@@ -53,8 +53,6 @@ public class Message {
 
     private Integer latencyMs;
 
-    private UUID parentMessageId;
-
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -62,7 +60,7 @@ public class Message {
     @Builder
     private Message(UUID consultationId, MessageRole role, String content,
                     String model, Integer tokensInput, Integer tokensOutput,
-                    Integer latencyMs, UUID parentMessageId) {
+                    Integer latencyMs) {
         this.consultationId = consultationId;
         this.role = role;
         this.content = content;
@@ -70,7 +68,6 @@ public class Message {
         this.tokensInput = tokensInput;
         this.tokensOutput = tokensOutput;
         this.latencyMs = latencyMs;
-        this.parentMessageId = parentMessageId;
     }
 
     public static Message createUserMessage(UUID consultationId, String content) {
