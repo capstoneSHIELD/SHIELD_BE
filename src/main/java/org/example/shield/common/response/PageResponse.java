@@ -1,16 +1,25 @@
 package org.example.shield.common.response;
 
-/**
- * 공통 페이징 응답 DTO.
- *
- * TODO: record로 구현
- * - content: List<T>
- * - page: int
- * - size: int
- * - totalElements: long
- * - totalPages: int
- * - hasNext: boolean
- * - static from(Page<T>): PageResponse<T>
- */
-public class PageResponse {
+import org.springframework.data.domain.Page;
+
+import java.util.List;
+
+public record PageResponse<T>(
+        List<T> content,
+        int page,
+        int size,
+        long totalElements,
+        int totalPages,
+        boolean hasNext
+) {
+    public static <T> PageResponse<T> from(Page<T> page) {
+        return new PageResponse<>(
+                page.getContent(),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.hasNext()
+        );
+    }
 }
