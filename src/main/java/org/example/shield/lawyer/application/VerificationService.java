@@ -5,20 +5,21 @@ package org.example.shield.lawyer.application;
  *
  * Layer: application
  * Called by: LawyerController (신청/상태), AdminController (처리)
- * Calls: LawyerProfileRepository
+ * Calls: LawyerReader, LawyerWriter, NotificationSender
  *
  * TODO:
  * - requestVerification(userId, barAssociationNumber):
- *   1. lawyer_profiles에 barAssociationNumber 저장
+ *   1. lawyers에 barAssociationNumber 저장
  *   2. verificationStatus를 PENDING으로 설정
  *   3. 이미 PENDING이면 409 에러
  *
  * - getVerificationStatus(userId): verificationStatus + verifiedAt 반환
  *
  * - processVerification(lawyerId, action, reason):
- *   1. action이 APPROVE면 → APPROVED + verifiedAt 설정
- *   2. action이 REJECT면 → REJECTED
+ *   1. action이 APPROVE → VERIFIED + verifiedAt 설정
+ *   2. action이 REJECT → REJECTED
  *   3. 관리자(ADMIN)만 호출 가능
+ *   4. NotificationSender로 변호사에게 이메일 알림
  */
 public class VerificationService {
 }

@@ -3,13 +3,13 @@ package org.example.shield.brief.controller.dto;
 /**
  * 의뢰서 전달 응답 DTO.
  *
- * TODO:
- * - deliveryId: String (UUID)
- * - lawyerId: String
+ * TODO: record로 구현
+ * - deliveryId: UUID
  * - lawyerName: String
- * - status: String (SENT / VIEWED / ACCEPTED / REJECTED / NO_RESPONSE)
+ * - status: String (DELIVERED / CONFIRMED / REJECTED)
  * - sentAt: LocalDateTime
- * - respondedAt: LocalDateTime (null이면 미응답)
+ * - viewedAt: LocalDateTime (nullable)
+ * - respondedAt: LocalDateTime (nullable)
  */
 public class DeliveryResponse {
 }

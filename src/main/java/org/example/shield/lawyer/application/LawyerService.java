@@ -5,13 +5,15 @@ package org.example.shield.lawyer.application;
  *
  * Layer: application
  * Called by: LawyerController
- * Calls: LawyerProfileRepository, UserRepository
+ * Calls: LawyerReader, LawyerWriter
  *
  * TODO:
- * - getLawyers(pageable, specialization): 변호사 목록 (APPROVED만, 필터/페이지네이션)
- * - getLawyer(lawyerId): 변호사 프로필 상세 (의뢰인이 볼 때)
- * - getMyProfile(userId): 변호사 본인 프로필 (편집 화면 초기값)
- * - updateMyProfile(userId, request): 전문분야/경력/자격증 수정 (차후 구현)
+ * - getLawyers(pageable, specialization, minExperience, sort):
+ *   변호사 목록 (VERIFIED만, 필터/정렬/페이징)
+ *   기본 정렬: 경력순
+ * - getLawyer(lawyerId): 변호사 프로필 상세
+ * - getMyProfile(userId): 변호사 본인 프로필
+ * - updateMyProfile(userId, request): 전문분야/경력/자격증/소개글 수정
  */
 public class LawyerService {
 }

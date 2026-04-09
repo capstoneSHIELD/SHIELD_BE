@@ -1,18 +1,19 @@
 package org.example.shield.brief.application;
 
 /**
- * 변호사 매칭 서비스 - 의뢰서 기반으로 최적의 변호사 1명 선정.
+ * 변호사 매칭 서비스 - 의뢰서 기반 변호사 매칭 (여러 명).
  *
  * Layer: application
- * Called by: BriefController.getLawyerRecommendation()
- * Calls: BriefRepository, LawyerProfileRepository
+ * Called by: BriefController.getLawyerRecommendations()
+ * Calls: BriefReader, LawyerReader
  *
  * TODO:
- * - findMatch(briefId):
+ * - findMatching(briefId, pageable):
  *   1. brief에서 keywords, legalField 조회
- *   2. lawyer_profiles에서 verificationStatus = APPROVED인 변호사만 필터
- *   3. specializations에 legalField가 포함된 변호사 필터
- *   4. 매칭 결과 없으면 404
+ *   2. lawyers에서 verificationStatus = VERIFIED인 변호사 필터
+ *   3. keywords와 lawyers.tags 비교 → matchedKeywords 추출
+ *   4. 기본 정렬: 경력순 (experience)
+ *   5. PageResponse로 반환
  */
 public class LawyerMatchingService {
 }

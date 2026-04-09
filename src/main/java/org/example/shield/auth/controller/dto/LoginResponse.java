@@ -3,11 +3,11 @@ package org.example.shield.auth.controller.dto;
 /**
  * 로그인 응답 DTO.
  *
- * TODO:
+ * TODO: record로 구현
  * - accessToken: String (JWT)
- * - userId: String (UUID)
- * - name: String (사용자 이름)
- * - role: String (CLIENT / LAWYER)
+ * - userId: UUID
+ * - name: String
+ * - role: String (USER / LAWYER / ADMIN)
  */
 public class LoginResponse {
 }

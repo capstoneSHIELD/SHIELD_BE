@@ -1,14 +1,20 @@
 package org.example.shield.consultation.controller.dto;
 
 /**
- * 상담 상세 응답 DTO.
+ * 내 상담 목록 응답 DTO.
  *
- * TODO:
- * - consultationId: String (UUID)
- * - status: String (IN_PROGRESS / ANALYZED / COMPLETED)
- * - briefId: String (생성된 의뢰서 ID, null이면 분석 전)
- * - classification: Object (primaryField, confidence) (null이면 분석 전)
+ * TODO: record로 구현
+ * - consultationId: UUID
+ * - status: String (COLLECTING / ANALYZING / AWAITING_CONFIRM / CONFIRMED / REJECTED)
+ * - primaryField: List<String> (nullable, 분류 전 null)
+ * - tags: List<String> (nullable)
+ * - lastMessage: String (nullable)
+ * - lastMessageAt: LocalDateTime (nullable)
  * - createdAt: LocalDateTime
+ * - brief: BriefSummary (nullable, 의뢰서 생성 전 null)
+ *   - briefId: UUID
+ *   - title: String
+ *   - status: String
  */
 public class ConsultationResponse {
 }

@@ -1,17 +1,16 @@
 package org.example.shield.brief.controller.dto;
 
 /**
- * 변호사 매칭 응답 DTO (1명).
+ * 변호사 매칭 응답 DTO.
  *
- * TODO:
- * - notice: String ("특정 변호사를 추천하는 것이 아닙니다")
- * - lawyer: Object
- *   - lawyerId: String
- *   - name: String
- *   - primarySpecialization: String
- *   - experienceYears: int
- *   - matchedKeywords: List<String>
- *   - relevanceScore: int
+ * TODO: record로 구현
+ * - lawyerId: UUID
+ * - name: String
+ * - profileImageUrl: String (nullable)
+ * - specializations: String
+ * - experienceYears: int
+ * - tags: List<String> (세부 전문 키워드)
+ * - matchedKeywords: List<String> (의뢰서와 매칭된 키워드)
  */
 public class MatchingResponse {
 }

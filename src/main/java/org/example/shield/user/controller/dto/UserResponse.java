@@ -3,13 +3,13 @@ package org.example.shield.user.controller.dto;
 /**
  * 사용자 정보 응답 DTO.
  *
- * TODO:
- * - userId: String (UUID)
+ * TODO: record로 구현
+ * - userId: UUID
  * - email: String
  * - name: String
- * - role: String (CLIENT / LAWYER / ADMIN)
+ * - role: String (USER / LAWYER / ADMIN)
  * - provider: String (GOOGLE)
- * - createdAt: LocalDateTime
+ * - profileImageUrl: String (nullable)
  */
 public class UserResponse {
 }
