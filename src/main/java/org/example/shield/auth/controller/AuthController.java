@@ -1,5 +1,7 @@
 package org.example.shield.auth.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+@Tag(name = "Auth", description = "인증 API")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -27,6 +30,7 @@ public class AuthController {
 
     private final AuthService authService;
 
+    @Operation(summary = "Google 로그인", description = "Google OAuth 인증 코드로 로그인 및 JWT 발급")
     @PostMapping("/google")
     public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(
             @Valid @RequestBody GoogleLoginRequest request,
@@ -38,6 +42,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("로그인 성공", result.response()));
     }
 
+    @Operation(summary = "개발용 로그인", description = "Google OAuth 없이 테스트용 JWT 발급")
     @PostMapping("/dev/login")
     public ResponseEntity<ApiResponse<LoginResponse>> devLogin(
             @RequestBody DevLoginRequest request,
@@ -49,6 +54,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("개발용 로그인 성공", result.response()));
     }
 
+    @Operation(summary = "로그아웃", description = "현재 세션 종료 및 Refresh Token 무효화")
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(
             @AuthenticationPrincipal UUID userId,
@@ -58,6 +64,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("로그아웃 성공"));
     }
 
+    @Operation(summary = "토큰 갱신", description = "Refresh Token으로 새 Access Token 발급")
     @PostMapping("/token/refresh")
     public ResponseEntity<ApiResponse<String>> refreshToken(
             @CookieValue(name = "refreshToken", required = false) String refreshToken) {
