@@ -45,6 +45,7 @@ public class AuthService {
 
         LoginResponse response = new LoginResponse(
                 tokenPair.accessToken(),
+                tokenPair.refreshToken(),
                 user.getId(),
                 user.getName(),
                 user.getRole().name()
@@ -69,6 +70,7 @@ public class AuthService {
 
         LoginResponse response = new LoginResponse(
                 tokenPair.accessToken(),
+                tokenPair.refreshToken(),
                 user.getId(),
                 user.getName(),
                 user.getRole().name()
