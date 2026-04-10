@@ -11,6 +11,7 @@ import org.example.shield.brief.domain.BriefReader;
 import org.example.shield.brief.exception.BriefNotFoundException;
 import org.example.shield.brief.infrastructure.BriefDeliveryRepository;
 import org.example.shield.common.enums.BriefStatus;
+import org.example.shield.common.enums.UserRole;
 import org.example.shield.common.enums.PrivacySetting;
 import org.example.shield.common.exception.BusinessException;
 import org.example.shield.common.exception.ErrorCode;
@@ -46,6 +47,11 @@ public class DeliveryService {
             throw new BusinessException(ErrorCode.BRIEF_NOT_CONFIRMED) {};
         }
 
+        User lawyer = userReader.findById(lawyerId);
+        if (lawyer.getRole() != UserRole.LAWYER) {
+            throw new BusinessException(ErrorCode.INVALID_ROLE) {};
+        }
+
         if (deliveryRepository.existsByBriefIdAndLawyerId(briefId, lawyerId)) {
             throw new BusinessException(ErrorCode.DELIVERY_ALREADY_EXISTS) {};
         }
@@ -55,7 +61,6 @@ public class DeliveryService {
 
         brief.markDelivered();
 
-        User lawyer = userReader.findById(lawyerId);
         return DeliveryResponse.of(saved, lawyer.getName());
     }
 
