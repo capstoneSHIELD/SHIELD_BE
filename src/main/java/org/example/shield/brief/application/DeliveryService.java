@@ -114,8 +114,10 @@ public class DeliveryService {
         Brief brief = briefReader.findById(delivery.getBriefId());
         User client = userReader.findById(brief.getUserId());
 
-        // privacySetting에 따라 의뢰인 정보 마스킹
-        String clientName = maskName(client.getName());
+        // TODO: 전체공개/부분공개 설정에 따른 마스킹 정책 세분화 (API 명세 확정 후 구현)
+        // 현재: PUBLIC = 이름+이메일 노출, PARTIAL = 이름 마스킹 + 이메일 미노출
+        String clientName = brief.getPrivacySetting() == PrivacySetting.PUBLIC
+                ? client.getName() : maskName(client.getName());
         String clientEmail = brief.getPrivacySetting() == PrivacySetting.PUBLIC
                 ? client.getEmail() : null;
 
