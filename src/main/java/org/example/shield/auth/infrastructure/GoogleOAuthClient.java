@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.shield.auth.domain.OAuthClient;
 import org.example.shield.auth.domain.OAuthUserInfo;
 import org.example.shield.auth.exception.OAuthFailedException;
+import org.example.shield.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -50,14 +51,14 @@ public class GoogleOAuthClient implements OAuthClient {
                     .block();
 
             if (response == null || response.accessToken() == null) {
-                throw new OAuthFailedException();
+                throw new OAuthFailedException(ErrorCode.OAUTH_CODE_INVALID);
             }
             return response.accessToken();
         } catch (OAuthFailedException e) {
             throw e;
         } catch (Exception e) {
             log.error("Google OAuth token exchange failed", e);
-            throw new OAuthFailedException();
+            throw new OAuthFailedException(ErrorCode.OAUTH_CODE_INVALID);
         }
     }
 
@@ -71,14 +72,14 @@ public class GoogleOAuthClient implements OAuthClient {
                     .block();
 
             if (response == null || response.email() == null) {
-                throw new OAuthFailedException();
+                throw new OAuthFailedException(ErrorCode.OAUTH_USER_INFO_FAILED);
             }
             return new OAuthUserInfo(response.email(), response.name(), response.id());
         } catch (OAuthFailedException e) {
             throw e;
         } catch (Exception e) {
             log.error("Google OAuth user info fetch failed", e);
-            throw new OAuthFailedException();
+            throw new OAuthFailedException(ErrorCode.OAUTH_USER_INFO_FAILED);
         }
     }
 

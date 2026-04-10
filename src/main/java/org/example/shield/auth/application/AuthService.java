@@ -4,8 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.example.shield.auth.controller.dto.LoginResponse;
 import org.example.shield.auth.domain.JwtToken;
 import org.example.shield.auth.domain.OAuthUserInfo;
+import org.example.shield.auth.exception.InvalidRoleException;
 import org.example.shield.auth.exception.InvalidTokenException;
 import org.example.shield.common.enums.UserRole;
+import org.example.shield.common.exception.ErrorCode;
 import org.example.shield.user.domain.User;
 import org.example.shield.user.domain.UserReader;
 import org.example.shield.user.domain.UserWriter;
@@ -34,7 +36,7 @@ public class AuthService {
                         User.builder()
                                 .email(userInfo.email())
                                 .name(userInfo.name())
-                                .role(UserRole.valueOf(role.toUpperCase()))
+                                .role(parseRole(role))
                                 .provider("GOOGLE")
                                 .googleId(userInfo.googleId())
                                 .build()
@@ -59,7 +61,7 @@ public class AuthService {
                         User.builder()
                                 .email(email)
                                 .name(name)
-                                .role(UserRole.valueOf(role.toUpperCase()))
+                                .role(parseRole(role))
                                 .provider("DEV")
                                 .googleId("dev-" + UUID.randomUUID())
                                 .build()
@@ -85,19 +87,27 @@ public class AuthService {
 
     public String refreshToken(String refreshToken) {
         if (!jwtService.validateToken(refreshToken)) {
-            throw new InvalidTokenException();
+            throw new InvalidTokenException(ErrorCode.TOKEN_EXPIRED);
         }
 
         UUID userId = jwtService.getUserIdFromToken(refreshToken);
         User user = userReader.findById(userId);
 
         if (user.getRefreshToken() == null || !user.getRefreshToken().equals(refreshToken)) {
-            throw new InvalidTokenException();
+            throw new InvalidTokenException(ErrorCode.REFRESH_TOKEN_MISMATCH);
         }
 
         JwtToken tokenPair = jwtService.createTokenPair(userId, user.getRole().name());
         user.updateRefreshToken(tokenPair.refreshToken());
 
         return tokenPair.accessToken();
+    }
+
+    private UserRole parseRole(String role) {
+        try {
+            return UserRole.valueOf(role.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new InvalidRoleException();
+        }
     }
 }
