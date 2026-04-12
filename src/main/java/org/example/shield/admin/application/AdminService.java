@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
+import org.example.shield.admin.controller.dto.VerificationChecksResponse;
 import org.example.shield.admin.controller.dto.VerificationResponse;
+import org.example.shield.admin.domain.VerificationCheckReader;
 import org.example.shield.admin.domain.VerificationLog;
 import org.example.shield.admin.domain.VerificationLogWriter;
 import org.example.shield.common.enums.VerificationStatus;
@@ -38,6 +40,7 @@ public class AdminService {
     private final UserReader userReader;
     private final LawyerDocumentRepository lawyerDocumentRepository;
     private final VerificationLogWriter verificationLogWriter;
+    private final VerificationCheckReader verificationCheckReader;
 
     public PageResponse<PendingLawyerResponse> getPendingLawyers(String keyword, String status,
                                                                   Pageable pageable) {
@@ -106,6 +109,13 @@ public class AdminService {
                 reason,
                 log.getCreatedAt()
         );
+    }
+
+    public VerificationChecksResponse getVerificationChecks(UUID lawyerId) {
+        log.info("검증 체크리스트 조회. lawyerId={}", lawyerId);
+        return verificationCheckReader.findOptionalByLawyerId(lawyerId)
+                .map(VerificationChecksResponse::from)
+                .orElse(VerificationChecksResponse.empty(lawyerId));
     }
 
     private VerificationStatus parseVerificationStatus(String status) {

@@ -7,6 +7,7 @@ import org.example.shield.admin.application.AdminService;
 import jakarta.validation.Valid;
 import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
+import org.example.shield.admin.controller.dto.VerificationChecksResponse;
 import org.example.shield.admin.controller.dto.VerificationRequest;
 import org.example.shield.admin.controller.dto.VerificationResponse;
 import org.example.shield.common.response.ApiResponse;
@@ -64,9 +65,15 @@ public class AdminController {
         return ApiResponse.success("처리 완료", result);
     }
 
+    @Operation(summary = "자동 검증 결과 조회", description = "변호사 인증 신청의 자동 검증 결과와 체크리스트를 조회합니다")
+    @GetMapping("/lawyers/{lawyerId}/verification-checks")
+    public ApiResponse<VerificationChecksResponse> getVerificationChecks(@PathVariable UUID lawyerId) {
+        VerificationChecksResponse result = adminService.getVerificationChecks(lawyerId);
+        return ApiResponse.success("조회 성공", result);
+    }
+
     // TODO: GET  /api/admin/dashboard/stats                        — 대시보드 통계
     // TODO: GET  /api/admin/dashboard/alerts                       — 긴급 알림
-    // TODO: GET  /api/admin/lawyers/{lawyerId}/verification-checks — 자동 검증 결과
     // TODO: GET  /api/admin/lawyers/{lawyerId}/documents           — 서류 조회
     // TODO: GET  /api/admin/verification-logs                      — 처리 이력
     // TODO: GET  /api/admin/consultations                          — 상담 모니터링 (차후)
