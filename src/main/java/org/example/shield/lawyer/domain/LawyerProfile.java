@@ -54,4 +54,11 @@ public class LawyerProfile extends BaseEntity {
 
     @Column(length = 50)
     private String region;
+
+    public void updateVerificationStatus(VerificationStatus newStatus) {
+        this.verificationStatus = newStatus;
+        if (newStatus == VerificationStatus.VERIFIED) {
+            this.verifiedAt = LocalDateTime.now();
+        }
+    }
 }
