@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,4 +42,21 @@ public interface LawyerProfileRepository extends JpaRepository<LawyerProfile, UU
             Pageable pageable);
 
     long countByVerificationStatus(VerificationStatus status);
+
+    long countByVerificationStatusAndCreatedAtBefore(VerificationStatus status, LocalDateTime before);
+
+    @Query(value = """
+            SELECT COUNT(*) FROM lawyers lp
+            WHERE NOT EXISTS (SELECT 1 FROM lawyer_documents ld WHERE ld.lawyer_id = lp.id)
+            AND CAST(lp.verification_status AS TEXT) IN ('PENDING', 'REVIEWING', 'SUPPLEMENT_REQUESTED')
+            """, nativeQuery = true)
+    long countMissingDocuments();
+
+    @Query(value = """
+            SELECT COUNT(*) FROM (
+                SELECT bar_association_number FROM lawyers
+                GROUP BY bar_association_number HAVING COUNT(*) > 1
+            ) duplicates
+            """, nativeQuery = true)
+    long countDuplicateBarNumbers();
 }

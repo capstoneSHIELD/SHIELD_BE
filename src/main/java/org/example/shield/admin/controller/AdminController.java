@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.example.shield.admin.application.AdminService;
 import jakarta.validation.Valid;
+import org.example.shield.admin.controller.dto.DashboardAlertsResponse;
 import org.example.shield.admin.controller.dto.DashboardStatsResponse;
 import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
@@ -91,7 +92,13 @@ public class AdminController {
         return ApiResponse.success("조회 성공", result);
     }
 
-    // TODO: GET  /api/admin/dashboard/alerts                       — 긴급 알림
+    @Operation(summary = "대시보드 긴급 알림", description = "24시간 미처리, 서류 미제출, 중복 의심 건수를 조회합니다")
+    @GetMapping("/dashboard/alerts")
+    public ApiResponse<DashboardAlertsResponse> getDashboardAlerts() {
+        DashboardAlertsResponse result = adminService.getDashboardAlerts();
+        return ApiResponse.success("조회 성공", result);
+    }
+
     // TODO: GET  /api/admin/verification-logs                      — 처리 이력
     // TODO: GET  /api/admin/consultations                          — 상담 모니터링 (차후)
 }

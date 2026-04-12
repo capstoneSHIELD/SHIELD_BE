@@ -2,6 +2,7 @@ package org.example.shield.admin.application;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.shield.admin.controller.dto.DashboardAlertsResponse;
 import org.example.shield.admin.controller.dto.DashboardStatsResponse;
 import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
@@ -19,6 +20,7 @@ import org.example.shield.lawyer.domain.LawyerProfile;
 import org.example.shield.lawyer.domain.LawyerReader;
 import org.example.shield.lawyer.domain.LawyerWriter;
 import org.example.shield.lawyer.infrastructure.LawyerDocumentRepository;
+import org.example.shield.lawyer.infrastructure.LawyerProfileRepository;
 import org.example.shield.user.domain.User;
 import org.example.shield.user.domain.UserReader;
 import org.springframework.data.domain.Page;
@@ -43,6 +45,7 @@ public class AdminService {
     private final LawyerWriter lawyerWriter;
     private final UserReader userReader;
     private final LawyerDocumentRepository lawyerDocumentRepository;
+    private final LawyerProfileRepository lawyerProfileRepository;
     private final VerificationLogWriter verificationLogWriter;
     private final VerificationLogRepository verificationLogRepository;
     private final VerificationCheckReader verificationCheckReader;
@@ -59,6 +62,18 @@ public class AdminService {
                 todayStart, List.of("VERIFIED", "REJECTED"));
 
         return new DashboardStatsResponse(pendingCount, reviewingCount, supplementRequestedCount, todayProcessedCount);
+    }
+
+    public DashboardAlertsResponse getDashboardAlerts() {
+        log.info("대시보드 긴급 알림 조회");
+
+        LocalDateTime twentyFourHoursAgo = LocalDateTime.now().minusHours(24);
+        long overdueCount = lawyerProfileRepository.countByVerificationStatusAndCreatedAtBefore(
+                VerificationStatus.PENDING, twentyFourHoursAgo);
+        long missingDocumentCount = lawyerProfileRepository.countMissingDocuments();
+        long duplicateSuspectCount = lawyerProfileRepository.countDuplicateBarNumbers();
+
+        return new DashboardAlertsResponse(overdueCount, missingDocumentCount, duplicateSuspectCount);
     }
 
     public PageResponse<PendingLawyerResponse> getPendingLawyers(String keyword, String status,
