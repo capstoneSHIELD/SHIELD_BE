@@ -10,6 +10,7 @@ import org.example.shield.admin.controller.dto.DashboardStatsResponse;
 import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
 import org.example.shield.admin.controller.dto.VerificationChecksResponse;
+import org.example.shield.admin.controller.dto.VerificationLogResponse;
 import org.example.shield.admin.controller.dto.VerificationRequest;
 import org.example.shield.admin.controller.dto.VerificationResponse;
 import org.example.shield.common.response.ApiResponse;
@@ -99,6 +100,17 @@ public class AdminController {
         return ApiResponse.success("조회 성공", result);
     }
 
-    // TODO: GET  /api/admin/verification-logs                      — 처리 이력
+    @Operation(summary = "처리 이력 조회", description = "변호사 인증 상태 변경 이력을 조회합니다 (기간/상태 필터, 페이징)")
+    @GetMapping("/verification-logs")
+    public ApiResponse<PageResponse<VerificationLogResponse>> getVerificationLogs(
+            @RequestParam(required = false) String period,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        PageResponse<VerificationLogResponse> result = adminService.getVerificationLogs(period, status, pageable);
+        return ApiResponse.success("조회 성공", result);
+    }
+
     // TODO: GET  /api/admin/consultations                          — 상담 모니터링 (차후)
 }

@@ -7,9 +7,11 @@ import org.example.shield.admin.controller.dto.DashboardStatsResponse;
 import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
 import org.example.shield.admin.controller.dto.VerificationChecksResponse;
+import org.example.shield.admin.controller.dto.VerificationLogResponse;
 import org.example.shield.admin.controller.dto.VerificationResponse;
 import org.example.shield.admin.domain.VerificationCheckReader;
 import org.example.shield.admin.domain.VerificationLog;
+import org.example.shield.admin.domain.VerificationLogReader;
 import org.example.shield.admin.domain.VerificationLogWriter;
 import org.example.shield.admin.infrastructure.VerificationLogRepository;
 import org.example.shield.common.enums.VerificationStatus;
@@ -47,6 +49,7 @@ public class AdminService {
     private final LawyerDocumentRepository lawyerDocumentRepository;
     private final LawyerProfileRepository lawyerProfileRepository;
     private final VerificationLogWriter verificationLogWriter;
+    private final VerificationLogReader verificationLogReader;
     private final VerificationLogRepository verificationLogRepository;
     private final VerificationCheckReader verificationCheckReader;
 
@@ -74,6 +77,67 @@ public class AdminService {
         long duplicateSuspectCount = lawyerProfileRepository.countDuplicateBarNumbers();
 
         return new DashboardAlertsResponse(overdueCount, missingDocumentCount, duplicateSuspectCount);
+    }
+
+    public PageResponse<VerificationLogResponse> getVerificationLogs(String period, String status,
+                                                                      Pageable pageable) {
+        log.info("처리 이력 조회. period={}, status={}", period, status);
+
+        LocalDateTime after = resolvePeriod(period);
+        Page<VerificationLog> logPage;
+
+        if (status != null && after != null) {
+            logPage = verificationLogReader.findAllByToStatusAndCreatedAtAfter(status, after, pageable);
+        } else if (status != null) {
+            logPage = verificationLogReader.findAllByToStatus(status, pageable);
+        } else if (after != null) {
+            logPage = verificationLogReader.findAllByCreatedAtAfter(after, pageable);
+        } else {
+            logPage = verificationLogReader.findAll(pageable);
+        }
+
+        List<VerificationLog> logs = logPage.getContent();
+        if (logs.isEmpty()) {
+            return PageResponse.from(logPage.map(l -> null));
+        }
+
+        List<UUID> lawyerIds = logs.stream().map(VerificationLog::getLawyerId).distinct().toList();
+        Map<UUID, LawyerProfile> lawyerMap = lawyerIds.stream()
+                .collect(Collectors.toMap(id -> id, lawyerReader::findById));
+
+        List<UUID> allUserIds = new java.util.ArrayList<>();
+        lawyerMap.values().forEach(lp -> allUserIds.add(lp.getUserId()));
+        logs.forEach(l -> allUserIds.add(l.getAdminId()));
+
+        Map<UUID, User> userMap = userReader.findAllByIds(allUserIds.stream().distinct().toList()).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
+        Page<VerificationLogResponse> responsePage = logPage.map(vlog -> {
+            LawyerProfile lawyer = lawyerMap.get(vlog.getLawyerId());
+            User lawyerUser = userMap.get(lawyer.getUserId());
+            User admin = userMap.get(vlog.getAdminId());
+            return new VerificationLogResponse(
+                    vlog.getId(),
+                    lawyerUser != null ? lawyerUser.getName() : null,
+                    vlog.getFromStatus(),
+                    vlog.getToStatus(),
+                    lawyer.getSpecializations(),
+                    admin != null ? admin.getName() : null,
+                    vlog.getReason(),
+                    vlog.getCreatedAt()
+            );
+        });
+
+        return PageResponse.from(responsePage);
+    }
+
+    private LocalDateTime resolvePeriod(String period) {
+        if (period == null) return null;
+        return switch (period.toLowerCase()) {
+            case "today" -> LocalDate.now().atStartOfDay();
+            case "week" -> LocalDate.now().minusDays(7).atStartOfDay();
+            default -> null;
+        };
     }
 
     public PageResponse<PendingLawyerResponse> getPendingLawyers(String keyword, String status,
