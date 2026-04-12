@@ -7,9 +7,10 @@ import org.example.shield.brief.controller.dto.InboxDetailResponse;
 import org.example.shield.brief.controller.dto.InboxResponse;
 import org.example.shield.brief.domain.Brief;
 import org.example.shield.brief.domain.BriefDelivery;
+import org.example.shield.brief.domain.BriefDeliveryReader;
+import org.example.shield.brief.domain.BriefDeliveryWriter;
 import org.example.shield.brief.domain.BriefReader;
 import org.example.shield.brief.exception.BriefNotFoundException;
-import org.example.shield.brief.infrastructure.BriefDeliveryRepository;
 import org.example.shield.common.enums.BriefStatus;
 import org.example.shield.common.enums.PrivacySetting;
 import org.example.shield.common.enums.VerificationStatus;
@@ -37,7 +38,8 @@ import java.util.stream.Collectors;
 public class DeliveryService {
 
     private final BriefReader briefReader;
-    private final BriefDeliveryRepository deliveryRepository;
+    private final BriefDeliveryReader deliveryReader;
+    private final BriefDeliveryWriter deliveryWriter;
     private final UserReader userReader;
     private final LawyerReader lawyerReader;
 
@@ -45,6 +47,10 @@ public class DeliveryService {
     public DeliveryResponse createDelivery(UUID briefId, UUID lawyerId, UUID userId) {
         Brief brief = briefReader.findById(briefId);
         validateOwner(brief, userId);
+
+        if (deliveryReader.existsByBriefIdAndLawyerId(briefId, lawyerId)) {
+            throw new BusinessException(ErrorCode.DELIVERY_ALREADY_EXISTS) {};
+        }
 
         if (brief.getStatus() != BriefStatus.CONFIRMED) {
             throw new BusinessException(ErrorCode.BRIEF_NOT_CONFIRMED) {};
@@ -56,12 +62,8 @@ public class DeliveryService {
             throw new BusinessException(ErrorCode.LAWYER_NOT_VERIFIED) {};
         }
 
-        if (deliveryRepository.existsByBriefIdAndLawyerId(briefId, lawyerId)) {
-            throw new BusinessException(ErrorCode.DELIVERY_ALREADY_EXISTS) {};
-        }
-
         BriefDelivery delivery = BriefDelivery.create(briefId, lawyerId);
-        BriefDelivery saved = deliveryRepository.save(delivery);
+        BriefDelivery saved = deliveryWriter.save(delivery);
 
         brief.markDelivered();
 
@@ -72,7 +74,7 @@ public class DeliveryService {
         Brief brief = briefReader.findById(briefId);
         validateOwner(brief, userId);
 
-        List<BriefDelivery> deliveries = deliveryRepository.findAllByBriefId(briefId);
+        List<BriefDelivery> deliveries = deliveryReader.findAllByBriefId(briefId);
 
         // N+1 방지: 변호사 ID를 모아서 한 번에 조회
         List<UUID> lawyerIds = deliveries.stream().map(BriefDelivery::getLawyerId).toList();
@@ -90,7 +92,7 @@ public class DeliveryService {
     }
 
     public PageResponse<InboxResponse> getInbox(UUID lawyerId, Pageable pageable) {
-        Page<BriefDelivery> deliveries = deliveryRepository.findAllByLawyerId(lawyerId, pageable);
+        Page<BriefDelivery> deliveries = deliveryReader.findAllByLawyerId(lawyerId, pageable);
 
         List<UUID> briefIds = deliveries.getContent().stream()
                 .map(BriefDelivery::getBriefId).toList();
@@ -107,8 +109,7 @@ public class DeliveryService {
 
     @Transactional
     public InboxDetailResponse getInboxDetail(UUID deliveryId, UUID lawyerId) {
-        BriefDelivery delivery = deliveryRepository.findById(deliveryId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DELIVERY_NOT_FOUND) {});
+        BriefDelivery delivery = deliveryReader.findById(deliveryId);
 
         if (!delivery.getLawyerId().equals(lawyerId)) {
             throw new BusinessException(ErrorCode.DELIVERY_NOT_FOUND) {};
