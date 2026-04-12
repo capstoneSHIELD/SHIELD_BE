@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.example.shield.admin.application.AdminService;
 import jakarta.validation.Valid;
+import org.example.shield.admin.controller.dto.DashboardStatsResponse;
 import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
 import org.example.shield.admin.controller.dto.VerificationChecksResponse;
@@ -83,7 +84,13 @@ public class AdminController {
         return ApiResponse.success("조회 성공", result);
     }
 
-    // TODO: GET  /api/admin/dashboard/stats                        — 대시보드 통계
+    @Operation(summary = "대시보드 통계", description = "상태별 변호사 카운트 및 오늘 처리 건수를 조회합니다")
+    @GetMapping("/dashboard/stats")
+    public ApiResponse<DashboardStatsResponse> getDashboardStats() {
+        DashboardStatsResponse result = adminService.getDashboardStats();
+        return ApiResponse.success("조회 성공", result);
+    }
+
     // TODO: GET  /api/admin/dashboard/alerts                       — 긴급 알림
     // TODO: GET  /api/admin/verification-logs                      — 처리 이력
     // TODO: GET  /api/admin/consultations                          — 상담 모니터링 (차후)

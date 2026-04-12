@@ -2,6 +2,7 @@ package org.example.shield.admin.application;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.shield.admin.controller.dto.DashboardStatsResponse;
 import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
 import org.example.shield.admin.controller.dto.VerificationChecksResponse;
@@ -9,6 +10,7 @@ import org.example.shield.admin.controller.dto.VerificationResponse;
 import org.example.shield.admin.domain.VerificationCheckReader;
 import org.example.shield.admin.domain.VerificationLog;
 import org.example.shield.admin.domain.VerificationLogWriter;
+import org.example.shield.admin.infrastructure.VerificationLogRepository;
 import org.example.shield.common.enums.VerificationStatus;
 import org.example.shield.common.exception.BusinessException;
 import org.example.shield.common.exception.ErrorCode;
@@ -24,6 +26,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,7 +44,22 @@ public class AdminService {
     private final UserReader userReader;
     private final LawyerDocumentRepository lawyerDocumentRepository;
     private final VerificationLogWriter verificationLogWriter;
+    private final VerificationLogRepository verificationLogRepository;
     private final VerificationCheckReader verificationCheckReader;
+
+    public DashboardStatsResponse getDashboardStats() {
+        log.info("대시보드 통계 조회");
+
+        long pendingCount = lawyerReader.countByVerificationStatus(VerificationStatus.PENDING);
+        long reviewingCount = lawyerReader.countByVerificationStatus(VerificationStatus.REVIEWING);
+        long supplementRequestedCount = lawyerReader.countByVerificationStatus(VerificationStatus.SUPPLEMENT_REQUESTED);
+
+        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        long todayProcessedCount = verificationLogRepository.countByCreatedAtAfterAndToStatusIn(
+                todayStart, List.of("VERIFIED", "REJECTED"));
+
+        return new DashboardStatsResponse(pendingCount, reviewingCount, supplementRequestedCount, todayProcessedCount);
+    }
 
     public PageResponse<PendingLawyerResponse> getPendingLawyers(String keyword, String status,
                                                                   Pageable pageable) {
