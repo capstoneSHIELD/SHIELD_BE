@@ -2,6 +2,7 @@ package org.example.shield.admin.application;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
 import org.example.shield.common.response.PageResponse;
 import org.example.shield.lawyer.domain.LawyerProfile;
@@ -41,14 +42,12 @@ public class AdminService {
             return PageResponse.from(lawyerPage.map(lp -> null));
         }
 
-        // N+1 방지: batch fetch users
         List<UUID> userIds = lawyers.stream()
                 .map(LawyerProfile::getUserId)
                 .toList();
         Map<UUID, User> userMap = userReader.findAllByIds(userIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        // N+1 방지: batch fetch document counts
         List<UUID> lawyerIds = lawyers.stream()
                 .map(LawyerProfile::getId)
                 .toList();
@@ -67,4 +66,10 @@ public class AdminService {
         return PageResponse.from(responsePage);
     }
 
+    public LawyerDetailResponse getLawyerDetail(UUID lawyerId) {
+        log.info("변호사 상세 조회. lawyerId={}", lawyerId);
+        LawyerProfile lawyer = lawyerReader.findById(lawyerId);
+        User user = userReader.findById(lawyer.getUserId());
+        return LawyerDetailResponse.from(lawyer, user);
+    }
 }

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.example.shield.admin.application.AdminService;
+import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
 import org.example.shield.common.response.ApiResponse;
 import org.example.shield.common.response.PageResponse;
@@ -11,9 +12,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
 
 @Tag(name = "Admin", description = "관리자 API")
 @RestController
@@ -33,6 +37,13 @@ public class AdminController {
             @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, size);
         PageResponse<PendingLawyerResponse> result = adminService.getPendingLawyers(keyword, status, pageable);
+        return ApiResponse.success("조회 성공", result);
+    }
+
+    @Operation(summary = "변호사 가입 신청 상세", description = "변호사의 상세 프로필 정보를 조회합니다 (관리자 전용)")
+    @GetMapping("/lawyers/{lawyerId}")
+    public ApiResponse<LawyerDetailResponse> getLawyerDetail(@PathVariable UUID lawyerId) {
+        LawyerDetailResponse result = adminService.getLawyerDetail(lawyerId);
         return ApiResponse.success("조회 성공", result);
     }
 
