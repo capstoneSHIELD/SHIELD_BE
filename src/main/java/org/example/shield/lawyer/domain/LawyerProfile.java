@@ -51,4 +51,7 @@ public class LawyerProfile extends BaseEntity {
     private List<String> certifications;
 
     private Integer caseCount;
+
+    @Column(length = 50)
+    private String region;
 }
