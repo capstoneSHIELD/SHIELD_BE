@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.shield.common.response.ApiResponse;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.example.shield.common.response.PageResponse;
 import org.example.shield.lawyer.application.LawyerDocumentService;
 import org.example.shield.lawyer.application.LawyerService;
@@ -58,6 +59,7 @@ public class LawyerController {
     }
 
     @Operation(summary = "내 프로필 조회", description = "변호사 본인의 프로필을 조회합니다")
+    @PreAuthorize("hasRole('LAWYER')")
     @GetMapping("/me")
     public ApiResponse<LawyerResponse> getMyProfile(
             @AuthenticationPrincipal UUID userId) {
@@ -66,6 +68,7 @@ public class LawyerController {
     }
 
     @Operation(summary = "내 프로필 수정", description = "변호사 본인의 프로필을 수정합니다")
+    @PreAuthorize("hasRole('LAWYER')")
     @PatchMapping("/me")
     public ApiResponse<LawyerResponse> updateMyProfile(
             @AuthenticationPrincipal UUID userId,
@@ -75,6 +78,7 @@ public class LawyerController {
     }
 
     @Operation(summary = "검증 상태 확인", description = "변호사 자격 검증 상태를 확인합니다")
+    @PreAuthorize("hasRole('LAWYER')")
     @GetMapping("/me/verification-status")
     public ApiResponse<VerificationResponse> getVerificationStatus(
             @AuthenticationPrincipal UUID userId) {
@@ -83,6 +87,7 @@ public class LawyerController {
     }
 
     @Operation(summary = "검증 신청", description = "대한변호사협회 등록번호로 자격 검증을 신청합니다")
+    @PreAuthorize("hasRole('LAWYER')")
     @PostMapping("/me/verification-request")
     public ApiResponse<VerificationResponse> requestVerification(
             @AuthenticationPrincipal UUID userId,
@@ -93,6 +98,7 @@ public class LawyerController {
     }
 
     @Operation(summary = "서류 업로드", description = "변호사 자격증 등 서류를 업로드합니다 (PDF, JPG, PNG / 최대 10MB)")
+    @PreAuthorize("hasRole('LAWYER')")
     @PostMapping(value = "/me/documents", consumes = "multipart/form-data")
     public ApiResponse<DocumentResponse> uploadDocument(
             @AuthenticationPrincipal UUID userId,
