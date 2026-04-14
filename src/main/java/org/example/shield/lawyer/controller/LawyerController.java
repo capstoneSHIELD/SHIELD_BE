@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.UUID;
 
 @Tag(name = "Lawyer", description = "변호사 API")
@@ -105,5 +106,14 @@ public class LawyerController {
             @RequestParam("file") MultipartFile file) {
         DocumentResponse result = lawyerDocumentService.uploadDocument(userId, file);
         return ApiResponse.success("서류가 업로드되었습니다", result);
+    }
+
+    @Operation(summary = "내 서류 조회", description = "변호사 본인이 업로드한 서류 목록을 조회합니다")
+    @PreAuthorize("hasRole('LAWYER')")
+    @GetMapping("/me/documents")
+    public ApiResponse<List<DocumentResponse>> getMyDocuments(
+            @AuthenticationPrincipal UUID userId) {
+        List<DocumentResponse> result = lawyerDocumentService.getMyDocuments(userId);
+        return ApiResponse.success("조회 성공", result);
     }
 }

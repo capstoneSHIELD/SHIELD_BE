@@ -1,10 +1,13 @@
 package org.example.shield.brief.application;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.shield.brief.controller.dto.DeliveryListResponse;
 import org.example.shield.brief.controller.dto.DeliveryResponse;
+import org.example.shield.brief.controller.dto.DeliveryStatusResponse;
 import org.example.shield.brief.controller.dto.InboxDetailResponse;
 import org.example.shield.brief.controller.dto.InboxResponse;
+import org.example.shield.brief.controller.dto.InboxStatsResponse;
 import org.example.shield.brief.domain.Brief;
 import org.example.shield.brief.domain.BriefDelivery;
 import org.example.shield.brief.domain.BriefDeliveryReader;
@@ -12,6 +15,7 @@ import org.example.shield.brief.domain.BriefDeliveryWriter;
 import org.example.shield.brief.domain.BriefReader;
 import org.example.shield.brief.exception.BriefNotFoundException;
 import org.example.shield.common.enums.BriefStatus;
+import org.example.shield.common.enums.DeliveryStatus;
 import org.example.shield.common.enums.PrivacySetting;
 import org.example.shield.common.enums.VerificationStatus;
 import org.example.shield.lawyer.domain.LawyerProfile;
@@ -23,6 +27,7 @@ import org.example.shield.user.domain.User;
 import org.example.shield.user.domain.UserReader;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +37,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -42,6 +48,55 @@ public class DeliveryService {
     private final BriefDeliveryWriter deliveryWriter;
     private final UserReader userReader;
     private final LawyerReader lawyerReader;
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Transactional
+    public DeliveryStatusResponse updateDeliveryStatus(UUID deliveryId, UUID lawyerId,
+                                                        DeliveryStatus status, String rejectionReason) {
+        log.info("의뢰서 수락/거절 요청. deliveryId={}, lawyerId={}, status={}", deliveryId, lawyerId, status);
+
+        BriefDelivery delivery = deliveryReader.findById(deliveryId);
+
+        if (!delivery.getLawyerId().equals(lawyerId)) {
+            throw new BusinessException(ErrorCode.DELIVERY_NOT_FOUND) {};
+        }
+
+        if (delivery.getStatus() != DeliveryStatus.DELIVERED) {
+            throw new BusinessException(ErrorCode.DELIVERY_ALREADY_PROCESSED) {};
+        }
+
+        switch (status) {
+            case CONFIRMED -> delivery.accept();
+            case REJECTED -> {
+                if (rejectionReason == null || rejectionReason.isBlank()) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE) {};
+                }
+                delivery.reject(rejectionReason);
+            }
+            default -> throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE) {};
+        }
+
+        deliveryWriter.save(delivery);
+
+        Brief brief = briefReader.findById(delivery.getBriefId());
+        User client = userReader.findById(brief.getUserId());
+        User lawyer = userReader.findById(lawyerId);
+
+        eventPublisher.publishEvent(new DeliveryStatusEvent(
+                client.getEmail(),
+                client.getName(),
+                lawyer.getName(),
+                brief.getTitle(),
+                delivery.getStatus().name(),
+                rejectionReason
+        ));
+
+        return new DeliveryStatusResponse(
+                delivery.getId(),
+                delivery.getStatus().name(),
+                delivery.getRespondedAt()
+        );
+    }
 
     @Transactional
     public DeliveryResponse createDelivery(UUID briefId, UUID lawyerId, UUID userId) {
@@ -91,8 +146,10 @@ public class DeliveryService {
         return new DeliveryListResponse(responses);
     }
 
-    public PageResponse<InboxResponse> getInbox(UUID lawyerId, Pageable pageable) {
-        Page<BriefDelivery> deliveries = deliveryReader.findAllByLawyerId(lawyerId, pageable);
+    public PageResponse<InboxResponse> getInbox(UUID lawyerId, DeliveryStatus status, Pageable pageable) {
+        Page<BriefDelivery> deliveries = (status != null)
+                ? deliveryReader.findAllByLawyerIdAndStatus(lawyerId, status, pageable)
+                : deliveryReader.findAllByLawyerId(lawyerId, pageable);
 
         List<UUID> briefIds = deliveries.getContent().stream()
                 .map(BriefDelivery::getBriefId).toList();
@@ -105,6 +162,14 @@ public class DeliveryService {
         });
 
         return PageResponse.from(responsePage);
+    }
+
+    public InboxStatsResponse getInboxStats(UUID lawyerId) {
+        Map<DeliveryStatus, Long> statusCountMap = deliveryReader.countGroupByStatus(lawyerId);
+        long pending = statusCountMap.getOrDefault(DeliveryStatus.DELIVERED, 0L);
+        long confirmed = statusCountMap.getOrDefault(DeliveryStatus.CONFIRMED, 0L);
+        long rejected = statusCountMap.getOrDefault(DeliveryStatus.REJECTED, 0L);
+        return new InboxStatsResponse(pending + confirmed + rejected, pending, confirmed, rejected);
     }
 
     @Transactional

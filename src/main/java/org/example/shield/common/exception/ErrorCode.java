@@ -44,6 +44,7 @@ public enum ErrorCode {
     // Delivery
     DELIVERY_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 전달 건입니다"),
     DELIVERY_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 전달된 변호사입니다"),
+    DELIVERY_ALREADY_PROCESSED(HttpStatus.CONFLICT, "이미 처리된 의뢰서입니다"),
 
     // Brief - Delivery
     BRIEF_NOT_CONFIRMED(HttpStatus.BAD_REQUEST, "의뢰서를 먼저 확정해 주세요"),

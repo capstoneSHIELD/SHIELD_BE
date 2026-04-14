@@ -76,6 +76,11 @@ public class LawyerDocumentService {
                 .toList();
     }
 
+    public List<DocumentResponse> getMyDocuments(UUID userId) {
+        var lawyer = lawyerReader.findByUserId(userId);
+        return getDocuments(lawyer.getId());
+    }
+
     private void validateFile(MultipartFile file) {
         if (file.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE) {};

@@ -6,9 +6,11 @@ import lombok.RequiredArgsConstructor;
 import org.example.shield.common.response.ApiResponse;
 import org.example.shield.user.application.UserService;
 import org.example.shield.user.controller.dto.UserResponse;
-import org.springframework.http.ResponseEntity;
+import org.example.shield.user.controller.dto.UserUpdateRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -24,9 +26,18 @@ public class UserController {
 
     @Operation(summary = "내 정보 조회", description = "현재 로그인한 사용자 정보 조회")
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<UserResponse>> getMyInfo(
+    public ApiResponse<UserResponse> getMyInfo(
             @AuthenticationPrincipal UUID userId) {
         UserResponse response = userService.getMyInfo(userId);
-        return ResponseEntity.ok(ApiResponse.success("사용자 정보 조회 성공", response));
+        return ApiResponse.success("조회 성공", response);
+    }
+
+    @Operation(summary = "내 정보 수정", description = "이름, 전화번호를 선택적으로 수정합니다")
+    @PatchMapping("/me")
+    public ApiResponse<UserResponse> updateMyInfo(
+            @AuthenticationPrincipal UUID userId,
+            @RequestBody UserUpdateRequest request) {
+        UserResponse response = userService.updateMyInfo(userId, request);
+        return ApiResponse.success("수정 완료", response);
     }
 }

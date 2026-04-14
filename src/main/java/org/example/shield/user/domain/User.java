@@ -65,4 +65,8 @@ public class User {
         this.refreshToken = refreshToken;
     }
 
+    public void updateProfile(String name, String phone) {
+        if (name != null && !name.isBlank()) this.name = name;
+        if (phone != null && !phone.isBlank()) this.phone = phone;
+    }
 }
