@@ -1,8 +1,10 @@
 package org.example.shield.brief.application;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.shield.brief.controller.dto.DeliveryListResponse;
 import org.example.shield.brief.controller.dto.DeliveryResponse;
+import org.example.shield.brief.controller.dto.DeliveryStatusResponse;
 import org.example.shield.brief.controller.dto.InboxDetailResponse;
 import org.example.shield.brief.controller.dto.InboxResponse;
 import org.example.shield.brief.domain.Brief;
@@ -12,6 +14,7 @@ import org.example.shield.brief.domain.BriefDeliveryWriter;
 import org.example.shield.brief.domain.BriefReader;
 import org.example.shield.brief.exception.BriefNotFoundException;
 import org.example.shield.common.enums.BriefStatus;
+import org.example.shield.common.enums.DeliveryStatus;
 import org.example.shield.common.enums.PrivacySetting;
 import org.example.shield.common.enums.VerificationStatus;
 import org.example.shield.lawyer.domain.LawyerProfile;
@@ -23,6 +26,7 @@ import org.example.shield.user.domain.User;
 import org.example.shield.user.domain.UserReader;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +36,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -42,6 +47,55 @@ public class DeliveryService {
     private final BriefDeliveryWriter deliveryWriter;
     private final UserReader userReader;
     private final LawyerReader lawyerReader;
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Transactional
+    public DeliveryStatusResponse updateDeliveryStatus(UUID deliveryId, UUID lawyerId,
+                                                        String statusStr, String rejectionReason) {
+        log.info("의뢰서 수락/거절 요청. deliveryId={}, lawyerId={}, status={}", deliveryId, lawyerId, statusStr);
+
+        BriefDelivery delivery = deliveryReader.findById(deliveryId);
+
+        if (!delivery.getLawyerId().equals(lawyerId)) {
+            throw new BusinessException(ErrorCode.DELIVERY_NOT_FOUND) {};
+        }
+
+        if (delivery.getStatus() != DeliveryStatus.DELIVERED) {
+            throw new BusinessException(ErrorCode.DELIVERY_ALREADY_PROCESSED) {};
+        }
+
+        switch (statusStr.toUpperCase()) {
+            case "CONFIRMED" -> delivery.accept();
+            case "REJECTED" -> {
+                if (rejectionReason == null || rejectionReason.isBlank()) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE) {};
+                }
+                delivery.reject(rejectionReason);
+            }
+            default -> throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE) {};
+        }
+
+        deliveryWriter.save(delivery);
+
+        Brief brief = briefReader.findById(delivery.getBriefId());
+        User client = userReader.findById(brief.getUserId());
+        User lawyer = userReader.findById(lawyerId);
+
+        eventPublisher.publishEvent(new DeliveryStatusEvent(
+                client.getEmail(),
+                client.getName(),
+                lawyer.getName(),
+                brief.getTitle(),
+                delivery.getStatus().name(),
+                rejectionReason
+        ));
+
+        return new DeliveryStatusResponse(
+                delivery.getId(),
+                delivery.getStatus().name(),
+                delivery.getRespondedAt()
+        );
+    }
 
     @Transactional
     public DeliveryResponse createDelivery(UUID briefId, UUID lawyerId, UUID userId) {

@@ -18,6 +18,16 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
+/**
+ * TODO [Issue #16] PATCH /api/users/me — 내 정보 수정 추가
+ *
+ * - Request: UserUpdateRequest(record) { name (optional), phone (optional) }
+ * - User 엔티티에 updateProfile(String name, String phone) 비즈니스 메서드 추가
+ * - UserService에 updateMyInfo(UUID userId, UserUpdateRequest request) 추가
+ * - UserWriter 주입 필요 (현재 UserService에 UserReader만 있음)
+ * - Response: UserResponse (기존 from() 재활용)
+ * - Notion PATCH /api/users/me 페이지에 Request/Response 양식 작성 필요
+ */
 public class UserController {
 
     private final UserService userService;

@@ -35,6 +35,21 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/lawyers")
 @RequiredArgsConstructor
+/**
+ * TODO [Issue #16]
+ *
+ * 1. GET /api/lawyers/me/documents — 변호사 본인 서류 조회
+ *    - @PreAuthorize("hasRole('LAWYER')")
+ *    - JWT userId → lawyerReader.findByUserId() → lawyerDocumentService.getDocuments(lawyer.getId())
+ *    - Signed URL 포함 반환 (기존 admin 서류 조회와 동일 로직)
+ *    - Response: List<DocumentResponse>
+ *
+ * 2. GET /api/lawyer/dashboard/stats — 변호사 대시보드 통계
+ *    - 별도 LawyerDashboardController 또는 이 컨트롤러에 추가
+ *    - Response: LawyerDashboardStatsResponse { newCount, reviewingCount, inProgressCount, weeklyCompletedCount }
+ *    - delivery status 기준 카운트: DELIVERED=신규, 진행중=CONFIRMED, 이번 주 완료=respondedAt 기준
+ *    - Notion API 명세서에 신규 추가 필요
+ */
 public class LawyerController {
 
     private final LawyerService lawyerService;
