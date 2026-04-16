@@ -8,6 +8,7 @@ import java.util.UUID;
 
 public record InboxResponse(
         UUID deliveryId,
+        UUID briefId,
         String briefTitle,
         String legalField,
         String status,
@@ -16,6 +17,7 @@ public record InboxResponse(
     public static InboxResponse of(BriefDelivery delivery, Brief brief) {
         return new InboxResponse(
                 delivery.getId(),
+                brief.getId(),
                 brief.getTitle(),
                 brief.getLegalField(),
                 delivery.getStatus().name(),
