@@ -29,9 +29,9 @@ public class LawyerService {
     private final LawyerWriter lawyerWriter;
     private final UserReader userReader;
 
-    public PageResponse<LawyerResponse> getLawyers(Pageable pageable) {
-        Page<LawyerProfile> profiles = lawyerReader.findAllByVerificationStatus(
-                VerificationStatus.VERIFIED, pageable);
+    public PageResponse<LawyerResponse> getLawyers(Pageable pageable, String specialization, Integer minExperience) {
+        Page<LawyerProfile> profiles = lawyerReader.findVerifiedLawyers(
+                specialization, minExperience, pageable);
 
         List<UUID> userIds = profiles.getContent().stream()
                 .map(LawyerProfile::getUserId)
@@ -48,8 +48,8 @@ public class LawyerService {
         return PageResponse.from(responsePage);
     }
 
-    public LawyerResponse getLawyer(UUID lawyerId) {
-        LawyerProfile profile = lawyerReader.findById(lawyerId);
+    public LawyerResponse getLawyer(UUID userId) {
+        LawyerProfile profile = lawyerReader.findByUserId(userId);
         User user = userReader.findById(profile.getUserId());
         return LawyerResponse.from(profile, user.getName(), user.getProfileImageUrl());
     }

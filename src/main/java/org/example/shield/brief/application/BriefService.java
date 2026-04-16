@@ -9,10 +9,15 @@ import org.example.shield.brief.domain.Brief;
 import org.example.shield.brief.domain.BriefReader;
 import org.example.shield.brief.domain.BriefWriter;
 import org.example.shield.brief.exception.BriefAlreadyConfirmedException;
+import org.example.shield.common.enums.BriefStatus;
+import org.example.shield.common.enums.ConsultationStatus;
 import org.example.shield.common.enums.PrivacySetting;
 import org.example.shield.common.exception.BusinessException;
 import org.example.shield.common.exception.ErrorCode;
 import org.example.shield.common.response.PageResponse;
+import org.example.shield.consultation.domain.Consultation;
+import org.example.shield.consultation.domain.ConsultationReader;
+import org.example.shield.consultation.domain.ConsultationWriter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,9 +32,17 @@ public class BriefService {
 
     private final BriefReader briefReader;
     private final BriefWriter briefWriter;
+    private final ConsultationReader consultationReader;
+    private final ConsultationWriter consultationWriter;
 
-    public PageResponse<BriefSummaryResponse> getMyBriefs(UUID userId, Pageable pageable) {
-        Page<Brief> briefs = briefReader.findAllByUserId(userId, pageable);
+    public PageResponse<BriefSummaryResponse> getMyBriefs(UUID userId, String status, Pageable pageable) {
+        Page<Brief> briefs;
+        if (status != null && !status.isBlank()) {
+            BriefStatus briefStatus = BriefStatus.valueOf(status.toUpperCase());
+            briefs = briefReader.findAllByUserIdAndStatus(userId, briefStatus, pageable);
+        } else {
+            briefs = briefReader.findAllByUserId(userId, pageable);
+        }
         Page<BriefSummaryResponse> responsePage = briefs.map(BriefSummaryResponse::from);
         return PageResponse.from(responsePage);
     }
@@ -70,7 +83,12 @@ public class BriefService {
         // 상태 변경
         if (request.status() != null) {
             switch (request.status()) {
-                case "CONFIRMED" -> brief.confirm();
+                case "CONFIRMED" -> {
+                    brief.confirm();
+                    Consultation consultation = consultationReader.findById(brief.getConsultationId());
+                    consultation.updateStatus(ConsultationStatus.CONFIRMED);
+                    consultationWriter.save(consultation);
+                }
                 case "DISCARDED" -> brief.discard();
                 default -> throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE) {};
             }

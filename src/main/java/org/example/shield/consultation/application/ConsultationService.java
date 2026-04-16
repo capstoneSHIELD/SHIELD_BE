@@ -1,6 +1,8 @@
 package org.example.shield.consultation.application;
 
 import lombok.RequiredArgsConstructor;
+import org.example.shield.brief.domain.Brief;
+import org.example.shield.brief.domain.BriefReader;
 import org.example.shield.common.enums.DomainType;
 import org.example.shield.common.response.PageResponse;
 import org.example.shield.consultation.controller.dto.ClassifyResponse;
@@ -27,6 +29,7 @@ public class ConsultationService {
     private final ConsultationReader consultationReader;
     private final ConsultationWriter consultationWriter;
     private final MessageWriter messageWriter;
+    private final BriefReader briefReader;
 
     private static final String WELCOME_MESSAGE =
             "반갑습니다. SHIELD 법률 AI입니다. 어떤 법률 문제로 어려움을 겪고 계신가요? 구체적인 상황을 말씀해 주시면 정보 정리를 도와드리겠습니다.";
@@ -50,9 +53,18 @@ public class ConsultationService {
         );
     }
 
+    public ConsultationResponse getConsultation(UUID consultationId) {
+        Consultation consultation = consultationReader.findById(consultationId);
+        ConsultationResponse.BriefSummary briefSummary = briefReader
+                .findOptionalByConsultationId(consultationId)
+                .map(b -> new ConsultationResponse.BriefSummary(b.getId(), b.getTitle(), b.getStatus().name()))
+                .orElse(null);
+        return ConsultationResponse.from(consultation, briefSummary);
+    }
+
     public PageResponse<ConsultationResponse> getMyConsultations(UUID userId, Pageable pageable) {
         Page<Consultation> consultations = consultationReader.findAllByUserId(userId, pageable);
-        Page<ConsultationResponse> responsePage = consultations.map(ConsultationResponse::from);
+        Page<ConsultationResponse> responsePage = consultations.map(c -> ConsultationResponse.from(c, null));
         return PageResponse.from(responsePage);
     }
 

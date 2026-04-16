@@ -107,7 +107,7 @@ public class DeliveryService {
             throw new BusinessException(ErrorCode.DELIVERY_ALREADY_EXISTS) {};
         }
 
-        if (brief.getStatus() != BriefStatus.CONFIRMED) {
+        if (brief.getStatus() != BriefStatus.CONFIRMED && brief.getStatus() != BriefStatus.DELIVERED) {
             throw new BusinessException(ErrorCode.BRIEF_NOT_CONFIRMED) {};
         }
 

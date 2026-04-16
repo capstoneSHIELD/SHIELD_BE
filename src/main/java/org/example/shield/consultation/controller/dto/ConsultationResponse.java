@@ -13,9 +13,12 @@ public record ConsultationResponse(
         List<String> tags,
         String lastMessage,
         LocalDateTime lastMessageAt,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        BriefSummary brief
 ) {
-    public static ConsultationResponse from(Consultation consultation) {
+    public record BriefSummary(UUID briefId, String title, String status) {}
+
+    public static ConsultationResponse from(Consultation consultation, BriefSummary brief) {
         return new ConsultationResponse(
                 consultation.getId(),
                 consultation.getStatus().name(),
@@ -23,7 +26,8 @@ public record ConsultationResponse(
                 consultation.getTags(),
                 consultation.getLastMessage(),
                 consultation.getLastMessageAt(),
-                consultation.getCreatedAt()
+                consultation.getCreatedAt(),
+                brief
         );
     }
 }

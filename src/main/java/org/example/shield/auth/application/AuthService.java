@@ -104,6 +104,9 @@ public class AuthService {
     }
 
     private UserRole parseRole(String role) {
+        if (role == null || role.isBlank()) {
+            return UserRole.USER;
+        }
         try {
             return UserRole.valueOf(role.toUpperCase());
         } catch (IllegalArgumentException e) {
