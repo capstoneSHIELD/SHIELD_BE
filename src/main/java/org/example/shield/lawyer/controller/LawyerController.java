@@ -52,7 +52,7 @@ public class LawyerController {
             @RequestParam(defaultValue = "experience") String sort) {
         Sort sortOrder = switch (sort) {
             case "name" -> Sort.by(Sort.Direction.ASC, "userId");
-            default -> Sort.by(Sort.Direction.DESC, "experienceYears");
+            default -> Sort.by(Sort.Direction.DESC, "experience_years");
         };
         Pageable pageable = PageRequest.of(page, Math.min(size, 100), sortOrder);
         PageResponse<LawyerResponse> result = lawyerService.getLawyers(pageable, specialization, minExperience);

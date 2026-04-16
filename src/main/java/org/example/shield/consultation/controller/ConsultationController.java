@@ -67,6 +67,14 @@ public class ConsultationController {
         return ApiResponse.success("상담이 생성되었습니다", result);
     }
 
+    @Operation(summary = "상담 상세 조회", description = "상담의 상태, 분류, 태그 등 메타정보를 조회합니다")
+    @GetMapping("/{consultationId}")
+    public ApiResponse<ConsultationResponse> getConsultation(
+            @PathVariable UUID consultationId) {
+        ConsultationResponse response = consultationService.getConsultation(consultationId);
+        return ApiResponse.success("조회 성공", response);
+    }
+
     @Operation(summary = "내 상담 목록", description = "로그인한 사용자의 상담 목록을 조회합니다")
     @GetMapping
     public ApiResponse<PageResponse<ConsultationResponse>> getMyConsultations(

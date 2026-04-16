@@ -49,7 +49,13 @@ public class LawyerService {
     }
 
     public LawyerResponse getLawyer(UUID lawyerId) {
-        LawyerProfile profile = lawyerReader.findById(lawyerId);
+        LawyerProfile profile;
+        try {
+            profile = lawyerReader.findById(lawyerId);
+        } catch (Exception e) {
+            // lawyerId가 userId인 경우 (추천 API에서 userId를 반환하므로)
+            profile = lawyerReader.findByUserId(lawyerId);
+        }
         User user = userReader.findById(profile.getUserId());
         return LawyerResponse.from(profile, user.getName(), user.getProfileImageUrl());
     }

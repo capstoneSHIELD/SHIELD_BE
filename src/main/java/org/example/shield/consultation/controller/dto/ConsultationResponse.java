@@ -18,8 +18,7 @@ public record ConsultationResponse(
 ) {
     public record BriefSummary(UUID briefId, String title, String status) {}
 
-    public static ConsultationResponse from(Consultation consultation) {
-        // TODO: Brief 연관관계 추가 후 brief 필드 매핑 구현
+    public static ConsultationResponse from(Consultation consultation, BriefSummary brief) {
         return new ConsultationResponse(
                 consultation.getId(),
                 consultation.getStatus().name(),
@@ -28,7 +27,7 @@ public record ConsultationResponse(
                 consultation.getLastMessage(),
                 consultation.getLastMessageAt(),
                 consultation.getCreatedAt(),
-                null
+                brief
         );
     }
 }
