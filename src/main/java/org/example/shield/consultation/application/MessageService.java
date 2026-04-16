@@ -83,7 +83,7 @@ public class MessageService {
         Message aiMessage = Message.createAiMessage(
                 consultationId,
                 parsed.getNextQuestion(),
-                "grok-4-1-fast",  // model shortname for audit
+                "llama-3.3-70b",  // model shortname for audit
                 result.tokensInput(),
                 result.tokensOutput(),
                 result.latencyMs()
