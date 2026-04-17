@@ -52,6 +52,29 @@ class GroqRequestTest {
     }
 
     @Test
+    @DisplayName("forClassify() 직렬화 — json_object 모드, 저온도, max_tokens 512")
+    void forClassify_serialization() throws Exception {
+        List<GroqRequest.Message> messages = List.of(
+                GroqRequest.Message.system("You are a legal intent classifier."),
+                GroqRequest.Message.user("Classify the conversation intent.")
+        );
+
+        GroqRequest request = GroqRequest.forClassify("llama-3.3-70b-versatile", messages);
+        String json = objectMapper.writeValueAsString(request);
+
+        assertThat(json).contains("\"model\":\"llama-3.3-70b-versatile\"");
+        assertThat(json).contains("\"temperature\"");
+        assertThat(json).contains("\"max_completion_tokens\":512");
+        assertThat(json).contains("\"response_format\"");
+        assertThat(json).contains("\"type\":\"json_object\"");
+        // forClassify should NOT include top_p
+        assertThat(json).doesNotContain("top_p");
+
+        // Verify temperature is 0.1
+        assertThat(request.getTemperature()).isEqualTo(0.1);
+    }
+
+    @Test
     @DisplayName("Message factory 메서드 — role 및 content 올바른 설정")
     void message_factories() {
         GroqRequest.Message system = GroqRequest.Message.system("sys");

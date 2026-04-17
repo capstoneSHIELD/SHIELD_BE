@@ -39,6 +39,18 @@ public class GroqApiConfig {
     @Value("${groq.chat.max-history-messages:20}")
     private int maxHistoryMessages;
 
+    @Value("${groq.classify.model:llama-3.3-70b-versatile}")
+    private String classifyModel;
+
+    @Value("${groq.classify.temperature:0.1}")
+    private double classifyTemperature;
+
+    @Value("${groq.classify.max-tokens:512}")
+    private int classifyMaxTokens;
+
+    @Value("${groq.timeout.read-classify:15000}")
+    private int classifyReadTimeout;
+
     @Bean
     public WebClient groqWebClient() {
         HttpClient httpClient = HttpClient.create()

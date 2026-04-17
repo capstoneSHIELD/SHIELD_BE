@@ -80,8 +80,18 @@ groq:
     connect: 5000
     read-chat: 30000
     read-brief: 60000
+    read-classify: 15000
   chat:
     max-history-messages: 20
+  classify:
+    model: llama-3.3-70b-versatile
+    temperature: 0.1
+    max-tokens: 512
+
+# 온톨로지 설정
+ontology:
+  slim-json-path: classpath:ontology/legal-ontology-slim.json
+  cache-ttl-minutes: 60
 
 # CORS
 app:

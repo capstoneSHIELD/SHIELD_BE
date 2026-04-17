@@ -75,7 +75,7 @@ class GroqServiceTruncationTest {
     private GroqService createMinimalService() throws Exception {
         var constructor = GroqService.class.getDeclaredConstructors()[0];
         constructor.setAccessible(true);
-        // GroqService has 6 constructor params — pass null for all (we only test truncateMessages)
-        return (GroqService) constructor.newInstance(null, null, null, null, null, null);
+        // GroqService has 7 constructor params — pass null for all (we only test truncateMessages)
+        return (GroqService) constructor.newInstance(null, null, null, null, null, null, null);
     }
 }

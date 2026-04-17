@@ -2,10 +2,16 @@ package org.example.shield.consultation.application;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.shield.ai.application.CategoryLawMappingService;
 import org.example.shield.ai.application.ChecklistCoverageService;
 import org.example.shield.ai.application.GroqService;
+import org.example.shield.ai.application.IntentClassificationService;
+import org.example.shield.ai.application.LegalRetrievalService;
+import org.example.shield.ai.application.RagContextBuilder;
 import org.example.shield.ai.config.GroqApiConfig;
 import org.example.shield.ai.dto.ChatParsedResponse;
+import org.example.shield.ai.dto.IntentClassificationResult;
+import org.example.shield.ai.dto.LegalChunk;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.response.PageResponse;
@@ -39,6 +45,10 @@ public class MessageService {
     private final GroqApiConfig groqApiConfig;
     private final SanitizeService sanitizeService;
     private final ChecklistCoverageService checklistCoverageService;
+    private final IntentClassificationService intentClassificationService;
+    private final CategoryLawMappingService categoryLawMappingService;
+    private final LegalRetrievalService legalRetrievalService;
+    private final RagContextBuilder ragContextBuilder;
 
     @Transactional
     public SendMessageResponse sendMessage(UUID consultationId, String content) {
@@ -60,8 +70,42 @@ public class MessageService {
         Message userMessage = Message.createUserMessage(consultationId, content);
         messageWriter.save(userMessage);
 
-        // 2. Groq API 호출 (Phase 1 대화)
-        AiCallResult<ChatParsedResponse> result = groqService.chat(consultation, sanitizedText);
+        // [RAG] Layer 1-2-3 (primaryField가 설정된 이후에만 실행)
+        String ragContext = "";
+        if (consultation.getPrimaryField() != null && !consultation.getPrimaryField().isEmpty()) {
+            try {
+                String primaryField = consultation.getPrimaryField().get(0);
+
+                // Layer 1: 의도 분류
+                List<Message> recentMessages = messageReader.findAllByConsultationId(consultationId);
+                IntentClassificationResult classification =
+                        intentClassificationService.classify(recentMessages, primaryField);
+
+                // Layer 2: 법률 검색
+                List<String> lawIds = categoryLawMappingService.resolveLawIds(
+                        classification.matchedNodeIds());
+                String vectorQuery = classification.retrievalQueries().isEmpty()
+                        ? primaryField + " 관련 법률"
+                        : classification.retrievalQueries().get(0);
+                List<LegalChunk> chunks = legalRetrievalService.retrieve(
+                        vectorQuery,
+                        classification.keywords().core(),
+                        lawIds, 3);
+
+                // Layer 3: 컨텍스트 빌드
+                ragContext = ragContextBuilder.build(chunks, classification.intentSummary());
+                if (!ragContext.isEmpty()) {
+                    log.info("RAG 컨텍스트 생성 완료: consultationId={}, chunks={}", consultationId, chunks.size());
+                }
+            } catch (Exception e) {
+                log.warn("RAG 파이프라인 실패, 폴백 (RAG 없이 진행): consultationId={}, error={}",
+                        consultationId, e.getMessage());
+                ragContext = "";
+            }
+        }
+
+        // 2. Groq API 호출 (Phase 1 대화 — RAG 컨텍스트 포함)
+        AiCallResult<ChatParsedResponse> result = groqService.chat(consultation, sanitizedText, ragContext);
         ChatParsedResponse parsed = result.data();
 
         // 3. 응답 ID 저장 (감사 로깅용)
