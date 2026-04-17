@@ -70,6 +70,9 @@ public class MessageService {
         Message userMessage = Message.createUserMessage(consultationId, content);
         messageWriter.save(userMessage);
 
+        // 대화 내역 1회 조회 — RAG와 chat() 양쪽에서 공유 (중복 DB 쿼리 방지)
+        List<Message> chatHistory = messageReader.findAllByConsultationId(consultationId);
+
         // [RAG] Layer 1-2-3 (primaryField가 설정된 이후에만 실행)
         String ragContext = "";
         if (consultation.getPrimaryField() != null && !consultation.getPrimaryField().isEmpty()) {
@@ -77,9 +80,8 @@ public class MessageService {
                 String primaryField = consultation.getPrimaryField().get(0);
 
                 // Layer 1: 의도 분류
-                List<Message> recentMessages = messageReader.findAllByConsultationId(consultationId);
                 IntentClassificationResult classification =
-                        intentClassificationService.classify(recentMessages, primaryField);
+                        intentClassificationService.classify(chatHistory, primaryField);
 
                 // Layer 2: 법률 검색
                 List<String> lawIds = categoryLawMappingService.resolveLawIds(
@@ -104,8 +106,8 @@ public class MessageService {
             }
         }
 
-        // 2. Groq API 호출 (Phase 1 대화 — RAG 컨텍스트 포함)
-        AiCallResult<ChatParsedResponse> result = groqService.chat(consultation, sanitizedText, ragContext);
+        // 2. Groq API 호출 (Phase 1 대화 — RAG 컨텍스트 포함, 조회된 chatHistory 재사용)
+        AiCallResult<ChatParsedResponse> result = groqService.chat(consultation, sanitizedText, ragContext, chatHistory);
         ChatParsedResponse parsed = result.data();
 
         // 3. 응답 ID 저장 (감사 로깅용)

@@ -7,7 +7,7 @@ import org.example.shield.ai.dto.BriefParsedResponse;
 import org.example.shield.ai.dto.ChatParsedResponse;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.GroqRequest;
-import org.example.shield.ai.dto.GroqResponse;
+import org.example.shield.ai.infrastructure.GroqClient;
 import org.example.shield.ai.infrastructure.GuardrailFilter;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
@@ -15,9 +15,6 @@ import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.Message;
 import org.example.shield.consultation.domain.MessageReader;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
-import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -41,7 +38,7 @@ public class GroqService {
     private final SanitizeService sanitizeService;
     private final GuardrailFilter guardrailFilter;
     private final MessageReader messageReader;
-    private final WebClient groqWebClient;
+    private final GroqClient groqClient;
 
     /**
      * Phase 1 대화 — 사용자 메시지 처리 후 AI 응답 반환.
@@ -50,11 +47,12 @@ public class GroqService {
      * @param consultation      상담 엔티티
      * @param sanitizedUserText 사용자 입력 (sanitize 완료)
      * @param ragContext        RAG 컨텍스트 (빈 문자열이면 미삽입)
+     * @param chatHistory       이미 조회된 대화 내역 (중복 DB 쿼리 방지)
      * @return AiCallResult<ChatParsedResponse>
      */
     public AiCallResult<ChatParsedResponse> chat(Consultation consultation, String sanitizedUserText,
-                                                  String ragContext) {
-        List<GroqRequest.Message> messages = buildChatMessages(consultation, sanitizedUserText, ragContext);
+                                                  String ragContext, List<Message> chatHistory) {
+        List<GroqRequest.Message> messages = buildChatMessages(consultation, sanitizedUserText, ragContext, chatHistory);
         AiCallResult<ChatParsedResponse> result = aiClient.callChat(
                 config.getChatModel(), messages);
 
@@ -93,60 +91,26 @@ public class GroqService {
 
     /**
      * RAG Layer 1 — 의도 분류 전용 LLM 호출.
-     * AiClient 인터페이스를 우회하여 GroqService에서 직접 호출.
-     * 분류 결과를 raw JSON 문자열로 반환.
+     * GroqClient.callRawJson()에 위임하여 raw JSON 문자열로 반환.
      *
      * @param messages 분류용 messages[] 배열 (system + user)
      * @return AiCallResult<String> — raw JSON 문자열
      */
     public AiCallResult<String> callClassify(List<GroqRequest.Message> messages) {
         GroqRequest request = GroqRequest.forClassify(config.getClassifyModel(), messages);
-        long startNanos = System.nanoTime();
-
-        try {
-            GroqResponse groqResponse = groqWebClient.post()
-                    .uri("/v1/chat/completions")
-                    .bodyValue(request)
-                    .retrieve()
-                    .bodyToMono(GroqResponse.class)
-                    .timeout(Duration.ofMillis(config.getClassifyReadTimeout()))
-                    .retryWhen(Retry.backoff(2, Duration.ofSeconds(1))
-                            .filter(e -> e instanceof WebClientResponseException wce
-                                    && (wce.getStatusCode().value() == 429
-                                    || wce.getStatusCode().value() >= 500)))
-                    .block();
-
-            int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000);
-
-            if (groqResponse == null) {
-                throw new RuntimeException("Groq 분류 API 응답이 null입니다");
-            }
-
-            String contentJson = groqResponse.extractContent();
-            Integer tokensIn = groqResponse.getUsage() != null
-                    ? groqResponse.getUsage().getPromptTokens() : null;
-            Integer tokensOut = groqResponse.getUsage() != null
-                    ? groqResponse.getUsage().getCompletionTokens() : null;
-
-            log.info("Groq 분류 API 호출 성공: id={}, tokensIn={}, tokensOut={}, latency={}ms",
-                    groqResponse.getId(), tokensIn, tokensOut, latencyMs);
-
-            return new AiCallResult<>(groqResponse.getId(), contentJson, tokensIn, tokensOut, latencyMs);
-
-        } catch (Exception e) {
-            int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000);
-            log.error("Groq 분류 API 호출 실패: latency={}ms, error={}", latencyMs, e.getMessage());
-            throw new RuntimeException("Groq 분류 API 호출 실패: " + e.getMessage(), e);
-        }
+        return groqClient.callRawJson(request, Duration.ofMillis(config.getClassifyReadTimeout()));
     }
 
     /**
      * Phase 1 대화용 messages[] 배열 구성.
      * system + assistant/user 턴을 역할 배열로 구조화.
      * history truncation: 시스템 프롬프트 + 최대 N턴 (configurable).
+     *
+     * @param chatHistory 호출자가 이미 조회한 대화 내역 (중복 DB 쿼리 방지)
      */
     private List<GroqRequest.Message> buildChatMessages(
-            Consultation consultation, String latestSanitizedUserText, String ragContext) {
+            Consultation consultation, String latestSanitizedUserText,
+            String ragContext, List<Message> chatHistory) {
 
         List<GroqRequest.Message> msgs = new ArrayList<>();
 
@@ -169,11 +133,8 @@ public class GroqService {
 
         msgs.add(GroqRequest.Message.system(systemPrompt));
 
-        // 2. 기존 대화 내역 (시간순)
-        // TODO: 성능 최적화 — findAllByConsultationId는 전체 메시지를 로드함.
-        //  DB에서 최근 N건만 조회하는 쿼리로 개선 고려 (OrderByCreatedAtDesc + Limit)
-        List<Message> history = messageReader.findAllByConsultationId(consultation.getId());
-        for (Message msg : history) {
+        // 2. 기존 대화 내역 (시간순) — 호출자가 전달한 리스트 사용
+        for (Message msg : chatHistory) {
             if (msg.getRole() == MessageRole.USER) {
                 // TODO: 저장 시점에 sanitize된 텍스트를 별도 필드에 보관하면 중복 sanitize 제거 가능
                 msgs.add(GroqRequest.Message.user(

@@ -10,6 +10,7 @@ import org.example.shield.ai.dto.IntentClassificationResult.Keywords;
 import org.example.shield.ai.dto.IntentClassificationResult.MatchedNode;
 import org.example.shield.consultation.domain.Message;
 import org.springframework.beans.factory.annotation.Qualifier;
+import jakarta.annotation.PostConstruct;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
@@ -45,6 +46,18 @@ public class IntentClassificationService {
         this.resourceLoader = resourceLoader;
     }
 
+    @PostConstruct
+    void loadPromptTemplate() {
+        try {
+            this.intentClassifierPromptTemplate = StreamUtils.copyToString(
+                    resourceLoader.getResource("classpath:ai/prompts/rag/intent-classifier.md")
+                            .getInputStream(),
+                    StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new RuntimeException("의도 분류 프롬프트 로드 실패", e);
+        }
+    }
+
     /**
      * 대화 내역을 분석하여 법률 의도를 분류.
      *
@@ -54,7 +67,7 @@ public class IntentClassificationService {
      */
     public IntentClassificationResult classify(List<Message> recentMessages, String primaryField) {
         try {
-            String promptTemplate = getPromptTemplate();
+            String promptTemplate = intentClassifierPromptTemplate;
             String conversationHistory = buildConversationHistory(recentMessages);
 
             String systemPrompt = promptTemplate
@@ -79,25 +92,11 @@ public class IntentClassificationService {
      * 프롬프트 조립용 — 테스트에서 접근 가능하도록 패키지 접근 수준.
      */
     String buildSystemPrompt(List<Message> recentMessages) {
-        String promptTemplate = getPromptTemplate();
+        String promptTemplate = intentClassifierPromptTemplate;
         String conversationHistory = buildConversationHistory(recentMessages);
         return promptTemplate
                 .replace("{ONTOLOGY_JSON}", slimOntologyJson)
                 .replace("{CONVERSATION_HISTORY}", conversationHistory);
-    }
-
-    private String getPromptTemplate() {
-        if (intentClassifierPromptTemplate == null) {
-            try {
-                intentClassifierPromptTemplate = StreamUtils.copyToString(
-                        resourceLoader.getResource("classpath:ai/prompts/rag/intent-classifier.md")
-                                .getInputStream(),
-                        StandardCharsets.UTF_8);
-            } catch (IOException e) {
-                throw new RuntimeException("의도 분류 프롬프트 로드 실패", e);
-            }
-        }
-        return intentClassifierPromptTemplate;
     }
 
     private String buildConversationHistory(List<Message> messages) {

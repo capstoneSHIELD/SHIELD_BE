@@ -51,6 +51,50 @@ public class GroqClient implements AiClient {
     }
 
     /**
+     * Groq API 호출 — raw JSON 문자열 그대로 반환 (파싱 없음).
+     * callClassify 등 응답을 직접 파싱하는 호출자용.
+     */
+    public AiCallResult<String> callRawJson(GroqRequest request, Duration timeout) {
+        long startNanos = System.nanoTime();
+
+        try {
+            GroqResponse groqResponse = groqWebClient.post()
+                    .uri("/v1/chat/completions")
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(GroqResponse.class)
+                    .timeout(timeout)
+                    .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
+                            .filter(this::isRetryable))
+                    .block();
+
+            if (groqResponse == null) {
+                throw new AnalysisFailedException("Groq API 응답이 null입니다");
+            }
+
+            int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000);
+            String contentJson = groqResponse.extractContent();
+
+            Integer tokensIn = groqResponse.getUsage() != null
+                    ? groqResponse.getUsage().getPromptTokens() : null;
+            Integer tokensOut = groqResponse.getUsage() != null
+                    ? groqResponse.getUsage().getCompletionTokens() : null;
+
+            log.info("Groq API 호출 성공 (raw): id={}, tokensIn={}, tokensOut={}, latency={}ms",
+                    groqResponse.getId(), tokensIn, tokensOut, latencyMs);
+
+            return new AiCallResult<>(groqResponse.getId(), contentJson, tokensIn, tokensOut, latencyMs);
+
+        } catch (AnalysisFailedException e) {
+            throw e;
+        } catch (Exception e) {
+            int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000);
+            log.error("Groq API 호출 실패 (raw): latency={}ms, error={}", latencyMs, e.getMessage(), e);
+            throw new AnalysisFailedException("Groq API 호출 실패: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * Groq API 호출 + 응답 파싱.
      * 429/5xx 재시도 3회, JSON 파싱 실패 시 markdown extraction fallback.
      */
