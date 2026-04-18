@@ -41,6 +41,25 @@ spring:
       hibernate:
         format_sql: true
 
+  # Flyway (Phase A: PostgreSQL 마이그레이션 단일 소스화)
+  # - ddl-auto: none 과 짝을 이뤄 Flyway가 스키마 관리자
+  # - flyway_schema_history 부재 가정 → baseline-on-migrate=true, baseline-version=1 (V2부터 apply)
+  # - placeholder-replacement=false: V3의 PL/pgSQL $$...$$ 및 SQL 내 ${...} 치환 사고 사전 차단
+  flyway:
+    enabled: true
+    url: ${DB_URL}?prepareThreshold=0&stringtype=unspecified
+    user: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    locations: classpath:db/migration
+    schemas: public
+    table: flyway_schema_history
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: "Initial baseline before Flyway adoption"
+    validate-on-migrate: true
+    out-of-order: false
+    placeholder-replacement: false
+
 # JWT
 jwt:
   secret: ${JWT_SECRET}
