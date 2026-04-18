@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.application.ChecklistCoverageService;
 import org.example.shield.ai.application.GroqService;
+import org.example.shield.ai.application.RagPipelineService;
 import org.example.shield.ai.config.GroqApiConfig;
 import org.example.shield.ai.dto.ChatParsedResponse;
 import org.example.shield.ai.dto.AiCallResult;
@@ -39,6 +40,7 @@ public class MessageService {
     private final GroqApiConfig groqApiConfig;
     private final SanitizeService sanitizeService;
     private final ChecklistCoverageService checklistCoverageService;
+    private final RagPipelineService ragPipelineService;
 
     @Transactional
     public SendMessageResponse sendMessage(UUID consultationId, String content) {
@@ -60,8 +62,18 @@ public class MessageService {
         Message userMessage = Message.createUserMessage(consultationId, content);
         messageWriter.save(userMessage);
 
-        // 2. Groq API 호출 (Phase 1 대화)
-        AiCallResult<ChatParsedResponse> result = groqService.chat(consultation, sanitizedText);
+        // 대화 내역 1회 조회 — RAG와 chat() 양쪽에서 공유 (중복 DB 쿼리 방지)
+        List<Message> chatHistory = messageReader.findAllByConsultationId(consultationId);
+
+        // [RAG] Layer 1-2-3 (primaryField가 설정된 이후에만 실행)
+        String ragContext = "";
+        if (consultation.getPrimaryField() != null && !consultation.getPrimaryField().isEmpty()) {
+            ragContext = ragPipelineService.execute(
+                    chatHistory, consultation.getPrimaryField().get(0), consultationId);
+        }
+
+        // 2. Groq API 호출 (Phase 1 대화 — RAG 컨텍스트 포함, 조회된 chatHistory 재사용)
+        AiCallResult<ChatParsedResponse> result = groqService.chat(consultation, sanitizedText, ragContext, chatHistory);
         ChatParsedResponse parsed = result.data();
 
         // 3. 응답 ID 저장 (감사 로깅용)

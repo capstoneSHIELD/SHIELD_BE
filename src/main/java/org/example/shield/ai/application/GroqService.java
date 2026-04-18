@@ -7,6 +7,7 @@ import org.example.shield.ai.dto.BriefParsedResponse;
 import org.example.shield.ai.dto.ChatParsedResponse;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.GroqRequest;
+import org.example.shield.ai.infrastructure.GroqClient;
 import org.example.shield.ai.infrastructure.GuardrailFilter;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
@@ -15,6 +16,7 @@ import org.example.shield.consultation.domain.Message;
 import org.example.shield.consultation.domain.MessageReader;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,17 +38,21 @@ public class GroqService {
     private final SanitizeService sanitizeService;
     private final GuardrailFilter guardrailFilter;
     private final MessageReader messageReader;
+    private final GroqClient groqClient;
 
     /**
      * Phase 1 대화 — 사용자 메시지 처리 후 AI 응답 반환.
      * Groq는 Stateful 모드를 지원하지 않으므로 항상 full history 전송.
      *
-     * @param consultation 상담 엔티티
+     * @param consultation      상담 엔티티
      * @param sanitizedUserText 사용자 입력 (sanitize 완료)
+     * @param ragContext        RAG 컨텍스트 (빈 문자열이면 미삽입)
+     * @param chatHistory       이미 조회된 대화 내역 (중복 DB 쿼리 방지)
      * @return AiCallResult<ChatParsedResponse>
      */
-    public AiCallResult<ChatParsedResponse> chat(Consultation consultation, String sanitizedUserText) {
-        List<GroqRequest.Message> messages = buildChatMessages(consultation, sanitizedUserText);
+    public AiCallResult<ChatParsedResponse> chat(Consultation consultation, String sanitizedUserText,
+                                                  String ragContext, List<Message> chatHistory) {
+        List<GroqRequest.Message> messages = buildChatMessages(consultation, sanitizedUserText, ragContext, chatHistory);
         AiCallResult<ChatParsedResponse> result = aiClient.callChat(
                 config.getChatModel(), messages);
 
@@ -84,12 +90,27 @@ public class GroqService {
     }
 
     /**
+     * RAG Layer 1 — 의도 분류 전용 LLM 호출.
+     * GroqClient.callRawJson()에 위임하여 raw JSON 문자열로 반환.
+     *
+     * @param messages 분류용 messages[] 배열 (system + user)
+     * @return AiCallResult<String> — raw JSON 문자열
+     */
+    public AiCallResult<String> callClassify(List<GroqRequest.Message> messages) {
+        GroqRequest request = GroqRequest.forClassify(config.getClassifyModel(), messages);
+        return groqClient.callRawJson(request, Duration.ofMillis(config.getClassifyReadTimeout()));
+    }
+
+    /**
      * Phase 1 대화용 messages[] 배열 구성.
      * system + assistant/user 턴을 역할 배열로 구조화.
      * history truncation: 시스템 프롬프트 + 최대 N턴 (configurable).
+     *
+     * @param chatHistory 호출자가 이미 조회한 대화 내역 (중복 DB 쿼리 방지)
      */
     private List<GroqRequest.Message> buildChatMessages(
-            Consultation consultation, String latestSanitizedUserText) {
+            Consultation consultation, String latestSanitizedUserText,
+            String ragContext, List<Message> chatHistory) {
 
         List<GroqRequest.Message> msgs = new ArrayList<>();
 
@@ -105,13 +126,15 @@ public class GroqService {
             }
         }
 
+        // RAG Layer 3: 법률 조문 컨텍스트 주입
+        if (ragContext != null && !ragContext.isEmpty()) {
+            systemPrompt = systemPrompt + "\n\n" + ragContext;
+        }
+
         msgs.add(GroqRequest.Message.system(systemPrompt));
 
-        // 2. 기존 대화 내역 (시간순)
-        // TODO: 성능 최적화 — findAllByConsultationId는 전체 메시지를 로드함.
-        //  DB에서 최근 N건만 조회하는 쿼리로 개선 고려 (OrderByCreatedAtDesc + Limit)
-        List<Message> history = messageReader.findAllByConsultationId(consultation.getId());
-        for (Message msg : history) {
+        // 2. 기존 대화 내역 (시간순) — 호출자가 전달한 리스트 사용
+        for (Message msg : chatHistory) {
             if (msg.getRole() == MessageRole.USER) {
                 // TODO: 저장 시점에 sanitize된 텍스트를 별도 필드에 보관하면 중복 sanitize 제거 가능
                 msgs.add(GroqRequest.Message.user(

@@ -91,4 +91,18 @@ public class GroqRequest {
                 .responseFormat(Map.of("type", "json_object"))
                 .build();
     }
+
+    /**
+     * RAG Layer 1 의도 분류 (json_object 모드, 저온도).
+     * temperature 0.1로 결정적 출력, max_tokens 512로 경량 호출.
+     */
+    public static GroqRequest forClassify(String model, List<Message> messages) {
+        return GroqRequest.builder()
+                .model(model)
+                .messages(messages)
+                .temperature(0.1)
+                .maxCompletionTokens(512)
+                .responseFormat(Map.of("type", "json_object"))
+                .build();
+    }
 }
