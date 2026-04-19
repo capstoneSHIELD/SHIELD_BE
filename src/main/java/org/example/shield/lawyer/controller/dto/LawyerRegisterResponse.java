@@ -7,9 +7,12 @@ import java.time.LocalDateTime;
 /**
  * 변호사 가입(/api/lawyers/me/register) 응답.
  *
- * 가입이 완료되면 User.role 이 USER → LAWYER 로 승격되기 때문에
- * 기존 JWT 에 담긴 role 클레임이 더 이상 유효하지 않다.
- * 이에 맞춰 새 accessToken 을 함께 반환하여 프론트가 즉시 교체할 수 있게 한다.
+ * 가입이 완료되면 User.role 이 USER → LAWYER 로 승격되며
+ * 새 JWT 토큰 쌍(access + refresh) 이 발급된다.
+ *
+ * - accessToken : 응답 body 에 포함해 프론트가 즉시 교체한다.
+ * - refreshToken : 기존 로그인 엔드포인트와 동일하게 HttpOnly secure 쿠키(refreshToken)로 교체한다.
+ *   (body 에는 포함하지 않음. XSS 노출 이슈 및 기존 관례 유지)
  */
 public record LawyerRegisterResponse(
         String accessToken,

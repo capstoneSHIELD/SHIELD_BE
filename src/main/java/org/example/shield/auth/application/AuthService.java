@@ -35,11 +35,19 @@ public class AuthService {
         var existing = userReader.findByGoogleId(userInfo.googleId());
         boolean isNewUser = existing.isEmpty();
 
+        // 보안: 신규 가입 시에는 클라이언트가 전달한 role 을 신뢰하지 않고
+        // 항상 USER 로 고정한다. LAWYER/ADMIN 으로의 승격은 전용 에지 API
+        // (예: /api/lawyers/me/register) 를 통해서만 일어나야 한다.
+        // parseRole(role) 결과는 더 이상 사용하지 않으나, 입력 검증(InvalidRoleException) 목적으로 호출을 유지한다.
+        if (role != null && !role.isBlank()) {
+            parseRole(role);
+        }
+
         User user = existing.orElseGet(() -> userWriter.save(
                 User.builder()
                         .email(userInfo.email())
                         .name(userInfo.name())
-                        .role(parseRole(role))
+                        .role(UserRole.USER)
                         .provider("GOOGLE")
                         .googleId(userInfo.googleId())
                         .build()
