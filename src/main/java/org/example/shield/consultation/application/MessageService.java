@@ -91,7 +91,7 @@ public class MessageService {
             throw new ChatAiException();
         }
 
-        // 4. AI 분류 결과 처리 (primaryFieldLocked 가드)
+        // 4. AI 분류 결과 처리 (per-level lock, Issue #48)
         if (hasAny(parsed.getAiDomains()) || hasAny(parsed.getAiSubDomains()) || hasAny(parsed.getAiTags())) {
             boolean updated = consultation.updateAiClassification(
                     parsed.getAiDomains(), parsed.getAiSubDomains(), parsed.getAiTags());
