@@ -73,6 +73,7 @@ public class CohereChatRequest {
 
     /**
      * Phase 1 대화: 전체 chatHistory를 messages[]로 전달.
+     * response_format=json_object 로 모델 출력을 JSON 객체로 강제 (Issue #56).
      */
     public static CohereChatRequest forChat(String model, List<Message> messages) {
         return CohereChatRequest.builder()
@@ -81,6 +82,7 @@ public class CohereChatRequest {
                 .temperature(0.3)
                 .maxTokens(1024)
                 .p(0.9)
+                .responseFormat(Map.of("type", "json_object"))
                 .build();
     }
 
