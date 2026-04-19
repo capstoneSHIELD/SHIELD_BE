@@ -13,6 +13,10 @@ spring:
       hibernate:
         format_sql: false
 
+# ALB 뒤에서 HTTPS 프록시 처리
+server:
+  forward-headers-strategy: framework
+
 # 프로덕션 CORS
 app:
   cors:
