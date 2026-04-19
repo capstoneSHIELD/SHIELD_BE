@@ -15,6 +15,8 @@ app:
     allowed-origins: http://localhost:3000,http://localhost:5173,http://localhost:5174
 
 logging:
+  file:
+    name: logs/shield-local.log
   level:
     org.example.shield: DEBUG
     org.springframework.web: INFO
