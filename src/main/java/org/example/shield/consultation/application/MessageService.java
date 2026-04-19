@@ -146,6 +146,11 @@ public class MessageService {
             );
             Message savedAi = chatTxBoundary.finalizeAiResponse(consultationId, payload);
 
+            // DB에 반영된 AI 분류 결과를 로컬 객체에도 동기화하여 후속 커버리지 계산에 사용
+            if (payload.hasAnyClassification()) {
+                consultation.updateAiClassification(payload.aiDomains(), payload.aiSubDomains(), payload.aiTags());
+            }
+
             // 7. allCompleted AND gate (P0-II, Issue #40 3레벨 커버리지) — 트랜잭션 밖
             boolean effectiveAllCompleted = evaluateAllCompletedGate(consultationId, consultation, parsed);
 
