@@ -78,10 +78,11 @@ public class LawyerMatchingService {
 
         // matchedKeywords 집계용: 소분류 + Brief.keywords 합집합.
         List<String> briefKeywords = brief.getKeywords() != null ? brief.getKeywords() : Collections.emptyList();
-        List<String> matchKeywords = new ArrayList<>(tags);
+        java.util.Set<String> keywordSet = new java.util.LinkedHashSet<>(tags);
         for (String kw : briefKeywords) {
-            if (kw != null && !matchKeywords.contains(kw)) matchKeywords.add(kw);
+            if (kw != null) keywordSet.add(kw);
         }
+        List<String> matchKeywords = new java.util.ArrayList<>(keywordSet);
 
         // 1) 쿼리 텍스트 조립 → 임베딩
         String queryText = embeddingTextBuilder.build(
