@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase C-1 자동 벤치 러너.
+"""Phase C-1/C-5 자동 벤치 러너.
 
 eval-set JSONL을 읽어 각 질의에 대해 Spring `PgLegalRetrievalService`와 동일한
 3-way 하이브리드 SQL을 psql로 실행하고 다음 지표를 계산한다.
@@ -8,8 +8,12 @@ eval-set JSONL을 읽어 각 질의에 대해 Spring `PgLegalRetrievalService`�
 - MRR (첫 gold 조문의 역순위 평균, top-10 미발견 시 0)
 - nDCG@5 (gold 이진 관련성)
 
+`--rerank` 플래그를 주면 Cohere `rerank-v3.5`로 후단 재정렬을 적용한다.
+후단 재정렬은 하이브리드 SQL로 top-K_pool을 뽑은 뒤, 각 청크를 YAML-friendly
+문자열로 직렬화해 rerank API에 넘기고, `relevance_score` 내림차순으로 재정렬한다.
+
 출력:
-- Markdown 보고서 (기본 docs/phase-c1-baseline.md)
+- Markdown 보고서 (`--output` 경로)
 - JSON (Markdown 경로의 .json, 기계 판독용)
 
 사용법:
@@ -17,11 +21,16 @@ eval-set JSONL을 읽어 각 질의에 대해 Spring `PgLegalRetrievalService`�
       --eval eval/eval-set.v1.jsonl \\
       --output docs/phase-c1-baseline.md
 
+  COHERE_API_KEY=... DB_PASSWORD=... python3 scripts/eval_rag.py \\
+      --eval eval/eval-set.v1.jsonl \\
+      --output docs/phase-c5-rerank.md \\
+      --rerank --pool 20
+
 설계 메모:
-- SQL 가중치와 BM25 prefix 규칙은 `rag_qualitative_smoke.py`와 동일하게 유지
-  (Phase B-8c 반영). 가중치: vec 0.5 / bm25 0.3 / trigram 0.2.
+- SQL 가중치와 BM25 prefix 규칙은 Spring 서비스와 동일 (vec 0.5 / bm25 0.3 / trig 0.2).
 - hit 판정: (law_id, article_no) 튜플 기준 정확 일치.
 - top-K 개수는 MRR/Recall 산정을 위해 10으로 확장한다.
+- rerank 모드에서는 후보 pool(기본 20)을 뽑은 뒤 10개로 잘라 같은 지표를 계산한다.
 """
 from __future__ import annotations
 
@@ -43,6 +52,7 @@ DB_NAME = "postgres"
 
 EMBED_MODEL = "embed-v4.0"
 EMBED_DIM = 1024
+RERANK_MODEL = "rerank-v3.5"
 WV, WK, WT = 0.5, 0.3, 0.2
 TOPK = 10
 RECALL_KS = (1, 3, 5, 10)
@@ -50,25 +60,54 @@ NDCG_K = 5
 
 
 def embed_query(text: str) -> list[float]:
-    body = json.dumps({
+    # embed도 무료 티어에서 429 날 수 있어 공유 _cohere_post 경로 사용
+    data = _cohere_post("/v2/embed", {
         "model": EMBED_MODEL,
         "texts": [text],
         "input_type": "search_query",
         "embedding_types": ["float"],
         "output_dimension": EMBED_DIM,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.cohere.com/v2/embed",
-        data=body,
-        headers={
-            "Authorization": f"Bearer {COHERE_KEY}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
+    }, timeout=30)
     return data["embeddings"]["float"][0]
+
+
+def _cohere_post(path: str, body_dict: dict, timeout: int = 60) -> dict:
+    """Cohere API POST with 429 back-off. 무료 티어 rate limit 대응."""
+    body = json.dumps(body_dict).encode("utf-8")
+    last_err: Exception | None = None
+    for attempt in range(6):
+        req = urllib.request.Request(
+            f"https://api.cohere.com{path}",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {COHERE_KEY}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code == 429:
+                sleep_sec = min(60, 6 * (attempt + 1))
+                print(f"[WARN] 429 on {path}, retrying in {sleep_sec}s (attempt {attempt+1}/6)", file=sys.stderr)
+                time.sleep(sleep_sec)
+                continue
+            raise
+    raise last_err  # type: ignore[misc]
+
+
+def rerank(query: str, documents: list[str], top_n: int) -> list[dict]:
+    """Cohere rerank-v3.5 호출. 반환: [{index, relevance_score}, ...]"""
+    data = _cohere_post("/v2/rerank", {
+        "model": RERANK_MODEL,
+        "query": query,
+        "documents": documents,
+        "top_n": top_n,
+    })
+    return data["results"]
 
 
 def to_pgvector_literal(vec: list[float]) -> str:
@@ -84,7 +123,12 @@ def build_keyword_query(keywords: list[str]) -> str:
     return " | ".join(with_prefix(k) for k in keywords)
 
 
-def run_search(case: dict) -> tuple[list[dict], str]:
+def pipe_escape(s: str) -> str:
+    """psql -A 출력의 '|' 구분자와 충돌 방지용."""
+    return (s or "").replace("|", "/")
+
+
+def run_search(case: dict, limit: int) -> tuple[list[dict], str]:
     qvec = embed_query(case["query"])
     qvec_lit = to_pgvector_literal(qvec)
     kq = build_keyword_query(case["bm25_keywords"])
@@ -96,22 +140,26 @@ def run_search(case: dict) -> tuple[list[dict], str]:
         cat_literal = "NULL::text[]"
 
     # law_id는 현재 민법 단일 코퍼스이므로 'law-civil' 고정.
-    # gold_articles의 law_id와 대조하기 위해 SELECT에 law_id 포함.
+    # reranker가 쓸 본문(content)과 법령명(law_name)도 SELECT에 포함.
+    # 구분자는 |||(삼중 파이프) — 본문에 단일 '|'가 있어도 충돌 없음.
     sql = f"""
-        SELECT lc.law_id || '|' || lc.article_no || '|' ||
-               COALESCE(lc.article_title,'') || '|' ||
+        SELECT lc.law_id || '|||' ||
+               REPLACE(COALESCE(lc.law_name,''), '|||', '/') || '|||' ||
+               lc.article_no || '|||' ||
+               REPLACE(COALESCE(lc.article_title,''), '|||', '/') || '|||' ||
                ROUND( (
                    CASE WHEN lc.embedding IS NULL THEN 0
                         ELSE 1 - (lc.embedding <=> '{qvec_lit}'::vector)
                    END * {WV}
                  + ts_rank(lc.content_tsv, to_tsquery('simple', '{kq}'), 1) * {WK}
                  + similarity(lc.content, $${case["query"]}$$) * {WT}
-               )::numeric, 4) || '|' ||
+               )::numeric, 4) || '|||' ||
                ROUND((CASE WHEN lc.embedding IS NULL THEN 0
                            ELSE 1 - (lc.embedding <=> '{qvec_lit}'::vector)
-                      END)::numeric, 4) || '|' ||
-               ROUND(ts_rank(lc.content_tsv, to_tsquery('simple', '{kq}'), 1)::numeric, 4) || '|' ||
-               ROUND(similarity(lc.content, $${case["query"]}$$)::numeric, 4)
+                      END)::numeric, 4) || '|||' ||
+               ROUND(ts_rank(lc.content_tsv, to_tsquery('simple', '{kq}'), 1)::numeric, 4) || '|||' ||
+               ROUND(similarity(lc.content, $${case["query"]}$$)::numeric, 4) || '|||' ||
+               REPLACE(REPLACE(COALESCE(lc.content,''), E'\\n', ' '), '|||', '/')
           FROM legal_chunks lc
          WHERE lc.abolition_date IS NULL
            AND lc.law_id = 'law-civil'
@@ -128,7 +176,7 @@ def run_search(case: dict) -> tuple[list[dict], str]:
                  + ts_rank(lc.content_tsv, to_tsquery('simple', '{kq}'), 1) * {WK}
                  + similarity(lc.content, $${case["query"]}$$) * {WT}
                  ) DESC
-         LIMIT {TOPK};
+         LIMIT {limit};
     """
 
     env = os.environ.copy()
@@ -145,27 +193,58 @@ def run_search(case: dict) -> tuple[list[dict], str]:
     for line in result.stdout.strip().split("\n"):
         if not line.strip():
             continue
-        parts = line.split("|")
-        if len(parts) >= 7:
+        parts = line.split("|||")
+        if len(parts) >= 9:
             rows.append({
                 "law_id": parts[0],
-                "article_no": parts[1],
-                "title": parts[2],
-                "score": parts[3],
-                "vec_sim": parts[4],
-                "bm25": parts[5],
-                "trig": parts[6],
+                "law_name": parts[1],
+                "article_no": parts[2],
+                "title": parts[3],
+                "score": parts[4],
+                "vec_sim": parts[5],
+                "bm25": parts[6],
+                "trig": parts[7],
+                "content": parts[8],
             })
     return rows, kq
 
 
+def rerank_rows(query: str, rows: list[dict], top_n: int) -> list[dict]:
+    """Cohere rerank-v3.5로 재정렬. 각 row에 'rerank_score' 추가."""
+    if not rows:
+        return rows
+    # YAML-friendly 문자열 (Cohere 권장 포맷). 법조문 구조를 보존.
+    documents = []
+    for r in rows:
+        law = r["law_name"] or r["law_id"]
+        title = r["title"] or ""
+        content = r["content"] or ""
+        # 본문은 너무 길면 rerank가 자동 절단하지만, 명시적으로 4000자 제한.
+        if len(content) > 4000:
+            content = content[:4000]
+        doc = f"law: {law}\narticle: {r['article_no']}\ntitle: {title}\ncontent: {content}"
+        documents.append(doc)
+    results = rerank(query, documents, top_n)
+    reordered = []
+    for res in results:
+        idx = res["index"]
+        row = dict(rows[idx])
+        row["rerank_score"] = round(float(res["relevance_score"]), 4)
+        reordered.append(row)
+    return reordered
+
+
 def compute_metrics(rows: list[dict], gold: list[dict]) -> dict:
-    """gold_articles = [{law_id, article_no}, ...] 기준 hit rank 계산."""
+    """gold_articles = [{law_id, article_no}, ...] 기준 hit rank 계산.
+
+    주의: 평가는 상위 K=10 기준으로 수행. rerank 모드에서도 pool 크기와 무관하게
+    재정렬 후 상위 10개만 사용.
+    """
+    rows = rows[:TOPK]
     gold_pairs = {(g["law_id"], g["article_no"]) for g in gold}
-    # rank(1-based) per gold: None if not in top-K
     result_pairs = [(r["law_id"], r["article_no"]) for r in rows]
 
-    # 각 gold의 최소 rank
+    # 각 gold의 최소 rank (top-K 범위 내)
     gold_ranks: list[int | None] = []
     for g in gold_pairs:
         rank = None
@@ -181,7 +260,6 @@ def compute_metrics(rows: list[dict], gold: list[dict]) -> dict:
         hits_at[k] = hit
     recall_at = {k: (hits_at[k] / len(gold_pairs)) if gold_pairs else 0.0 for k in RECALL_KS}
 
-    # MRR: 전체 질의에서는 "첫 번째 gold의 rank" 기준 역수
     first_hit_rank = None
     for idx, pair in enumerate(result_pairs, 1):
         if pair in gold_pairs:
@@ -189,12 +267,10 @@ def compute_metrics(rows: list[dict], gold: list[dict]) -> dict:
             break
     rr = (1.0 / first_hit_rank) if first_hit_rank else 0.0
 
-    # nDCG@5 (gold=1, else=0)
     dcg = 0.0
     for idx, pair in enumerate(result_pairs[:NDCG_K], 1):
         if pair in gold_pairs:
             dcg += 1.0 / math.log2(idx + 1)
-    # IDCG: gold 개수와 NDCG_K 중 작은 값만큼 상위에 배치된 이상적 순서
     ideal_hits = min(len(gold_pairs), NDCG_K)
     idcg = sum(1.0 / math.log2(i + 1) for i in range(1, ideal_hits + 1)) if ideal_hits else 0.0
     ndcg = (dcg / idcg) if idcg else 0.0
@@ -226,14 +302,21 @@ def mean(xs: list[float]) -> float:
 
 def render_markdown(cases_result: list[dict], summary: dict, meta: dict) -> str:
     lines: list[str] = []
-    lines.append("# Phase C-1 RAG 벤치마크 베이스라인")
+    title_suffix = " (+ Cohere Rerank 3.5)" if meta["use_rerank"] else ""
+    lines.append(f"# Phase C RAG 벤치마크{title_suffix}")
     lines.append("")
     lines.append(f"- eval set: `{meta['eval_path']}` ({meta['n_cases']} 질의)")
     lines.append(f"- 가중치: vector={WV}, keyword(BM25)={WK}, trigram={WT}")
     lines.append(f"- topK: {TOPK} (Recall@K K∈{list(RECALL_KS)}, nDCG@{NDCG_K})")
     lines.append("- BM25 쿼리: prefix 매칭 (`키워드:*`) 적용")
     lines.append("- 코퍼스: 민법 (law-civil) 단일")
+    if meta["use_rerank"]:
+        lines.append(f"- 후단 재정렬: Cohere `{RERANK_MODEL}` (후보 pool={meta['pool']} → top-{TOPK})")
+    else:
+        lines.append("- 후단 재정렬: 없음 (하이브리드 SQL only)")
     lines.append(f"- 실행 시각: {meta['timestamp']}")
+    if meta.get("elapsed_sec") is not None:
+        lines.append(f"- 총 실행 시간: {meta['elapsed_sec']:.1f}s ({meta['elapsed_sec']/meta['n_cases']:.2f}s/질의)")
     lines.append("")
     lines.append("## 종합 지표")
     lines.append("")
@@ -279,16 +362,26 @@ def render_markdown(cases_result: list[dict], summary: dict, meta: dict) -> str:
         lines.append(f"- gold: {gold_str}")
         lines.append(f"- BM25 tsquery: `{c['bm25_tsquery']}`")
         lines.append("")
-        lines.append("| # | 조문 | 제목 | score | vec | bm25 | trig | hit |")
-        lines.append("|---|---|---|---|---|---|---|---|")
+        if meta["use_rerank"]:
+            lines.append("| # | 조문 | 제목 | rerank | hybrid | vec | bm25 | trig | hit |")
+            lines.append("|---|---|---|---|---|---|---|---|---|")
+        else:
+            lines.append("| # | 조문 | 제목 | score | vec | bm25 | trig | hit |")
+            lines.append("|---|---|---|---|---|---|---|---|")
         gold_pairs = {(g["law_id"], g["article_no"]) for g in c["gold_articles"]}
         for i, row in enumerate(c["rows"][:5], 1):
             hit = "O" if (row["law_id"], row["article_no"]) in gold_pairs else ""
-            title = (row["title"] or "").replace("|", "/")[:30]
-            lines.append(
-                f"| {i} | {row['article_no']} | {title} | {row['score']} | "
-                f"{row['vec_sim']} | {row['bm25']} | {row['trig']} | {hit} |"
-            )
+            title = pipe_escape(row["title"])[:30]
+            if meta["use_rerank"]:
+                lines.append(
+                    f"| {i} | {row['article_no']} | {title} | {row.get('rerank_score','-')} | "
+                    f"{row['score']} | {row['vec_sim']} | {row['bm25']} | {row['trig']} | {hit} |"
+                )
+            else:
+                lines.append(
+                    f"| {i} | {row['article_no']} | {title} | {row['score']} | "
+                    f"{row['vec_sim']} | {row['bm25']} | {row['trig']} | {hit} |"
+                )
         lines.append("")
     return "\n".join(lines) + "\n"
 
@@ -297,6 +390,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--eval", required=True, help="eval JSONL 경로")
     parser.add_argument("--output", required=True, help="Markdown 출력 경로 (.md)")
+    parser.add_argument("--rerank", action="store_true", help="Cohere rerank-v3.5 후단 재정렬 활성화")
+    parser.add_argument("--pool", type=int, default=20, help="rerank 입력 후보 pool 크기 (기본 20)")
     args = parser.parse_args()
 
     eval_path = Path(args.eval)
@@ -305,28 +400,43 @@ def main():
 
     cases = load_cases(eval_path)
     print(f"[INFO] {len(cases)} cases loaded from {eval_path}", file=sys.stderr)
+    if args.rerank:
+        print(f"[INFO] rerank enabled (pool={args.pool}, model={RERANK_MODEL})", file=sys.stderr)
+
+    # 하이브리드 SQL의 limit — rerank면 pool, 아니면 TOPK
+    sql_limit = args.pool if args.rerank else TOPK
 
     cases_result = []
     per_domain: dict[str, list[dict]] = {}
     total_gold = 0
+    t0 = time.time()
     for idx, case in enumerate(cases, 1):
         print(f"[INFO] ({idx}/{len(cases)}) {case['id']} — {case['query'][:30]}…", file=sys.stderr)
-        rows, kq = run_search(case)
+        rows, kq = run_search(case, sql_limit)
+        if args.rerank and rows:
+            rows = rerank_rows(case["query"], rows, top_n=TOPK)
+        # 무료 티어 rate limit(분당 ~10 호출) 회피용 페이싱.
+        # rerank 모드: embed 1 + rerank 1 = 질의당 2 call → 6.5s 간격.
+        # baseline 모드: embed 1 call → 0s.
+        if args.rerank and idx < len(cases):
+            time.sleep(6.5)
         metrics = compute_metrics(rows, case["gold_articles"])
         total_gold += len(case["gold_articles"])
+        # JSON 출력용: content는 너무 커서 제외
+        rows_for_out = [{k: v for k, v in r.items() if k != "content"} for r in rows]
         entry = {
             "id": case["id"],
             "domain": case["domain"],
             "query": case["query"],
             "gold_articles": case["gold_articles"],
             "bm25_tsquery": kq,
-            "rows": rows,
+            "rows": rows_for_out,
             "metrics": metrics,
         }
         cases_result.append(entry)
         per_domain.setdefault(case["domain"], []).append(entry)
+    elapsed = time.time() - t0
 
-    # 종합 지표
     summary = {
         "recall_at": {k: mean([c["metrics"]["recall_at"][k] for c in cases_result]) for k in RECALL_KS},
         "mrr": mean([c["metrics"]["rr"] for c in cases_result]),
@@ -346,6 +456,9 @@ def main():
         "eval_path": str(eval_path),
         "n_cases": len(cases),
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S %Z"),
+        "use_rerank": bool(args.rerank),
+        "pool": args.pool if args.rerank else None,
+        "elapsed_sec": elapsed,
     }
 
     md = render_markdown(cases_result, summary, meta)
@@ -362,7 +475,8 @@ def main():
     print(
         f"[SUMMARY] R@1={summary['recall_at'][1]:.3f} R@3={summary['recall_at'][3]:.3f} "
         f"R@5={summary['recall_at'][5]:.3f} R@10={summary['recall_at'][10]:.3f} "
-        f"MRR={summary['mrr']:.3f} nDCG@5={summary['ndcg5']:.3f}",
+        f"MRR={summary['mrr']:.3f} nDCG@5={summary['ndcg5']:.3f} "
+        f"elapsed={elapsed:.1f}s",
         file=sys.stderr,
     )
 
