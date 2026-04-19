@@ -334,16 +334,21 @@ class MessageServiceTest {
         parsed.setNextQuestion("   "); // blank
         given(cohereService.chat(any(), anyString(), anyString(), any()))
                 .willReturn(new AiCallResult<>("resp-blank-regression", parsed, 100, 0, 250));
-        given(messageWriter.save(any(Message.class))).willAnswer(inv -> inv.getArgument(0));
+        // PR-C 리팩터링 이후 USER 메시지는 chatTxBoundary.saveUserMessage 로 저장된다.
+        given(chatTxBoundary.saveUserMessage(eq(consultationId), anyString()))
+                .willAnswer(inv -> {
+                    String text = inv.getArgument(1);
+                    return Message.createUserMessage(consultationId, text);
+                });
 
         // when / then
         assertThatThrownBy(() -> messageService.sendMessage(consultationId, "사용자 입력"))
                 .isInstanceOf(ChatAiException.class);
 
         // USER 메시지만 저장되어야 한다 (AI 메시지는 blank 차단으로 저장 X)
-        ArgumentCaptor<Message> captor = ArgumentCaptor.forClass(Message.class);
-        verify(messageWriter, times(1)).save(captor.capture());
-        assertThat(captor.getValue().getContent()).isEqualTo("사용자 입력");
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(chatTxBoundary, times(1)).saveUserMessage(eq(consultationId), captor.capture());
+        assertThat(captor.getValue()).isEqualTo("사용자 입력");
 
         // lastResponseId 도 dirty state 로 남아 있어야 한다 (감사 로깅 목적)
         assertThat(real.getLastResponseId()).isEqualTo("resp-blank-regression");

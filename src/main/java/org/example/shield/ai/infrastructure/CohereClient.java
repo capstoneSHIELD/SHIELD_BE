@@ -229,21 +229,37 @@ public class CohereClient implements AiClient {
     }
 
     private <T> T parseResponse(String contentJson, Class<T> type) {
+        // 1차: 원문 그대로 파싱
         try {
             return objectMapper.readValue(contentJson, type);
-        } catch (Exception e) {
-            log.warn("JSON 파싱 실패, 원문: {}", contentJson.substring(0, Math.min(500, contentJson.length())));
+        } catch (Exception primary) {
+            log.warn("JSON 파싱 실패 (1차), 원문: {}",
+                    contentJson.substring(0, Math.min(500, contentJson.length())));
 
+            // 2차: 마크다운 펜스 안의 JSON
             String cleaned = extractJsonFromMarkdown(contentJson);
             if (!cleaned.equals(contentJson)) {
                 try {
                     return objectMapper.readValue(cleaned, type);
-                } catch (Exception e2) {
-                    log.error("마크다운 추출 후에도 JSON 파싱 실패: {}", e2.getMessage());
+                } catch (Exception ignored) {
+                    log.warn("마크다운 추출 후에도 JSON 파싱 실패 — 괄호 복구 fallback 진입");
                 }
             }
 
-            throw new AnalysisFailedException("Cohere 응답 JSON 파싱 실패: " + e.getMessage(), e);
+            // 3차: 평문에서 균형 잡힌 JSON 객체 구간 복구
+            String recovered = extractBalancedJsonObject(contentJson);
+            if (recovered != null) {
+                try {
+                    T parsed = objectMapper.readValue(recovered, type);
+                    log.warn("평문에서 JSON 구간 복구 성공 (길이={})", recovered.length());
+                    return parsed;
+                } catch (Exception ignored) {
+                    log.error("괄호 복구 후에도 JSON 파싱 실패");
+                }
+            }
+
+            throw new AnalysisFailedException(
+                    "Cohere 응답 JSON 파싱 실패: " + primary.getMessage(), primary);
         }
     }
 
@@ -263,6 +279,42 @@ public class CohereClient implements AiClient {
             }
         }
         return raw;
+    }
+
+    /**
+     * 작은 문자열 안에서 괄호 균형이 맞는 첫 JSON 객체 구간을 추출.
+     * 문자열 리터럴/이스케이프를 고려해 중괄호만 세어 균형 검사한다.
+     * 예: "체불된 임금이 {\"nextQuestion\": ...} 이런식..."
+     *       → 중간의 JSON 객체 만 복구.
+     *
+     * @return 유효한 JSON 문자열 발견 시 해당 substring, 없으면 null
+     */
+    private String extractBalancedJsonObject(String raw) {
+        if (raw == null) return null;
+        int n = raw.length();
+        int start = -1;
+        int depth = 0;
+        boolean inString = false;
+        boolean escape = false;
+        for (int i = 0; i < n; i++) {
+            char c = raw.charAt(i);
+            if (escape) { escape = false; continue; }
+            if (c == '\\') { escape = true; continue; }
+            if (c == '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (c == '{') {
+                if (depth == 0) start = i;
+                depth++;
+            } else if (c == '}') {
+                if (depth > 0) {
+                    depth--;
+                    if (depth == 0 && start >= 0) {
+                        return raw.substring(start, i + 1);
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private boolean isRetryable(Throwable e) {
