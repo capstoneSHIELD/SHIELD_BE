@@ -16,7 +16,7 @@ spring:
 # 프로덕션 CORS
 app:
   cors:
-    allowed-origins: https://shieldai.kr,https://www.shieldai.kr
+    allowed-origins: https://shieldai.kr,https://www.shieldai.kr,https://api.shieldai.kr
 
 # 프로덕션 로깅
 logging:
