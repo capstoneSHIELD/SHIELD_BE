@@ -129,13 +129,17 @@ cohere:
 rag:
   retrieval:
     stub: ${RAG_STUB:true}
-    # 하이브리드 점수 가중치 (Phase A-5 Review - R3)
-    # 중기적으로 실데이터 기반 MRR 그리드 서치로 튜닝
-    # 합이 1.0일 필요는 없지만 해석을 위해 권장
+    # 3-way 하이브리드 점수 가중치 (Phase B-4 재설계)
+    # 경로:
+    #  - vector:  Cohere embed-v4.0 임베딩 ↔ pgvector cosine similarity (0~1)
+    #  - keyword: BM25 ts_rank on content_tsv (to_tsquery OR)
+    #  - trigram: pg_trgm similarity (오탈자/부분일치 보조)
+    # 합이 1.0일 필요는 없지만 해석을 위해 권장.
+    # 중기적으로 실데이터 기반 MRR 그리드 서치로 튜닝.
     weights:
-      vector: ${RAG_W_VECTOR:0.6}    # 자연어 ts_rank (plainto_tsquery AND)
-      keyword: ${RAG_W_KEYWORD:0.3}  # 키워드 ts_rank (to_tsquery OR)
-      trigram: ${RAG_W_TRIGRAM:0.1}  # pg_trgm similarity (한국어 'simple' 보조)
+      vector: ${RAG_W_VECTOR:0.5}    # pgvector cosine similarity
+      keyword: ${RAG_W_KEYWORD:0.3}  # BM25 ts_rank
+      trigram: ${RAG_W_TRIGRAM:0.2}  # pg_trgm similarity
 
 # 온톨로지 설정
 ontology:

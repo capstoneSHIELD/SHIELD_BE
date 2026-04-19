@@ -45,23 +45,110 @@ public interface LegalChunkJpaRepository extends JpaRepository<LegalChunkEntity,
     List<LegalChunkEntity> findActiveByLawId(@Param("lawId") String lawId);
 
     // ---------------------------------------------------------------------
-    // Layer 2 하이브리드 검색 (tsvector BM25 + pg_trgm trigram 유사도)
+    // Layer 2 하이브리드 검색 (B-4: 3-way — pgvector + BM25 + pg_trgm)
     //
     // 설계:
-    //  - content_tsv는 to_tsvector('simple', ...) GENERATED 컬럼이므로
-    //    쿼리도 plainto_tsquery('simple', ...)로 대칭 구성한다.
-    //  - :vectorQuery (자연어) → plainto_tsquery (AND)
-    //  - :keywordQuery (키워드 ' | ' 조합) → to_tsquery (OR)
-    //  - ts_rank(..., 1): normalization flag 1 = "divide rank by 1 + log(doc length)"
-    //    긴 조문이 과도하게 높은 점수를 받는 경향을 억제
-    //  - score = vector_ts_rank * :vectorWeight
-    //          + keyword_ts_rank * :keywordWeight
-    //          + similarity * :trigramWeight
-    //    가중치는 application.yml rag.retrieval.weights.* 에서 외부화
-    //  - 법령ID 필터 유무에 따라 두 개의 쿼리로 분기 (빈 IN 회피)
-    //  - 임베딩 컬럼(embedding vector)은 차후 단계에서 도입 예정
+    //  - pgvector: 1 - (embedding <=> :queryVector::vector) → cosine similarity (0~1)
+    //    * embedding IS NULL 행은 0으로 처리 (인제스트 미완료 조문 안전화)
+    //  - BM25: to_tsquery('simple', :keywordQuery) ts_rank(...,1)
+    //    * 길이 정규화 1 = "rank / (1 + log(doc length))"
+    //  - 트라이그램: pg_trgm similarity(content, :vectorQuery) 보조
+    //  - 점수 합산:
+    //      score = vector_sim  * :vectorWeight
+    //            + keyword_rank * :keywordWeight
+    //            + trigram_sim  * :trigramWeight
+    //
+    // 필터 조합:
+    //  - category_ids: legal_chunks.category_ids && :categoryIds (array overlap)
+    //    * null/empty는 SQL 레벨에서 코알레스 → 미적용과 동등
+    //  - law_ids:     :lawIds의 유무에 따라 두 개 쿼리로 분기 (빈 IN 회피)
+    //
+    // 후보 축소: 3가지 경로 중 어느 하나라도 매칭되는 행만 정렬 대상에 포함
     //
     // 투영(projection): LegalChunkRow → Service에서 LegalChunk record 변환
+    // ---------------------------------------------------------------------
+
+    /**
+     * 3-way 하이브리드 검색 (법령ID 필터 없음).
+     *
+     * <p>{@code :queryVector}는 pgvector 리터럴 문자열 형식 {@code "[0.1,0.2,...]"}로 전달.
+     * 서비스 레이어에서 {@code float[]} → 문자열 변환을 담당한다.</p>
+     *
+     * <p>{@code :categoryIds}는 {@code String[]} 배열. null/빈 배열이면 필터가 무시된다.
+     * PostgreSQL 배열 겹침 연산자 {@code &&}는 한 원소라도 일치하면 true.</p>
+     */
+    @Query(value = """
+            SELECT lc.law_name        AS lawName,
+                   lc.article_no      AS articleNo,
+                   lc.article_title   AS articleTitle,
+                   lc.content         AS content,
+                   to_char(lc.effective_date, 'YYYY-MM-DD') AS effectiveDate,
+                   lc.source_url      AS sourceUrl,
+                   ( COALESCE(CASE WHEN lc.embedding IS NULL THEN 0
+                                   ELSE 1 - (lc.embedding <=> CAST(:queryVector AS vector))
+                               END, 0) * :vectorWeight
+                    + ts_rank(lc.content_tsv, to_tsquery('simple', :keywordQuery), 1) * :keywordWeight
+                    + similarity(lc.content, :vectorQuery) * :trigramWeight) AS score
+              FROM legal_chunks lc
+             WHERE lc.abolition_date IS NULL
+               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
+               AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
+                  OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
+                  OR lc.content %% :vectorQuery
+                  OR lc.embedding IS NOT NULL )
+             ORDER BY score DESC
+             LIMIT :topK
+            """, nativeQuery = true)
+    List<LegalChunkRow> search3Way(@Param("queryVector") String queryVector,
+                                   @Param("vectorQuery") String vectorQuery,
+                                   @Param("keywordQuery") String keywordQuery,
+                                   @Param("categoryIds") String[] categoryIds,
+                                   @Param("vectorWeight") double vectorWeight,
+                                   @Param("keywordWeight") double keywordWeight,
+                                   @Param("trigramWeight") double trigramWeight,
+                                   @Param("topK") int topK);
+
+    /**
+     * 3-way 하이브리드 검색 (법령ID 필터 포함).
+     */
+    @Query(value = """
+            SELECT lc.law_name        AS lawName,
+                   lc.article_no      AS articleNo,
+                   lc.article_title   AS articleTitle,
+                   lc.content         AS content,
+                   to_char(lc.effective_date, 'YYYY-MM-DD') AS effectiveDate,
+                   lc.source_url      AS sourceUrl,
+                   ( COALESCE(CASE WHEN lc.embedding IS NULL THEN 0
+                                   ELSE 1 - (lc.embedding <=> CAST(:queryVector AS vector))
+                               END, 0) * :vectorWeight
+                    + ts_rank(lc.content_tsv, to_tsquery('simple', :keywordQuery), 1) * :keywordWeight
+                    + similarity(lc.content, :vectorQuery) * :trigramWeight) AS score
+              FROM legal_chunks lc
+             WHERE lc.abolition_date IS NULL
+               AND lc.law_id IN (:lawIds)
+               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
+               AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
+                  OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
+                  OR lc.content %% :vectorQuery
+                  OR lc.embedding IS NOT NULL )
+             ORDER BY score DESC
+             LIMIT :topK
+            """, nativeQuery = true)
+    List<LegalChunkRow> search3WayByLaws(@Param("queryVector") String queryVector,
+                                         @Param("vectorQuery") String vectorQuery,
+                                         @Param("keywordQuery") String keywordQuery,
+                                         @Param("categoryIds") String[] categoryIds,
+                                         @Param("lawIds") Collection<String> lawIds,
+                                         @Param("vectorWeight") double vectorWeight,
+                                         @Param("keywordWeight") double keywordWeight,
+                                         @Param("trigramWeight") double trigramWeight,
+                                         @Param("topK") int topK);
+
+    // ---------------------------------------------------------------------
+    // [Legacy] B-1 이전의 2-way 하이브리드 (BM25 + trigram) — 하위 호환용.
+    // 벡터 경로가 없어도 동작해야 하는 테스트/디버깅 루트.
     // ---------------------------------------------------------------------
 
     /** 법령ID 필터 없음 버전 */

@@ -22,10 +22,13 @@ import java.util.List;
 public class StubLegalRetrievalService implements LegalRetrievalService {
 
     @Override
-    public List<LegalChunk> retrieve(String vectorQuery, List<String> bm25Keywords,
-                                     List<String> lawIds, int topK) {
-        log.warn("RAG retrieval stub 활성화 — 실제 검색 스킵. vectorQuery='{}', lawIds={}, topK={}",
-                vectorQuery, lawIds, topK);
+    public List<LegalChunk> retrieve(String vectorQuery,
+                                     List<String> bm25Keywords,
+                                     List<String> categoryIds,
+                                     List<String> lawIds,
+                                     int topK) {
+        log.warn("RAG retrieval stub 활성화 — 실제 검색 스킵. vectorQuery='{}', categoryIds={}, lawIds={}, topK={}",
+                vectorQuery, categoryIds, lawIds, topK);
         return List.of();
     }
 }

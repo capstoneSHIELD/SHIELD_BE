@@ -2,6 +2,7 @@ package org.example.shield.ai.infrastructure;
 
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.application.LegalRetrievalService;
+import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.domain.LegalChunkJpaRepository;
 import org.example.shield.ai.domain.LegalChunkJpaRepository.LegalChunkRow;
 import org.example.shield.ai.dto.LegalChunk;
@@ -11,22 +12,35 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * PostgreSQL 기반 Layer 2 법률 검색 구현.
+ * PostgreSQL 기반 Layer 2 법률 검색 구현 — 3-way 하이브리드 (B-4).
  *
- * <p>현재 단계에서는 {@code content_tsv}(tsvector GENERATED) 전문 검색과
- * {@code pg_trgm} 유사도를 결합한 하이브리드 랭킹을 수행한다.
- * 벡터 임베딩 컬럼은 후속 단계에서 도입되며, 그때 이 클래스의 쿼리가 확장된다.</p>
+ * <p>검색 경로:</p>
+ * <ul>
+ *   <li>벡터: Cohere embed-v4.0으로 쿼리 임베딩 생성 →
+ *       {@code pgvector} cosine similarity ({@code <=>} 연산자)</li>
+ *   <li>BM25: {@code content_tsv} (tsvector GENERATED) ts_rank</li>
+ *   <li>트라이그램: {@code pg_trgm} similarity (오탈자/부분일치 보조)</li>
+ * </ul>
+ *
+ * <p>선택 필터:</p>
+ * <ul>
+ *   <li>{@code categoryIds}: {@code legal_chunks.category_ids && ARRAY[...]} (배열 겹침)</li>
+ *   <li>{@code lawIds}: {@code law_id IN (...)}</li>
+ * </ul>
  *
  * <p>활성화 조건: {@code rag.retrieval.stub=false}.
- * Stub 구현과 상호 배타적으로 동작한다. 기본값은 true(Stub)이며,
- * 실데이터 인제스트 완료 후 환경변수 {@code RAG_STUB=false}로 전환한다.</p>
+ * 기본값은 Stub이며, 인제스트 완료 후 {@code RAG_STUB=false}로 전환.</p>
  *
- * <p>점수 가중치는 {@code rag.retrieval.weights.*}로 외부화되어 있어
- * 재빌드 없이 튜닝 가능하다.</p>
+ * <p>점수 가중치는 {@code rag.retrieval.weights.*}로 외부화되어 재빌드 없이 튜닝 가능하다.</p>
+ *
+ * <p>쿼리 임베딩 실패 시에는 영벡터로 대체되어 벡터 경로 점수가 0이 되고,
+ * BM25 + 트라이그램 2-way로 자연스럽게 degrade된다. Cohere 장애 상황에서도
+ * RAG 파이프라인 전체가 멈추지 않도록 하기 위함이다.</p>
  */
 @Service
 @ConditionalOnProperty(name = "rag.retrieval.stub", havingValue = "false", matchIfMissing = false)
@@ -40,27 +54,37 @@ public class PgLegalRetrievalService implements LegalRetrievalService {
     private static final String EMPTY_QUERY_SENTINEL = "__shield_never_match__";
 
     private final LegalChunkJpaRepository legalChunkJpaRepository;
+    private final CohereClient cohereClient;
+    private final CohereApiConfig cohereConfig;
     private final double vectorWeight;
     private final double keywordWeight;
     private final double trigramWeight;
+    /** 1024차원 영벡터의 pgvector 리터럴 문자열 (벡터 경로 degrade 시 사용). */
+    private final String zeroVectorLiteral;
 
     public PgLegalRetrievalService(
             LegalChunkJpaRepository legalChunkJpaRepository,
-            @Value("${rag.retrieval.weights.vector:0.6}") double vectorWeight,
+            CohereClient cohereClient,
+            CohereApiConfig cohereConfig,
+            @Value("${rag.retrieval.weights.vector:0.5}") double vectorWeight,
             @Value("${rag.retrieval.weights.keyword:0.3}") double keywordWeight,
-            @Value("${rag.retrieval.weights.trigram:0.1}") double trigramWeight) {
+            @Value("${rag.retrieval.weights.trigram:0.2}") double trigramWeight) {
         this.legalChunkJpaRepository = legalChunkJpaRepository;
+        this.cohereClient = cohereClient;
+        this.cohereConfig = cohereConfig;
         this.vectorWeight = vectorWeight;
         this.keywordWeight = keywordWeight;
         this.trigramWeight = trigramWeight;
-        log.info("PgLegalRetrievalService 활성화 — weights(vector={}, keyword={}, trigram={})",
-                vectorWeight, keywordWeight, trigramWeight);
+        this.zeroVectorLiteral = buildZeroVectorLiteral(cohereConfig.getEmbedDimension());
+        log.info("PgLegalRetrievalService 활성화 (3-way) — weights(vector={}, keyword={}, trigram={}), embedDim={}",
+                vectorWeight, keywordWeight, trigramWeight, cohereConfig.getEmbedDimension());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<LegalChunk> retrieve(String vectorQuery,
                                      List<String> bm25Keywords,
+                                     List<String> categoryIds,
                                      List<String> lawIds,
                                      int topK) {
 
@@ -79,17 +103,24 @@ public class PgLegalRetrievalService implements LegalRetrievalService {
         String vq = safeVectorQuery.isEmpty() ? EMPTY_QUERY_SENTINEL : safeVectorQuery;
         String kq = keywordQuery.isEmpty()    ? EMPTY_QUERY_SENTINEL : keywordQuery;
 
+        // 쿼리 임베딩 (실패 시 영벡터로 degrade → 벡터 경로 점수 0)
+        String queryVectorLiteral = buildQueryVectorLiteral(safeVectorQuery);
+
+        String[] categoryFilter = normalizeCategoryFilter(categoryIds);
+
         List<LegalChunkRow> rows;
         if (lawIds == null || lawIds.isEmpty()) {
-            rows = legalChunkJpaRepository.searchHybrid(
-                    vq, kq, vectorWeight, keywordWeight, trigramWeight, safeTopK);
+            rows = legalChunkJpaRepository.search3Way(
+                    queryVectorLiteral, vq, kq, categoryFilter,
+                    vectorWeight, keywordWeight, trigramWeight, safeTopK);
         } else {
-            rows = legalChunkJpaRepository.searchHybridByLaws(
-                    vq, kq, lawIds, vectorWeight, keywordWeight, trigramWeight, safeTopK);
+            rows = legalChunkJpaRepository.search3WayByLaws(
+                    queryVectorLiteral, vq, kq, categoryFilter, lawIds,
+                    vectorWeight, keywordWeight, trigramWeight, safeTopK);
         }
 
-        log.debug("RAG PG 검색 완료 — vq='{}', kq='{}', lawIds={}, hits={}",
-                vq, kq, lawIds, rows.size());
+        log.debug("RAG 3-way 검색 완료 — vq='{}', kq='{}', categories={}, lawIds={}, hits={}",
+                vq, kq, categoryFilter == null ? 0 : categoryFilter.length, lawIds, rows.size());
 
         return rows.stream()
                 .map(r -> new LegalChunk(
@@ -101,6 +132,46 @@ public class PgLegalRetrievalService implements LegalRetrievalService {
                         nz(r.getSourceUrl()),
                         r.getScore() == null ? 0.0 : r.getScore()))
                 .toList();
+    }
+
+    /**
+     * 쿼리 문자열을 Cohere embed-v4.0으로 임베딩하여 pgvector 리터럴 문자열로 변환한다.
+     * 빈 쿼리이거나 API 호출 실패 시 영벡터 리터럴을 반환하여 벡터 경로 점수를 0으로 만든다.
+     */
+    private String buildQueryVectorLiteral(String vectorQuery) {
+        if (vectorQuery == null || vectorQuery.isEmpty()) {
+            return zeroVectorLiteral;
+        }
+        try {
+            float[] vec = cohereClient.embedQuery(cohereConfig.getEmbedModel(), vectorQuery);
+            if (vec == null || vec.length == 0) {
+                log.warn("쿼리 임베딩 응답이 비어 영벡터로 degrade: query='{}'", vectorQuery);
+                return zeroVectorLiteral;
+            }
+            return floatArrayToPgVector(vec);
+        } catch (Exception e) {
+            log.warn("쿼리 임베딩 실패, 2-way(BM25+trigram)로 degrade: query='{}', error={}",
+                    vectorQuery, e.getMessage());
+            return zeroVectorLiteral;
+        }
+    }
+
+    /**
+     * categoryIds 리스트를 SQL 바인딩용 String[]로 변환.
+     * null/빈 리스트면 null 반환 → 쿼리의 CARDINALITY 체크가 필터를 자동 무시.
+     * 공백 요소는 제거.
+     */
+    private String[] normalizeCategoryFilter(List<String> categoryIds) {
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return null;
+        }
+        String[] arr = categoryIds.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .toArray(String[]::new);
+        return arr.length == 0 ? null : arr;
     }
 
     /**
@@ -140,6 +211,34 @@ public class PgLegalRetrievalService implements LegalRetrievalService {
         // tsquery 메타 문자(&|!():*<>) 및 따옴표/백슬래시 제거
         String cleaned = raw.replaceAll("[\\s&|!():*<>\"'\\\\]", "");
         return cleaned;
+    }
+
+    /**
+     * float[] 임베딩을 pgvector 리터럴 문자열 {@code "[0.1,0.2,...]"}로 변환.
+     * PostgreSQL의 {@code CAST(:queryVector AS vector)}로 바인딩된다.
+     */
+    static String floatArrayToPgVector(float[] vec) {
+        StringBuilder sb = new StringBuilder(vec.length * 10 + 2);
+        sb.append('[');
+        for (int i = 0; i < vec.length; i++) {
+            if (i > 0) sb.append(',');
+            // 로케일에 의존하지 않는 점 구분 포맷
+            sb.append(String.format(Locale.ROOT, "%.6f", vec[i]));
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    /** 영벡터(모든 차원이 0)의 pgvector 리터럴을 미리 생성. 초기화 시 1회만. */
+    private static String buildZeroVectorLiteral(int dim) {
+        StringBuilder sb = new StringBuilder(dim * 3 + 2);
+        sb.append('[');
+        for (int i = 0; i < dim; i++) {
+            if (i > 0) sb.append(',');
+            sb.append('0');
+        }
+        sb.append(']');
+        return sb.toString();
     }
 
     private String nz(String s) {
