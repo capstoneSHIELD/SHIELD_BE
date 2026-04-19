@@ -9,6 +9,8 @@ import org.example.shield.brief.controller.dto.MatchingResponse;
 import org.example.shield.brief.domain.Brief;
 import org.example.shield.brief.domain.BriefReader;
 import org.example.shield.brief.exception.BriefNotFoundException;
+import org.example.shield.consultation.domain.Consultation;
+import org.example.shield.consultation.domain.ConsultationReader;
 import org.example.shield.common.enums.VerificationStatus;
 import org.example.shield.common.response.PageResponse;
 import org.example.shield.lawyer.application.LawyerEmbeddingTextBuilder;
@@ -49,6 +51,7 @@ import java.util.stream.Collectors;
 public class LawyerMatchingService {
 
     private final BriefReader briefReader;
+    private final ConsultationReader consultationReader;
     private final LawyerReader lawyerReader;
     private final UserReader userReader;
     private final LawyerEmbeddingRepository lawyerEmbeddingRepository;
@@ -62,18 +65,34 @@ public class LawyerMatchingService {
             throw new BriefNotFoundException(briefId);
         }
 
+        // 상담의 대/중/소분류를 우선 사용 (user > ai 폴백).
+        Consultation consultation = consultationReader.findById(brief.getConsultationId());
+        List<String> domains = consultation.getEffectiveDomains();
+        List<String> subDomains = consultation.getEffectiveSubDomains();
+        List<String> tags = consultation.getEffectiveTags();
+
+        // 상담에 대분류 없으면 Brief.legalField 로 폴백.
+        if (domains.isEmpty() && brief.getLegalField() != null) {
+            domains = List.of(brief.getLegalField());
+        }
+
+        // matchedKeywords 집계용: 소분류 + Brief.keywords 합집합.
         List<String> briefKeywords = brief.getKeywords() != null ? brief.getKeywords() : Collections.emptyList();
+        List<String> matchKeywords = new ArrayList<>(tags);
+        for (String kw : briefKeywords) {
+            if (kw != null && !matchKeywords.contains(kw)) matchKeywords.add(kw);
+        }
 
         // 1) 쿼리 텍스트 조립 → 임베딩
         String queryText = embeddingTextBuilder.build(
-                brief.getLegalField() != null ? List.of(brief.getLegalField()) : List.of(),
-                List.of(),
-                briefKeywords,
+                domains,
+                subDomains,
+                tags,
                 brief.getContent());
 
         float[] queryVec = tryEmbedQuery(queryText);
         if (queryVec != null && queryVec.length > 0) {
-            Page<MatchingResponse> vectorPage = searchByVector(queryVec, briefKeywords, pageable);
+            Page<MatchingResponse> vectorPage = searchByVector(queryVec, matchKeywords, pageable);
             if (vectorPage != null) {
                 return PageResponse.from(vectorPage);
             }
@@ -81,7 +100,7 @@ public class LawyerMatchingService {
 
         // 2) degrade: 기존 키워드 매칭 fallback
         log.warn("벡터 매칭 실패 → 키워드 fallback briefId={}", briefId);
-        return fallbackKeywordMatching(briefKeywords, pageable);
+        return fallbackKeywordMatching(matchKeywords, pageable);
     }
 
     private float[] tryEmbedQuery(String queryText) {

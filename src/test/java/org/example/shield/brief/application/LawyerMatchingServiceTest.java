@@ -7,6 +7,8 @@ import org.example.shield.brief.domain.Brief;
 import org.example.shield.brief.domain.BriefReader;
 import org.example.shield.brief.exception.BriefNotFoundException;
 import org.example.shield.common.enums.VerificationStatus;
+import org.example.shield.consultation.domain.Consultation;
+import org.example.shield.consultation.domain.ConsultationReader;
 import org.example.shield.common.response.PageResponse;
 import org.example.shield.lawyer.application.LawyerEmbeddingTextBuilder;
 import org.example.shield.lawyer.domain.LawyerProfile;
@@ -45,6 +47,7 @@ import static org.mockito.Mockito.when;
 class LawyerMatchingServiceTest {
 
     @Mock private BriefReader briefReader;
+    @Mock private ConsultationReader consultationReader;
     @Mock private LawyerReader lawyerReader;
     @Mock private UserReader userReader;
     @Mock private LawyerEmbeddingRepository lawyerEmbeddingRepository;
@@ -69,13 +72,23 @@ class LawyerMatchingServiceTest {
     }
 
     private Brief createBrief(UUID userId) throws Exception {
+        return createBrief(userId, true);
+    }
+
+    private Brief createBrief(UUID userId, boolean stubConsultation) throws Exception {
         Brief brief = Brief.create(
                 UUID.randomUUID(), userId, "title", "형사",
                 "사건 내용", List.of("사기", "횡령"), List.of(), "전략");
-        // id 강제 주입
         Field idField = findField(brief.getClass(), "id");
         idField.setAccessible(true);
         idField.set(brief, UUID.randomUUID());
+        if (stubConsultation) {
+            Consultation consultation = mock(Consultation.class);
+            when(consultation.getEffectiveDomains()).thenReturn(List.of());
+            when(consultation.getEffectiveSubDomains()).thenReturn(List.of());
+            when(consultation.getEffectiveTags()).thenReturn(List.of());
+            when(consultationReader.findById(brief.getConsultationId())).thenReturn(consultation);
+        }
         return brief;
     }
 
@@ -92,7 +105,7 @@ class LawyerMatchingServiceTest {
     void 브리프_소유자가_아니면_BriefNotFoundException() throws Exception {
         UUID ownerId = UUID.randomUUID();
         UUID otherId = UUID.randomUUID();
-        Brief brief = createBrief(ownerId);
+        Brief brief = createBrief(ownerId, false);
         UUID briefId = brief.getId();
         when(briefReader.findById(briefId)).thenReturn(brief);
 
