@@ -2,6 +2,7 @@ pipeline {
     agent any
 
     environment {
+        JAVA_HOME = '/usr/lib/jvm/java-21-amazon-corretto.x86_64'
         JAR_NAME = 'shield.jar'
         DEPLOY_DIR = '/home/ec2-user/shield'
     }
