@@ -12,6 +12,7 @@ import org.example.shield.lawyer.application.LawyerService;
 import org.example.shield.lawyer.application.VerificationService;
 import org.example.shield.lawyer.controller.dto.DocumentResponse;
 import org.example.shield.lawyer.controller.dto.LawyerRegisterRequest;
+import org.example.shield.lawyer.controller.dto.LawyerRegisterResponse;
 import org.example.shield.lawyer.controller.dto.LawyerResponse;
 import org.example.shield.lawyer.controller.dto.ProfileUpdateRequest;
 import org.example.shield.lawyer.controller.dto.VerificationRequest;
@@ -95,13 +96,18 @@ public class LawyerController {
         return ApiResponse.success("조회 성공", result);
     }
 
-    @Operation(summary = "변호사 가입", description = "추가정보 입력 + 검증 신청 통합. LawyerProfile을 생성하고 PENDING 상태로 설정합니다")
-    @PreAuthorize("hasRole('LAWYER')")
+    @Operation(
+            summary = "변호사 가입",
+            description = "소셜 로그인 이후 변호사 추가정보 입력 + 검증 신청을 통합 처리합니다. "
+                    + "LawyerProfile을 생성하고 PENDING 상태로 설정하며, User.role을 USER→LAWYER로 승격한 뒤 "
+                    + "새 accessToken을 응답에 포함하여 반환합니다. 이미 LAWYER인 사용자도 호출 가능합니다."
+    )
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/me/register")
-    public ApiResponse<VerificationResponse> register(
+    public ApiResponse<LawyerRegisterResponse> register(
             @AuthenticationPrincipal UUID userId,
             @Valid @RequestBody LawyerRegisterRequest request) {
-        VerificationResponse result = verificationService.register(userId, request);
+        LawyerRegisterResponse result = verificationService.register(userId, request);
         return ApiResponse.success("변호사 가입이 완료되었습니다", result);
     }
 

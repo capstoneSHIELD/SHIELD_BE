@@ -31,16 +31,19 @@ public class AuthService {
     public LoginResult googleLogin(String authorizationCode, String role) {
         OAuthUserInfo userInfo = googleOAuthService.getUserInfo(authorizationCode);
 
-        User user = userReader.findByGoogleId(userInfo.googleId())
-                .orElseGet(() -> userWriter.save(
-                        User.builder()
-                                .email(userInfo.email())
-                                .name(userInfo.name())
-                                .role(parseRole(role))
-                                .provider("GOOGLE")
-                                .googleId(userInfo.googleId())
-                                .build()
-                ));
+        // 신규 가입 여부를 구분하기 위해 조회 시점을 명시적으로 분리한다.
+        var existing = userReader.findByGoogleId(userInfo.googleId());
+        boolean isNewUser = existing.isEmpty();
+
+        User user = existing.orElseGet(() -> userWriter.save(
+                User.builder()
+                        .email(userInfo.email())
+                        .name(userInfo.name())
+                        .role(parseRole(role))
+                        .provider("GOOGLE")
+                        .googleId(userInfo.googleId())
+                        .build()
+        ));
 
         JwtToken tokenPair = jwtService.createTokenPair(user.getId(), user.getRole().name());
         user.updateRefreshToken(tokenPair.refreshToken());
@@ -50,7 +53,8 @@ public class AuthService {
                 tokenPair.refreshToken(),
                 user.getId(),
                 user.getName(),
-                user.getRole().name()
+                user.getRole().name(),
+                isNewUser
         );
         return new LoginResult(response, tokenPair.refreshToken());
     }
@@ -75,7 +79,8 @@ public class AuthService {
                 tokenPair.refreshToken(),
                 user.getId(),
                 user.getName(),
-                user.getRole().name()
+                user.getRole().name(),
+                false
         );
         return new LoginResult(response, tokenPair.refreshToken());
     }
