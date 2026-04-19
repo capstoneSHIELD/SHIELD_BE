@@ -13,10 +13,14 @@ spring:
       hibernate:
         format_sql: false
 
+# ALB 뒤에서 HTTPS 프록시 처리
+server:
+  forward-headers-strategy: framework
+
 # 프로덕션 CORS
 app:
   cors:
-    allowed-origins: https://shieldai.kr,https://www.shieldai.kr
+    allowed-origins: https://shieldai.kr,https://www.shieldai.kr,https://api.shieldai.kr
 
 # 프로덕션 로깅
 logging:
