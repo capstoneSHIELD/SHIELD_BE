@@ -75,3 +75,6 @@ __pycache__/
 *~
 SHEILD-DOCX
 src/main/resources/seed/civil-law.backup.json
+
+# Runtime cache for scripts (e.g., cookies)
+.cache/
