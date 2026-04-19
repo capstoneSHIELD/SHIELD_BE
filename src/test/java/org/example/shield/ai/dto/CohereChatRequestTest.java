@@ -13,7 +13,7 @@ class CohereChatRequestTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    @DisplayName("forChat() 직렬화 — messages, model, temperature, max_tokens, p 포함")
+    @DisplayName("forChat() 직렬화 — messages, model, temperature, max_tokens, p, response_format 포함 (Issue #56)")
     void forChat_serialization() throws Exception {
         List<CohereChatRequest.Message> messages = List.of(
                 CohereChatRequest.Message.system("You are a helpful assistant."),
@@ -28,8 +28,9 @@ class CohereChatRequestTest {
         assertThat(json).contains("\"temperature\"");
         assertThat(json).contains("\"max_tokens\":1024");
         assertThat(json).contains("\"p\"");
-        // forChat should NOT include response_format
-        assertThat(json).doesNotContain("response_format");
+        // Issue #56: forChat 에도 response_format=json_object 강제
+        assertThat(json).contains("\"response_format\"");
+        assertThat(json).contains("\"json_object\"");
         // v2에서는 max_completion_tokens / top_p 대신 max_tokens / p 사용
         assertThat(json).doesNotContain("max_completion_tokens");
         assertThat(json).doesNotContain("top_p");
