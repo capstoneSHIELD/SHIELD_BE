@@ -70,19 +70,8 @@ SPECIAL_LAWS: list[dict] = [
 ]
 
 
-def fetch_full_law(lsi: str, law_name: str) -> dict:
-    """법제처 DRF lawService.do — ID 파라미터로 현행 법령 전문 조회.
-
-    참고: MST(마스터넘버)는 개정일자별로 달라지지만, ID(LSI)는 현행판으로 고정.
-    """
-    params = urlencode({
-        "OC": OC,
-        "target": "law",
-        "ID": lsi,
-        "type": "JSON",
-    })
-    url = f"https://www.law.go.kr/DRF/lawService.do?{params}"
-    print(f"[fetch] {law_name} LSI={lsi}")
+def _curl_json(url: str) -> dict:
+    """법제처 서버로 GET → JSON 파싱. 3회 재시도."""
     last_err = None
     for attempt in range(3):
         proc = subprocess.run(
@@ -98,7 +87,63 @@ def fetch_full_law(lsi: str, law_name: str) -> dict:
             last_err = f"rc={proc.returncode} stderr={proc.stderr.strip()[:200]}"
         print(f"  [warn] attempt {attempt+1} failed: {last_err}")
         time.sleep(2)
-    raise RuntimeError(f"law.go.kr 요청 실패 ({law_name}): {last_err}")
+    raise RuntimeError(f"law.go.kr 요청 실패: {last_err}")
+
+
+def resolve_mst_by_name(law_name: str, kind: str | None = None) -> tuple[str, str]:
+    """법령명 → (MST, 법령ID). kind 가 주어지면 법령구분명 일치 항목 우선.
+
+    법제처 LOD의 LSI는 특정 개정판 식별자라 현행 MST와 다를 수 있으므로
+    lawSearch로 현행판 MST를 먼저 얻은 뒤 lawService를 호출한다.
+    """
+    params = urlencode({
+        "OC": OC,
+        "target": "law",
+        "query": law_name,
+        "type": "JSON",
+        "display": "20",
+    })
+    url = f"https://www.law.go.kr/DRF/lawSearch.do?{params}"
+    data = _curl_json(url)
+
+    laws = data.get("LawSearch", {}).get("law", [])
+    if isinstance(laws, dict):
+        laws = [laws]
+    if not laws:
+        raise RuntimeError(f"법령 검색 결과 없음: {law_name}")
+
+    # 정확히 일치하는 법령명 우선
+    exact = [l for l in laws if l.get("법령명한글", "").strip() == law_name.strip()]
+    candidates = exact or laws
+
+    # 현행연혁코드=현행 우선
+    current = [l for l in candidates if l.get("현행연혁코드") == "현행"]
+    if current:
+        candidates = current
+
+    # 법령구분(법률/대통령령/규칙) 필터
+    if kind:
+        by_kind = [l for l in candidates if l.get("법령구분명") == kind]
+        if by_kind:
+            candidates = by_kind
+
+    # 시행일자 최신 순
+    candidates.sort(key=lambda l: l.get("시행일자", ""), reverse=True)
+    top = candidates[0]
+    return top["법령일련번호"], top["법령ID"]
+
+
+def fetch_full_law(mst: str, law_name: str) -> dict:
+    """MST로 현행 법령 전문 조회."""
+    params = urlencode({
+        "OC": OC,
+        "target": "law",
+        "MST": mst,
+        "type": "JSON",
+    })
+    url = f"https://www.law.go.kr/DRF/lawService.do?{params}"
+    print(f"[fetch] {law_name} MST={mst}")
+    return _curl_json(url)
 
 
 def _as_list(v):
@@ -109,27 +154,38 @@ def _as_list(v):
     return [v]
 
 
+def _str_content(raw) -> str:
+    """조문내용/항내용/호내용/목내용이 문자열 또는 문자열 list로 올 수 있음."""
+    if raw is None:
+        return ""
+    if isinstance(raw, str):
+        return raw.strip()
+    if isinstance(raw, list):
+        return "\n".join(str(x).strip() for x in raw if x is not None and str(x).strip())
+    return str(raw).strip()
+
+
 def render_text(unit: dict) -> str:
     parts: list[str] = []
-    head = (unit.get("조문내용") or "").strip()
+    head = _str_content(unit.get("조문내용"))
     if head:
         parts.append(head)
     for hang in _as_list(unit.get("항")):
         if not isinstance(hang, dict):
             continue
-        hcontent = (hang.get("항내용") or "").strip()
+        hcontent = _str_content(hang.get("항내용"))
         if hcontent:
             parts.append(hcontent)
         for ho in _as_list(hang.get("호")):
             if not isinstance(ho, dict):
                 continue
-            ho_content = (ho.get("호내용") or "").strip()
+            ho_content = _str_content(ho.get("호내용"))
             if ho_content:
                 parts.append(ho_content)
             for mok in _as_list(ho.get("목")):
                 if not isinstance(mok, dict):
                     continue
-                mok_content = (mok.get("목내용") or "").strip()
+                mok_content = _str_content(mok.get("목내용"))
                 if mok_content:
                     parts.append(mok_content)
     return "\n".join(parts)
@@ -149,7 +205,8 @@ def parse_header(전문_content: str) -> tuple[str | None, str | None, str | Non
     return (None, None, None)
 
 
-def extract_articles(law_json: dict, law_id: str, law_name: str, lsi: str) -> list[dict]:
+def extract_articles(law_json: dict, law_id: str, law_name: str,
+                     current_law_id: str, mst: str, lod_lsi: str) -> list[dict]:
     """법제처 응답 → Article 리스트."""
     try:
         units_raw = law_json["법령"]["조문"]["조문단위"]
@@ -157,10 +214,6 @@ def extract_articles(law_json: dict, law_id: str, law_name: str, lsi: str) -> li
         print(f"  [warn] 조문단위 없음: {law_name}")
         return []
     units = _as_list(units_raw)
-
-    # MST 추출 (소스 URL 생성용)
-    basic = law_json.get("법령", {}).get("기본정보", {})
-    mst = (basic.get("법령키") or basic.get("MST") or lsi) if isinstance(basic, dict) else lsi
 
     current_book: str | None = None
     current_chapter: str | None = None
@@ -214,9 +267,19 @@ def extract_articles(law_json: dict, law_id: str, law_name: str, lsi: str) -> li
             "section": current_section,
             "effective_date": unit.get("조문시행일자"),
             "source_mst": str(mst),
-            "source_law_id": lsi,
+            # 인제스트 시 CategoryLawMappingService.resolveCategoriesByLsi()가
+            # 이 값으로 역조회하므로, 온톨로지에 등록된 LOD LSI를 유지한다.
+            "source_law_id": lod_lsi,
         })
     return out
+
+
+# 법령구분명 힌트 (lawSearch 필터용)
+LAW_KIND_HINT: dict[str, str] = {
+    "law-housing-lease-enf": "대통령령",
+    "law-commercial-lease-enf": "대통령령",
+    "law-lease-reg-rule": "대법원규칙",
+}
 
 
 def process_law(entry: dict) -> dict:
@@ -224,24 +287,33 @@ def process_law(entry: dict) -> dict:
     law_id = entry["law_id"]
     law_name = entry["law_name"]
     lsi = entry["lsi"]
+    kind_hint = LAW_KIND_HINT.get(law_id)
 
     t0 = time.time()
     try:
-        law_json = fetch_full_law(lsi, law_name)
+        mst, current_law_id = resolve_mst_by_name(law_name, kind_hint)
+        print(f"  [resolve] {law_name} → MST={mst}, 법령ID={current_law_id} (LOD LSI={lsi})")
+        law_json = fetch_full_law(mst, law_name)
     except Exception as e:
         print(f"  [error] fetch 실패: {e}")
         return {"law_id": law_id, "ok": False, "error": str(e)[:200]}
 
-    articles = extract_articles(law_json, law_id, law_name, lsi)
+    # 현행판 MST로 교체된 값으로 seed 파일에 기록 (source_law_id는 현행 법령ID,
+    # source_mst는 현행 MST). 온톨로지 역인덱스는 여전히 LOD LSI로 조회하므로
+    # 별도 lod_lsi 필드로 보존.
+    articles = extract_articles(law_json, law_id, law_name, current_law_id, mst, lsi)
     if not articles:
         return {"law_id": law_id, "ok": False, "error": "no articles extracted"}
 
     out_path = OUT_DIR / f"{law_id}.json"
+    # articles 에 들어간 값에서 MST/현행 법령ID 가져오기
+    mst = articles[0]["source_mst"]
     payload = {
         "meta": {
             "law_name": law_name,
             "law_id": law_id,
-            "lsi": lsi,
+            "lsi": lsi,  # 온톨로지에 등록된 LOD LSI
+            "mst": mst,
             "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "total_articles": len(articles),
             "source": "https://www.law.go.kr/DRF/lawService.do",
