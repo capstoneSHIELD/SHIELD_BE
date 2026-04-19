@@ -1,5 +1,6 @@
 package org.example.shield.consultation.domain;
 
+import org.example.shield.common.enums.MessageRole;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -14,4 +15,6 @@ public interface MessageReader {
     Page<Message> findAllByConsultationId(UUID consultationId, Pageable pageable);
 
     Optional<Message> findLastByConsultationId(UUID consultationId);
+
+    long countByConsultationIdAndRole(UUID consultationId, MessageRole role);
 }

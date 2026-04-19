@@ -57,6 +57,13 @@ spring:
     out-of-order: false
     placeholder-replacement: false
 
+# 상담 (대화) 정책
+# - max-user-turns: 사용자 메시지 상한. 도달 시 서버가 allCompleted=true 를 강제 반환해
+#   FE 가 자연스럽게 /analyze (의뢰서 생성) 로 전환. 초과 호출(N+1 번째)은 400 거부.
+shield:
+  consultation:
+    max-user-turns: 10
+
 # JWT
 jwt:
   secret: ${JWT_SECRET}
@@ -98,7 +105,7 @@ cohere:
     embed: embed-v4.0
   timeout:
     connect: 5000
-    read-chat: 30000
+    read-chat: 180000
     read-brief: 60000
     read-classify: 15000
     read-embed: 30000

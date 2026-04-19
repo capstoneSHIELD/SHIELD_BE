@@ -1,6 +1,7 @@
 package org.example.shield.consultation.infrastructure;
 
 import lombok.RequiredArgsConstructor;
+import org.example.shield.common.enums.MessageRole;
 import org.example.shield.consultation.domain.Message;
 import org.example.shield.consultation.domain.MessageReader;
 import org.springframework.data.domain.Page;
@@ -30,5 +31,10 @@ public class MessageReaderImpl implements MessageReader {
     @Override
     public Optional<Message> findLastByConsultationId(UUID consultationId) {
         return messageRepository.findTopByConsultationIdOrderBySequenceDesc(consultationId);
+    }
+
+    @Override
+    public long countByConsultationIdAndRole(UUID consultationId, MessageRole role) {
+        return messageRepository.countByConsultationIdAndRole(consultationId, role);
     }
 }

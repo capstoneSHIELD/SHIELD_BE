@@ -1,5 +1,6 @@
 package org.example.shield.consultation.infrastructure;
 
+import org.example.shield.common.enums.MessageRole;
 import org.example.shield.consultation.domain.Message;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,4 +17,6 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     Page<Message> findAllByConsultationIdOrderBySequence(UUID consultationId, Pageable pageable);
 
     Optional<Message> findTopByConsultationIdOrderBySequenceDesc(UUID consultationId);
+
+    long countByConsultationIdAndRole(UUID consultationId, MessageRole role);
 }

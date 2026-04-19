@@ -41,6 +41,7 @@ public class CohereService {
     private final MessageReader messageReader;
     private final CohereClient cohereClient;
     private final OntologyService ontologyService;
+    private final ChecklistCoverageService checklistCoverageService;
 
     /**
      * Phase 1 대화 — 사용자 메시지 처리 후 AI 응답 반환.
@@ -134,6 +135,18 @@ public class CohereService {
             systemPrompt = systemPrompt + "\n\n" + classificationContext;
         }
 
+        // 이미 수집된 체크리스트 항목을 체크박스로 명시 — LLM 이 답변된 질문을 재생성하지 않도록 가이드
+        if (domain != null) {
+            String collectedSummary = checklistCoverageService.buildCollectedSummary(
+                    domain,
+                    consultation.getFirstSubDomain(),
+                    consultation.getFirstTag(),
+                    chatHistory);
+            if (!collectedSummary.isEmpty()) {
+                systemPrompt = systemPrompt + "\n\n" + collectedSummary;
+            }
+        }
+
         // RAG Layer 3: 법률 조문 컨텍스트 주입
         if (ragContext != null && !ragContext.isEmpty()) {
             systemPrompt = systemPrompt + "\n\n" + ragContext;
@@ -153,16 +166,34 @@ public class CohereService {
 
     /**
      * Phase 2 의뢰서용 messages[] 배열 구성.
+     *
+     * <p>체크리스트 L1 이 확정된 경우, 대화에서 수집되지 못한 슬롯 목록을
+     * system 프롬프트에 힌트로 주입한다. 10턴 상한으로 조기 종료된 상담에서
+     * LLM 이 대화 근거 기반 추론으로 누락 슬롯을 채울 수 있도록 돕는 용도.
+     * (근거 없는 슬롯은 brief.md 규칙에 따라 "미확인" 으로 표기)</p>
      */
     private List<CohereChatRequest.Message> buildBriefMessages(Consultation consultation) {
         List<CohereChatRequest.Message> msgs = new ArrayList<>();
 
-        // 1. 의뢰서 전용 시스템 프롬프트
+        // 전체 대화 내역 — 미수집 슬롯 판정과 appendHistory 양쪽에서 공유 (중복 DB 쿼리 방지)
+        List<Message> history = messageReader.findAllByConsultationId(consultation.getId());
+
+        // 1. 의뢰서 전용 시스템 프롬프트 + (L1 확정 시) 미수집 슬롯 추론 가이드
         String systemPrompt = promptService.loadRouterBriefPrompt();
+        String l1 = consultation.getFirstDomain();
+        if (l1 != null) {
+            String missing = checklistCoverageService.buildMissingSlotsGuidance(
+                    l1,
+                    consultation.getFirstSubDomain(),
+                    consultation.getFirstTag(),
+                    history);
+            if (!missing.isEmpty()) {
+                systemPrompt = systemPrompt + "\n\n" + missing;
+            }
+        }
         msgs.add(CohereChatRequest.Message.system(systemPrompt));
 
         // 2. 전체 대화 내역
-        List<Message> history = messageReader.findAllByConsultationId(consultation.getId());
         appendHistory(msgs, history, "brief");
 
         return truncateMessages(msgs, config.getMaxHistoryMessages());

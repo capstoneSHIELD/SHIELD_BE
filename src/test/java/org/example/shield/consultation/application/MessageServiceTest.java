@@ -11,12 +11,14 @@ import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.ChatParsedResponse;
 import org.example.shield.ai.infrastructure.SanitizeService;
+import org.example.shield.common.enums.MessageRole;
 import org.example.shield.common.exception.ChatAiException;
 import org.example.shield.consultation.controller.dto.SendMessageResponse;
 import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.ConsultationReader;
 import org.example.shield.consultation.domain.Message;
 import org.example.shield.consultation.domain.MessageReader;
+import org.example.shield.consultation.exception.ConsultationTurnLimitExceededException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
@@ -103,6 +106,9 @@ class MessageServiceTest {
     @BeforeEach
     void setUp() {
         consultationId = UUID.randomUUID();
+
+        // @Value 필드는 @InjectMocks 로 주입되지 않으므로 수동 세팅
+        ReflectionTestUtils.setField(messageService, "maxUserTurns", 10);
 
         given(consultationReader.findById(consultationId)).willReturn(consultation);
         given(consultation.getFirstDomain()).willReturn(null); // RAG skip
@@ -352,5 +358,90 @@ class MessageServiceTest {
 
         // lastResponseId 도 dirty state 로 남아 있어야 한다 (감사 로깅 목적)
         assertThat(real.getLastResponseId()).isEqualTo("resp-blank-regression");
+    }
+
+    // ── 턴 상한 (max-user-turns=10) ────────────────────────────────────
+
+    /**
+     * 10번째 USER 메시지 처리 시: 기존 USER 9개 + 새 1개 = 10 → 상한 도달.
+     * Cohere 가 allCompleted=false 를 줘도 서버가 true 로 덮어써 FE 가 /analyze 로 전환한다.
+     */
+    @Test
+    @DisplayName("10번째 USER 메시지 — Cohere allCompleted=false 라도 응답은 allCompleted=true 로 강제")
+    void sendMessage_turnLimitReached_forcesAllCompletedTrue() {
+        // 기존 USER 9건 — 새 메시지 저장 후 총 10건으로 상한 도달
+        given(messageReader.countByConsultationIdAndRole(consultationId, MessageRole.USER))
+                .willReturn(9L);
+
+        ChatParsedResponse parsed = new ChatParsedResponse();
+        parsed.setNextQuestion("마지막으로 하나만 더 확인드릴게요.");
+        parsed.setAllCompleted(false); // LLM 은 아직 덜 끝났다고 판단
+        parsed.setAiDomains(List.of());
+        parsed.setAiSubDomains(List.of());
+        parsed.setAiTags(List.of());
+        given(cohereService.chat(any(), anyString(), anyString(), any()))
+                .willReturn(new AiCallResult<>("resp-turn10", parsed, 100, 42, 250));
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "10번째 입력");
+
+        assertThat(response.allCompleted())
+                .as("턴 상한 도달 시 서버는 커버리지/LLM 신호 무시하고 allCompleted=true")
+                .isTrue();
+
+        // Cohere 호출과 finalize 는 정상 수행 (분류/슬롯 업데이트 기회 보존)
+        verify(cohereService, times(1)).chat(any(), anyString(), anyString(), any());
+        verify(chatTxBoundary, times(1)).finalizeAiResponse(eq(consultationId), any(AiFinalizePayload.class));
+
+        // 메트릭 outcome=turn_limit_reached
+        assertThat(meterRegistry.timer(ChatMetrics.METRIC_SEND_MESSAGE, "outcome", "turn_limit_reached").count())
+                .isEqualTo(1L);
+    }
+
+    /**
+     * 이미 10턴을 채운 상담에 11번째 메시지가 들어오면 방어선이 발동해
+     * Cohere 호출·USER 저장 없이 ConsultationTurnLimitExceededException 으로 400.
+     */
+    @Test
+    @DisplayName("11번째 USER 메시지 — Cohere·USER 저장 없이 ConsultationTurnLimitExceededException 발생")
+    void sendMessage_turnLimitExceeded_rejectsEleventhMessage() {
+        given(messageReader.countByConsultationIdAndRole(consultationId, MessageRole.USER))
+                .willReturn(10L);
+
+        assertThatThrownBy(() -> messageService.sendMessage(consultationId, "11번째 입력"))
+                .isInstanceOf(ConsultationTurnLimitExceededException.class);
+
+        verify(chatTxBoundary, never()).saveUserMessage(any(), anyString());
+        verify(cohereService, never()).chat(any(), anyString(), anyString(), any());
+        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
+
+        // 메트릭 outcome=turn_limit (guard 단계에서 기록)
+        assertThat(meterRegistry.timer(ChatMetrics.METRIC_SEND_MESSAGE, "outcome", "turn_limit").count())
+                .isEqualTo(1L);
+    }
+
+    /**
+     * 상한 미달(9턴째) 일반 경로는 기존 AND gate 만 동작해야 한다.
+     * LLM allCompleted=false → 응답도 false (턴 강제 없음).
+     */
+    @Test
+    @DisplayName("9번째 USER 메시지 — 상한 미달이면 턴 강제 없이 기존 AND gate 동작")
+    void sendMessage_belowTurnLimit_andGateUnaffected() {
+        given(messageReader.countByConsultationIdAndRole(consultationId, MessageRole.USER))
+                .willReturn(8L); // 새 메시지 저장 후 9 — 상한(10) 미만
+
+        ChatParsedResponse parsed = new ChatParsedResponse();
+        parsed.setNextQuestion("추가로 확인드릴 게 있어요.");
+        parsed.setAllCompleted(false);
+        parsed.setAiDomains(List.of());
+        parsed.setAiSubDomains(List.of());
+        parsed.setAiTags(List.of());
+        given(cohereService.chat(any(), anyString(), anyString(), any()))
+                .willReturn(new AiCallResult<>("resp-turn9", parsed, 100, 42, 250));
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "9번째 입력");
+
+        assertThat(response.allCompleted()).isFalse();
+        assertThat(meterRegistry.timer(ChatMetrics.METRIC_SEND_MESSAGE, "outcome", "success").count())
+                .isEqualTo(1L);
     }
 }

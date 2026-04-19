@@ -102,6 +102,104 @@ public class ChecklistCoverageService {
         return COVERAGE_THRESHOLD;
     }
 
+    /**
+     * 이미 수집된 체크리스트 항목을 마크다운 체크박스 요약으로 반환.
+     *
+     * <p>LLM 이 대화 히스토리에서 답변된 내용을 스스로 파싱하지 못해 동일 질문을
+     * 재생성하는 문제를 완화하기 위해 system 프롬프트에 사전 계산된 상태를 주입한다.
+     * 매칭 규칙은 {@link #compute} 와 동일한 토큰 기반 휴리스틱이라 false positive/negative
+     * 가 발생할 수 있지만, AND gate 와 달리 여기서는 '질문 생략 힌트'로만 쓰이므로
+     * 약간의 오차는 허용된다.</p>
+     *
+     * @param l1Name L1 한글 이름 (null/blank → 빈 문자열 반환)
+     * @param l2Name L2 한글 이름 (null 허용)
+     * @param l3Name L3 한글 이름 (null 허용; L2 가 null 이면 무시)
+     * @param chatHistory DB 중복 조회 방지를 위해 호출자가 전달한 메시지 목록
+     * @return "## 이미 수집된 항목..." 형식 마크다운, 항목 없으면 빈 문자열
+     */
+    public String buildCollectedSummary(
+            String l1Name, String l2Name, String l3Name, List<Message> chatHistory) {
+        if (l1Name == null || l1Name.isBlank()) return "";
+        JsonNode root = checklistLoader.loadAsTree(l1Name);
+        if (root == null) return "";
+
+        List<String> items = collectItems(root, l2Name, l3Name);
+        if (items.isEmpty()) return "";
+
+        String haystack = buildHaystackFromHistory(chatHistory);
+
+        StringBuilder sb = new StringBuilder("## 이미 수집된 항목 (재질문 금지)\n");
+        int matched = 0;
+        int firstUncheckedIdx = -1;
+        for (int i = 0; i < items.size(); i++) {
+            String item = items.get(i);
+            Set<String> tokens = ChecklistTokenizer.tokensOf(item);
+            boolean hit = !haystack.isEmpty() && ChecklistTokenizer.anyTokenMatches(tokens, haystack);
+            sb.append(hit ? "- [x] " : "- [ ] ").append(item).append('\n');
+            if (hit) {
+                matched++;
+            } else if (firstUncheckedIdx < 0) {
+                firstUncheckedIdx = i;
+            }
+        }
+        sb.append('\n');
+        sb.append("위 `[x]` 항목은 이미 답변됐습니다. 같은 정보를 다시 묻지 마세요. ");
+        if (firstUncheckedIdx >= 0) {
+            sb.append("`[ ]` 항목 중 가장 중요한 것 하나만 다음 질문으로 던지세요.");
+        } else {
+            sb.append("모든 항목이 수집됐으니 마무리 단계로 전환하세요.");
+        }
+        log.debug("collected summary: matched={}/{}, L1={}, L2={}, L3={}",
+                matched, items.size(), l1Name, l2Name, l3Name);
+        return sb.toString();
+    }
+
+    /**
+     * 의뢰서 생성용 — 대화에서 수집되지 못한 체크리스트 항목을 추론 가이드 블록으로.
+     *
+     * <p>{@link #buildCollectedSummary} 와 동일한 토큰 휴리스틱을 쓰되 unmatched 항목만
+     * 모아 brief 프롬프트에 힌트로 주입한다. 10턴 상한으로 상담이 조기 종료됐을 때
+     * LLM 이 대화 근거를 바탕으로 합리적 추론을 수행하도록 유도하는 용도다.</p>
+     *
+     * @param l1Name L1 한글 이름 (null/blank → 빈 문자열)
+     * @param l2Name L2 한글 이름 (null 허용)
+     * @param l3Name L3 한글 이름 (null 허용; L2 가 null 이면 무시)
+     * @param chatHistory 현재 상담 메시지 목록
+     * @return "## 미수집 슬롯..." 마크다운, 누락 항목이 없거나 L1 미확정이면 빈 문자열
+     */
+    public String buildMissingSlotsGuidance(
+            String l1Name, String l2Name, String l3Name, List<Message> chatHistory) {
+        if (l1Name == null || l1Name.isBlank()) return "";
+        JsonNode root = checklistLoader.loadAsTree(l1Name);
+        if (root == null) return "";
+
+        List<String> items = collectItems(root, l2Name, l3Name);
+        if (items.isEmpty()) return "";
+
+        String haystack = buildHaystackFromHistory(chatHistory);
+
+        List<String> missing = new ArrayList<>();
+        for (String item : items) {
+            Set<String> tokens = ChecklistTokenizer.tokensOf(item);
+            boolean hit = !haystack.isEmpty() && ChecklistTokenizer.anyTokenMatches(tokens, haystack);
+            if (!hit) missing.add(item);
+        }
+        if (missing.isEmpty()) return "";
+
+        StringBuilder sb = new StringBuilder("## 미수집 슬롯 (대화 내용으로 추론 필요)\n");
+        for (String m : missing) {
+            sb.append("- ").append(m).append('\n');
+        }
+        sb.append('\n');
+        sb.append("위 항목은 체크리스트 필수 슬롯이지만 대화에서 명시적으로 답변되지 않았습니다. ");
+        sb.append("대화 문맥에 근거가 있다면 합리적으로 추론해 채우고, 근거가 불충분하면 \"미확인\"으로 명시하세요. ");
+        sb.append("근거 없이 새 사실을 만들어내지 마세요.");
+
+        log.debug("missing slots: {}/{}, L1={}, L2={}, L3={}",
+                missing.size(), items.size(), l1Name, l2Name, l3Name);
+        return sb.toString();
+    }
+
     // ---------- helpers ----------
 
     /** YAML 트리에서 요청 범위에 해당하는 항목 문자열 전부 수집. */
@@ -149,6 +247,12 @@ public class ChecklistCoverageService {
     /** 해당 상담의 모든 USER 메시지를 NFC+소문자로 합친 문자열. */
     private String loadUserHaystack(UUID consultationId) {
         List<Message> messages = messageReader.findAllByConsultationId(consultationId);
+        return buildHaystackFromHistory(messages);
+    }
+
+    /** 주어진 메시지 목록의 USER 턴만 모아 NFC+소문자로 정규화한 haystack 반환. */
+    private String buildHaystackFromHistory(List<Message> messages) {
+        if (messages == null || messages.isEmpty()) return "";
         StringBuilder sb = new StringBuilder();
         for (Message m : messages) {
             if (m.getRole() == MessageRole.USER && m.getContent() != null) {

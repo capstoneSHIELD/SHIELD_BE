@@ -150,6 +150,61 @@ class ChecklistCoverageServiceTest {
         assertThat(service.getThreshold()).isEqualTo(0.85);
     }
 
+    // ----- buildMissingSlotsGuidance -----
+
+    @Test
+    @DisplayName("buildMissingSlotsGuidance — 전부 매칭되면 빈 문자열")
+    void missingSlots_allMatched_emptyString() {
+        // realEstateFullCoverage 와 동일 메시지 세트 — 모든 L1 항목 매칭 기대
+        UUID cid = UUID.randomUUID();
+        List<Message> messages = List.of(
+                userMsg(cid, "상대방은 집주인(임대인)이고 연락 가능, 분쟁 시기는 2024년 6월 발생일입니다."),
+                userMsg(cid, "관련 금액은 보증금 5000만원, 관련 문서는 계약서와 등기부 존재, 특약 포함."),
+                userMsg(cid, "증거 자료로 사진, 녹음, 이체내역, 문자, 이메일 전부 보유."),
+                userMsg(cid, "기존 조치 이력은 내용증명 보냈고 소송 검토 중, 원하는 결과는 보증금 반환 이행."),
+                userMsg(cid, "부동산 종류는 아파트, 거래 유형은 임대차, 소재지는 서울.")
+        );
+
+        String summary = service.buildMissingSlotsGuidance("부동산 거래", null, null, messages);
+        assertThat(summary).isEmpty();
+    }
+
+    @Test
+    @DisplayName("buildMissingSlotsGuidance — 일부만 언급되면 누락 항목이 리스트업되고 추론 가이드 포함")
+    void missingSlots_partialCoverage_listsMissing() {
+        UUID cid = UUID.randomUUID();
+        List<Message> messages = List.of(
+                userMsg(cid, "상대방은 집주인이고 분쟁은 2024년 6월 발생했습니다.")
+        );
+
+        String summary = service.buildMissingSlotsGuidance("부동산 거래", null, null, messages);
+
+        assertThat(summary).isNotEmpty();
+        assertThat(summary).contains("## 미수집 슬롯");
+        assertThat(summary).contains("- "); // 최소 1개 bullet
+        assertThat(summary).contains("미확인"); // 추론 가이드 문구
+        assertThat(summary).contains("근거 없이"); // 할루시네이션 금지 문구
+    }
+
+    @Test
+    @DisplayName("buildMissingSlotsGuidance — 빈 메시지면 모든 항목이 누락으로 출력")
+    void missingSlots_emptyHistory_allMissing() {
+        String summary = service.buildMissingSlotsGuidance("부동산 거래", null, null, List.of());
+        assertThat(summary).isNotEmpty();
+        assertThat(summary).contains("## 미수집 슬롯");
+    }
+
+    @Test
+    @DisplayName("buildMissingSlotsGuidance — L1 null/blank/지원되지 않는 값이면 빈 문자열")
+    void missingSlots_unsupportedL1_emptyString() {
+        UUID cid = UUID.randomUUID();
+        List<Message> messages = List.of(userMsg(cid, "아무 텍스트"));
+
+        assertThat(service.buildMissingSlotsGuidance(null, null, null, messages)).isEmpty();
+        assertThat(service.buildMissingSlotsGuidance("", null, null, messages)).isEmpty();
+        assertThat(service.buildMissingSlotsGuidance("CIVIL_LAW", null, null, messages)).isEmpty();
+    }
+
     // ----- helpers -----
 
     private Message userMsg(UUID consultationId, String content) {

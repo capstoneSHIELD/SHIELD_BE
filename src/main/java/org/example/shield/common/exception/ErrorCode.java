@@ -36,6 +36,7 @@ public enum ErrorCode {
     // Consultation
     CONSULTATION_NOT_FOUND(HttpStatus.NOT_FOUND, "상담을 찾을 수 없습니다"),
     CONSULTATION_NOT_COMPLETED(HttpStatus.BAD_REQUEST, "대화가 완료되지 않았습니다"),
+    CONSULTATION_TURN_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "상담 대화 횟수 상한을 초과했습니다. 의뢰서 생성으로 넘어가 주세요"),
 
     // Brief
     BRIEF_NOT_FOUND(HttpStatus.NOT_FOUND, "의뢰서를 찾을 수 없습니다"),

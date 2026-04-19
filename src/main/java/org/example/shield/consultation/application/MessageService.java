@@ -11,6 +11,7 @@ import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.ChatParsedResponse;
 import org.example.shield.ai.infrastructure.SanitizeService;
+import org.example.shield.common.enums.MessageRole;
 import org.example.shield.common.exception.ChatAiException;
 import org.example.shield.common.response.PageResponse;
 import org.example.shield.consultation.controller.dto.MessageResponse;
@@ -19,6 +20,8 @@ import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.ConsultationReader;
 import org.example.shield.consultation.domain.Message;
 import org.example.shield.consultation.domain.MessageReader;
+import org.example.shield.consultation.exception.ConsultationTurnLimitExceededException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -68,6 +71,14 @@ public class MessageService {
     private final ChatMetrics chatMetrics;
 
     /**
+     * 사용자 메시지 상한. 도달(=) 시 현재 턴을 마지막으로 처리하고 {@code effectiveAllCompleted=true}
+     * 를 강제 반환하여 FE 가 의뢰서 생성(/analyze)으로 전환하게 한다. 초과(>) 는 방어선 —
+     * {@link ConsultationTurnLimitExceededException} 으로 400 반환.
+     */
+    @Value("${shield.consultation.max-user-turns:10}")
+    private int maxUserTurns;
+
+    /**
      * 사용자 메시지 처리 및 AI 응답 생성.
      *
      * <p>{@code noRollbackFor = ChatAiException.class} (Issue #45 후속):
@@ -85,7 +96,15 @@ public class MessageService {
         try {
             Consultation consultation = consultationReader.findById(consultationId);
 
-            // 0. 사용자 입력 sanitization (P0-III)
+            // 0-a. 턴 상한 방어선 — 이미 상한에 도달한 상담이면 새 USER 메시지 저장 전에 차단.
+            // 정상 FE 는 이전 턴의 allCompleted=true 에서 /analyze 로 전환하므로 이 분기에 도달하지 않음.
+            long existingUserTurns = messageReader.countByConsultationIdAndRole(consultationId, MessageRole.USER);
+            if (existingUserTurns >= maxUserTurns) {
+                chatMetrics.recordSendMessage(pipelineStart, "turn_limit");
+                throw new ConsultationTurnLimitExceededException(consultationId, maxUserTurns);
+            }
+
+            // 0-b. 사용자 입력 sanitization (P0-III)
             String sanitizedText;
             try {
                 sanitizedText = sanitizeService.sanitizeUserText(content);
@@ -100,6 +119,11 @@ public class MessageService {
 
             // 대화 내역 1회 조회 — RAG와 chat() 양쪽에서 공유 (중복 DB 쿼리 방지)
             List<Message> chatHistory = messageReader.findAllByConsultationId(consultationId);
+
+            // 방금 저장된 USER 메시지 포함 턴 수가 상한에 도달했는지.
+            // 도달 시 Cohere 호출은 정상 수행하되(분류/슬롯 업데이트), 응답의 allCompleted 를 강제로 true 로 내려
+            // FE 가 /analyze 로 전환하게 한다.
+            boolean turnLimitReached = existingUserTurns + 1 >= maxUserTurns;
 
             // 2. [RAG] 도메인 정보가 있을 때만 실행 — 트랜잭션 밖
             String ragContext = "";
@@ -167,12 +191,14 @@ public class MessageService {
                 consultation.updateAiClassification(payload.aiDomains(), payload.aiSubDomains(), payload.aiTags());
             }
 
-            // 7. allCompleted AND gate (P0-II, Issue #40 3레벨 커버리지) — 트랜잭션 밖
-            boolean effectiveAllCompleted = evaluateAllCompletedGate(consultationId, consultation, parsed);
+            // 7. allCompleted 게이트 — 턴 상한 도달 시 커버리지 무시하고 true,
+            //    아니면 기존 AND gate (P0-II, Issue #40 3레벨 커버리지) — 모두 트랜잭션 밖
+            boolean effectiveAllCompleted = evaluateAllCompletedGate(
+                    consultationId, consultation, parsed, turnLimitReached);
 
-            chatMetrics.recordSendMessage(pipelineStart, "success");
+            chatMetrics.recordSendMessage(pipelineStart, turnLimitReached ? "turn_limit_reached" : "success");
             return SendMessageResponse.from(savedAi, effectiveAllCompleted);
-        } catch (ChatAiException e) {
+        } catch (ChatAiException | ConsultationTurnLimitExceededException e) {
             throw e; // already metered
         } catch (RuntimeException e) {
             chatMetrics.recordSendMessage(pipelineStart, "error");
@@ -204,11 +230,22 @@ public class MessageService {
     }
 
     /**
-     * allCompleted 커버리지 AND 게이트 — DB read-only 계산만 수행.
-     * {@link ChecklistCoverageService} 자체가 필요 시 readOnly 트랜잭션을 연다.
+     * allCompleted 게이트.
+     *
+     * <ol>
+     *   <li>{@code turnLimitReached=true} → 커버리지·LLM 신호 모두 무시하고 true 반환.
+     *       사용자 메시지 상한에 도달했으므로 상담을 강제 종료하고 /analyze 로 전환한다.</li>
+     *   <li>그 외 → 기존 AND gate: LLM 이 allCompleted 를 외친 경우에 한해
+     *       {@link ChecklistCoverageService} 커버리지가 임계치 이상인지 검증.</li>
+     * </ol>
      */
     private boolean evaluateAllCompletedGate(UUID consultationId, Consultation consultation,
-                                              ChatParsedResponse parsed) {
+                                              ChatParsedResponse parsed, boolean turnLimitReached) {
+        if (turnLimitReached) {
+            log.info("Turn limit reached ({}): forcing effectiveAllCompleted=true. consultationId={}",
+                    maxUserTurns, consultationId);
+            return true;
+        }
         if (!parsed.isAllCompleted()) return false;
 
         String l1 = consultation.getFirstDomain();
