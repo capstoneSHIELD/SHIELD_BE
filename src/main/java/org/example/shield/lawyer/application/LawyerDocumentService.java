@@ -10,7 +10,6 @@ import org.example.shield.lawyer.domain.LawyerDocument;
 import org.example.shield.lawyer.domain.LawyerDocumentReader;
 import org.example.shield.lawyer.domain.LawyerDocumentWriter;
 import org.example.shield.lawyer.domain.LawyerReader;
-import org.example.shield.user.domain.UserReader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -30,7 +29,6 @@ public class LawyerDocumentService {
 
     private final StorageClient storageClient;
     private final LawyerReader lawyerReader;
-    private final UserReader userReader;
     private final LawyerDocumentReader lawyerDocumentReader;
     private final LawyerDocumentWriter lawyerDocumentWriter;
 
@@ -41,11 +39,9 @@ public class LawyerDocumentService {
         validateFile(file);
 
         var lawyer = lawyerReader.findByUserId(userId);
-        var user = userReader.findById(userId);
         String fileType = extractFileType(file.getOriginalFilename());
         String sanitizedName = sanitizeFileName(file.getOriginalFilename());
-        String userName = sanitizeFileName(user.getName());
-        String storagePath = lawyer.getId() + "/" + userName + "_" + sanitizedName;
+        String storagePath = lawyer.getId() + "/" + UUID.randomUUID() + "_" + sanitizedName;
 
         String filePath = storageClient.upload(storagePath, file);
 
@@ -94,9 +90,14 @@ public class LawyerDocumentService {
         }
     }
 
+    /**
+     * 파일명을 storage path 안전 형태로 정제.
+     * URI.create() 는 non-ASCII(한글 등) 문자를 허용하지 않으므로 영숫자·점·대시·언더스코어만 유지한다.
+     * 원본 파일명은 LawyerDocument.fileName 컬럼에 별도 보존되므로 UI 표시는 영향 없음.
+     */
     private String sanitizeFileName(String fileName) {
         if (fileName == null) return "file";
-        return fileName.replaceAll("[^a-zA-Z0-9가-힣._-]", "_");
+        return fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
     private String extractFileType(String fileName) {
