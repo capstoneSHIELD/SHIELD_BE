@@ -55,8 +55,13 @@ public class RagPipelineService {
                     intentClassificationService.classify(chatHistory, domain);
 
             // Layer 2: 법률 (+ 옵션: 판례) 검색
-            List<String> lawIds = categoryLawMappingService.resolveLawIds(
-                    classification.matchedNodeIds());
+            // NOTE: lawIds 필터는 category-law-mappings.yml (LSI*) 과
+            // legal_chunks.law_id (law-*) 포맷 불일치로 임시 스킵 중.
+            List<String> lawIds = null;
+            // NOTE: categoryIds 필터도 임시 스킵 — Layer1 의 matchedNodeIds(law-*)가
+            // DB의 category_ids(book:*, chapter:*, group:*) 와 네임스페이스 다름.
+            // 검증용으로 필터 해제하여 3-way 점수만으로 매칭되는지 확인.
+            List<String> categoryIds = null;
             String vectorQuery = classification.retrievalQueries().isEmpty()
                     ? domain + " 관련 법률"
                     : classification.retrievalQueries().get(0);
@@ -67,7 +72,7 @@ public class RagPipelineService {
                 MixedRetrievalResult mixed = legalRetrievalService.retrieveMixed(
                         vectorQuery,
                         classification.keywords().core(),
-                        classification.matchedNodeIds(),
+                        categoryIds,
                         lawIds,
                         3);
                 ragContext = ragContextBuilder.build(mixed, classification.intentSummary());

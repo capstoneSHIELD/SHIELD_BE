@@ -117,7 +117,7 @@ cohere:
     connect: 5000
     read-chat: 180000
     read-brief: 60000
-    read-classify: 15000
+    read-classify: 30000
     read-embed: 30000
   embed:
     batch-size: 96
