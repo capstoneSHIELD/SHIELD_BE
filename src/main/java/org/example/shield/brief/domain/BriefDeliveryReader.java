@@ -14,5 +14,7 @@ public interface BriefDeliveryReader {
     Page<BriefDelivery> findAllByLawyerId(UUID lawyerId, Pageable pageable);
     Page<BriefDelivery> findAllByLawyerIdAndStatus(UUID lawyerId, DeliveryStatus status, Pageable pageable);
     boolean existsByBriefIdAndLawyerId(UUID briefId, UUID lawyerId);
+    boolean existsByBriefIdAndStatus(UUID briefId, DeliveryStatus status);
+    List<BriefDelivery> findAllByBriefIdInAndStatus(List<UUID> briefIds, DeliveryStatus status);
     Map<DeliveryStatus, Long> countGroupByStatus(UUID lawyerId);
 }
