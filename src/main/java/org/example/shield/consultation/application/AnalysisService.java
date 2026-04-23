@@ -59,8 +59,12 @@ public class AnalysisService {
             String legalField = consultation.getFirstDomain() != null
                     ? consultation.getFirstDomain() : "UNKNOWN";
 
+            // 서버 가드: LLM 이 "미확인 항목"/"확인 필요"/"누락" 같은 데이터 공백을
+            // keyIssues 에 넣는 경우가 있어 (brief.md 구 규칙의 잔재) 후처리로 제거.
+            // 실제 법적 쟁점만 유지.
             List<KeyIssue> keyIssueList = parsed.getKeyIssues() != null
                     ? parsed.getKeyIssues().stream()
+                        .filter(ki -> !isUnconfirmedMarker(ki.getTitle()))
                         .map(ki -> new KeyIssue(ki.getTitle(), ki.getDescription()))
                         .toList()
                     : List.of();
@@ -106,6 +110,21 @@ public class AnalysisService {
         }
 
         return CompletableFuture.completedFuture(null);
+    }
+
+    /**
+     * "미확인 항목", "확인 필요", "누락" 등 데이터 공백을 나타내는 표현이 제목에 포함된
+     * keyIssue 인지 판정. 이런 항목은 법적 쟁점이 아니라 정보 공백이므로 keyIssues
+     * 목록에서 제외하고 Brief.content 의 "※ 추가 확인 필요 사항" 섹션으로만 노출한다.
+     */
+    private boolean isUnconfirmedMarker(String title) {
+        if (title == null) return false;
+        String normalized = title.replaceAll("\\s+", "");
+        return normalized.contains("미확인항목")
+                || normalized.contains("확인필요")
+                || normalized.contains("누락된정보")
+                || normalized.contains("추가질문필요")
+                || normalized.startsWith("미확인:");
     }
 
 }
