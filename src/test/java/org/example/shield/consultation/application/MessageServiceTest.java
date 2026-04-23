@@ -388,6 +388,16 @@ class MessageServiceTest {
                 .as("턴 상한 도달 시 서버는 커버리지/LLM 신호 무시하고 allCompleted=true")
                 .isTrue();
 
+        // 턴 상한 도달 시 챗봇 응답(content=nextQuestion) 은 완료 안내 멘트로 강제 치환됨
+        // (LLM 이 "마지막으로 하나만 더..." 로 답해도 무시됨)
+        assertThat(response.content())
+                .as("턴 상한 도달 시 챗봇 응답은 완료 안내 멘트로 치환")
+                .contains("정보를 충분히 수집")
+                .contains("의뢰서 생성");
+        assertThat(response.content())
+                .as("LLM 이 생성한 추가 질문은 덮어씌워져야 함")
+                .doesNotContain("마지막으로 하나만 더");
+
         // Cohere 호출과 finalize 는 정상 수행 (분류/슬롯 업데이트 기회 보존)
         verify(cohereService, times(1)).chat(any(), anyString(), anyString(), any());
         verify(chatTxBoundary, times(1)).finalizeAiResponse(eq(consultationId), any(AiFinalizePayload.class));

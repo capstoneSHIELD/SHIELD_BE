@@ -150,6 +150,15 @@ public class MessageService {
                 throw new ChatAiException();
             }
 
+            // 4-b. 턴 상한 도달 시: LLM 이 추가 질문을 생성했더라도 완료 안내 멘트로 강제 치환.
+            // allCompleted=true 와 nextQuestion="추가 질문..." 이 공존해 UX 가 혼란스러워지는 문제 방어.
+            if (turnLimitReached) {
+                nextQuestion = "필요한 정보를 충분히 수집했습니다. "
+                        + "'의뢰서 생성' 버튼을 눌러 의뢰서를 만들어 주세요.";
+                log.info("턴 상한 도달 — nextQuestion 을 완료 안내로 치환: consultationId={}",
+                        consultationId);
+            }
+
             // 5. AI 분류 결과 온톨로지 필터링 (순수 로직)
             List<String> validSubs = null;
             List<String> validTags = null;
