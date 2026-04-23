@@ -48,6 +48,17 @@ public class BriefDeliveryReaderImpl implements BriefDeliveryReader {
     }
 
     @Override
+    public boolean existsByBriefIdAndStatus(UUID briefId, DeliveryStatus status) {
+        return briefDeliveryRepository.existsByBriefIdAndStatus(briefId, status);
+    }
+
+    @Override
+    public List<BriefDelivery> findAllByBriefIdInAndStatus(List<UUID> briefIds, DeliveryStatus status) {
+        if (briefIds == null || briefIds.isEmpty()) return List.of();
+        return briefDeliveryRepository.findAllByBriefIdInAndStatus(briefIds, status);
+    }
+
+    @Override
     public Map<DeliveryStatus, Long> countGroupByStatus(UUID lawyerId) {
         return briefDeliveryRepository.countGroupByStatus(lawyerId).stream()
                 .collect(Collectors.toMap(

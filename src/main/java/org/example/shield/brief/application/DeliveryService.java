@@ -65,6 +65,13 @@ public class DeliveryService {
             throw new BusinessException(ErrorCode.DELIVERY_ALREADY_PROCESSED) {};
         }
 
+        // 이미 다른 변호사가 수락한 의뢰서는 추가 수락 차단.
+        // 변호사 1인 선임 원칙 + 목록/상세 derived 필드의 유일성 보장용.
+        if (status == DeliveryStatus.CONFIRMED
+                && deliveryReader.existsByBriefIdAndStatus(delivery.getBriefId(), DeliveryStatus.CONFIRMED)) {
+            throw new BusinessException(ErrorCode.BRIEF_ALREADY_ACCEPTED) {};
+        }
+
         switch (status) {
             case CONFIRMED -> delivery.accept();
             case REJECTED -> {

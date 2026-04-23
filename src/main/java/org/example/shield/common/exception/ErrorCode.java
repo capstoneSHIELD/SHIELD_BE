@@ -41,6 +41,7 @@ public enum ErrorCode {
     // Brief
     BRIEF_NOT_FOUND(HttpStatus.NOT_FOUND, "의뢰서를 찾을 수 없습니다"),
     BRIEF_ALREADY_CONFIRMED(HttpStatus.CONFLICT, "이미 확정된 의뢰서입니다"),
+    BRIEF_ALREADY_ACCEPTED(HttpStatus.CONFLICT, "이미 다른 변호사가 수락한 의뢰서입니다"),
 
     // Delivery
     DELIVERY_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 전달 건입니다"),
