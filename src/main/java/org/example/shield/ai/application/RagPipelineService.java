@@ -54,14 +54,15 @@ public class RagPipelineService {
             IntentClassificationResult classification =
                     intentClassificationService.classify(chatHistory, domain);
 
-            // Layer 2: 법률 (+ 옵션: 판례) 검색
-            // NOTE: lawIds 필터는 category-law-mappings.yml (LSI*) 과
-            // legal_chunks.law_id (law-*) 포맷 불일치로 임시 스킵 중.
-            List<String> lawIds = null;
-            // NOTE: categoryIds 필터도 임시 스킵 — Layer1 의 matchedNodeIds(law-*)가
-            // DB의 category_ids(book:*, chapter:*, group:*) 와 네임스페이스 다름.
-            // 검증용으로 필터 해제하여 3-way 점수만으로 매칭되는지 확인.
-            List<String> categoryIds = null;
+            // Layer 2: 온톨로지 매핑으로 law_id / category_ids 해결 (Issue #65 복구)
+            // YAML 의 law_id 가 slug 포맷으로 통일되고 lsi_code 가 보조 필드로 분리되어
+            // CategoryLawMappingService.resolveLawIds 가 곧장 DB slug 와 호환되는 값을 반환.
+            List<String> matchedNodeIds = classification.matchedNodeIds();
+            List<String> lawIds = categoryLawMappingService.resolveLawIds(matchedNodeIds);
+            List<String> categoryIds = categoryLawMappingService.resolveCategoryIds(matchedNodeIds);
+            log.debug("RAG 필터 해결: consultationId={}, matchedNodes={}, lawIds={}, categoryIds={}",
+                    consultationId, matchedNodeIds, lawIds, categoryIds);
+
             String vectorQuery = classification.retrievalQueries().isEmpty()
                     ? domain + " 관련 법률"
                     : classification.retrievalQueries().get(0);
@@ -78,8 +79,10 @@ public class RagPipelineService {
                 ragContext = ragContextBuilder.build(mixed, classification.intentSummary());
                 hits = mixed.size();
                 if (!ragContext.isEmpty()) {
-                    log.info("RAG 컨텍스트 생성 완료 (mixed): consultationId={}, laws={}, cases={}, merged={}",
-                            consultationId, mixed.laws().size(), mixed.cases().size(), hits);
+                    log.info("RAG 컨텍스트 생성 완료 (mixed): consultationId={}, " +
+                                    "lawIdsApplied={}, categoryIdsApplied={}, laws={}, cases={}, merged={}",
+                            consultationId, lawIds.size(), categoryIds.size(),
+                            mixed.laws().size(), mixed.cases().size(), hits);
                 }
             } else {
                 List<LegalChunk> chunks = legalRetrievalService.retrieve(
@@ -89,7 +92,8 @@ public class RagPipelineService {
                 ragContext = ragContextBuilder.build(chunks, classification.intentSummary());
                 hits = chunks.size();
                 if (!ragContext.isEmpty()) {
-                    log.info("RAG 컨텍스트 생성 완료: consultationId={}, chunks={}", consultationId, hits);
+                    log.info("RAG 컨텍스트 생성 완료: consultationId={}, lawIdsApplied={}, chunks={}",
+                            consultationId, lawIds.size(), hits);
                 }
             }
             return ragContext;
