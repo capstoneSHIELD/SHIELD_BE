@@ -5,11 +5,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.application.ChecklistCoverageService;
 import org.example.shield.ai.application.CohereService;
+import org.example.shield.ai.application.DomainResolver;
 import org.example.shield.ai.application.OntologyService;
 import org.example.shield.ai.application.RagPipelineService;
 import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.ChatParsedResponse;
+import org.example.shield.ai.dto.IntentClassificationResult;
+import org.example.shield.ai.dto.RagResult;
+import org.example.shield.ai.dto.ResolvedDomain;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
 import org.example.shield.common.exception.ChatAiException;
@@ -67,6 +71,7 @@ public class MessageService {
     private final ChecklistCoverageService checklistCoverageService;
     private final RagPipelineService ragPipelineService;
     private final OntologyService ontologyService;
+    private final DomainResolver domainResolver;
     private final ChatTransactionalBoundary chatTxBoundary;
     private final ChatMetrics chatMetrics;
 
@@ -126,15 +131,22 @@ public class MessageService {
             boolean turnLimitReached = existingUserTurns + 1 >= maxUserTurns;
 
             // 2. [RAG] 도메인 정보가 있을 때만 실행 — 트랜잭션 밖
-            String ragContext = "";
+            RagResult ragResult = RagResult.empty();
             String domainForRag = consultation.getFirstDomain();
             if (domainForRag != null) {
-                ragContext = ragPipelineService.execute(chatHistory, domainForRag, consultationId);
+                ragResult = ragPipelineService.execute(chatHistory, domainForRag, consultationId);
             }
+
+            // 2-b. AI 분류 결과 + 사용자 선택 교차 매칭으로 활성 도메인 결정 (체크리스트 anchor)
+            ResolvedDomain activeDomain = domainResolver.resolve(
+                    ragResult.classification(),
+                    consultation.getUserDomains(),
+                    consultation.getUserSubDomains(),
+                    consultation.getUserTags());
 
             // 3. Cohere Chat v2 호출 — 트랜잭션 밖 + Micrometer 타이밍
             AiCallResult<ChatParsedResponse> result = callCohereMeasured(
-                    consultation, sanitizedText, ragContext, chatHistory);
+                    consultation, sanitizedText, ragResult.context(), chatHistory, activeDomain);
             ChatParsedResponse parsed = result.data();
 
             // 4. AI 응답 blank 차단 (Issue #45)
@@ -202,8 +214,9 @@ public class MessageService {
 
             // 7. allCompleted 게이트 — 턴 상한 도달 시 커버리지 무시하고 true,
             //    아니면 기존 AND gate (P0-II, Issue #40 3레벨 커버리지) — 모두 트랜잭션 밖
+            //    DomainResolver 가 결정한 activeDomain 으로 체크리스트 anchor 결정.
             boolean effectiveAllCompleted = evaluateAllCompletedGate(
-                    consultationId, consultation, parsed, turnLimitReached);
+                    consultationId, consultation, parsed, turnLimitReached, activeDomain);
 
             chatMetrics.recordSendMessage(pipelineStart, turnLimitReached ? "turn_limit_reached" : "success");
             return SendMessageResponse.from(savedAi, effectiveAllCompleted);
@@ -220,11 +233,12 @@ public class MessageService {
      * outcome 태그: success / blank / failure.
      */
     private AiCallResult<ChatParsedResponse> callCohereMeasured(
-            Consultation consultation, String sanitizedText, String ragContext, List<Message> chatHistory) {
+            Consultation consultation, String sanitizedText, String ragContext,
+            List<Message> chatHistory, ResolvedDomain activeDomain) {
         Timer.Sample sample = chatMetrics.startCohereCall();
         try {
             AiCallResult<ChatParsedResponse> result = cohereService.chat(
-                    consultation, sanitizedText, ragContext, chatHistory);
+                    consultation, sanitizedText, ragContext, chatHistory, activeDomain);
             String nq = result.data() == null ? null : result.data().getNextQuestion();
             if (nq == null || nq.isBlank()) {
                 chatMetrics.stopCohereCallBlank(sample);
@@ -249,7 +263,8 @@ public class MessageService {
      * </ol>
      */
     private boolean evaluateAllCompletedGate(UUID consultationId, Consultation consultation,
-                                              ChatParsedResponse parsed, boolean turnLimitReached) {
+                                              ChatParsedResponse parsed, boolean turnLimitReached,
+                                              ResolvedDomain activeDomain) {
         if (turnLimitReached) {
             log.info("Turn limit reached ({}): forcing effectiveAllCompleted=true. consultationId={}",
                     maxUserTurns, consultationId);
@@ -257,9 +272,10 @@ public class MessageService {
         }
         if (!parsed.isAllCompleted()) return false;
 
-        String l1 = consultation.getFirstDomain();
-        String l2 = consultation.getFirstSubDomain();
-        String l3 = consultation.getFirstTag();
+        // activeDomain 이 비어있으면 사용자 첫 선택값으로 폴백 (기존 동작)
+        String l1 = activeDomain.l1() != null ? activeDomain.l1() : consultation.getFirstDomain();
+        String l2 = activeDomain.l2() != null ? activeDomain.l2() : consultation.getFirstSubDomain();
+        String l3 = activeDomain.l3() != null ? activeDomain.l3() : consultation.getFirstTag();
 
         double coverageRatio = checklistCoverageService.compute(consultationId, l1, l2, l3);
         boolean effective = checklistCoverageService.isEffectivelyCompleted(true, coverageRatio);

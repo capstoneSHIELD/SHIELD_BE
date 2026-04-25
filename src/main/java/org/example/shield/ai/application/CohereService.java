@@ -7,6 +7,7 @@ import org.example.shield.ai.dto.BriefParsedResponse;
 import org.example.shield.ai.dto.ChatParsedResponse;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.CohereChatRequest;
+import org.example.shield.ai.dto.ResolvedDomain;
 import org.example.shield.ai.infrastructure.CohereClient;
 import org.example.shield.ai.infrastructure.GuardrailFilter;
 import org.example.shield.ai.infrastructure.SanitizeService;
@@ -54,8 +55,10 @@ public class CohereService {
      * @return AiCallResult<ChatParsedResponse>
      */
     public AiCallResult<ChatParsedResponse> chat(Consultation consultation, String sanitizedUserText,
-                                                  String ragContext, List<Message> chatHistory) {
-        List<CohereChatRequest.Message> messages = buildChatMessages(consultation, sanitizedUserText, ragContext, chatHistory);
+                                                  String ragContext, List<Message> chatHistory,
+                                                  ResolvedDomain activeDomain) {
+        List<CohereChatRequest.Message> messages = buildChatMessages(
+                consultation, sanitizedUserText, ragContext, chatHistory, activeDomain);
         AiCallResult<ChatParsedResponse> result = aiClient.callChat(
                 config.getChatModel(), messages);
 
@@ -113,17 +116,25 @@ public class CohereService {
      */
     private List<CohereChatRequest.Message> buildChatMessages(
             Consultation consultation, String latestSanitizedUserText,
-            String ragContext, List<Message> chatHistory) {
+            String ragContext, List<Message> chatHistory, ResolvedDomain activeDomain) {
 
         List<CohereChatRequest.Message> msgs = new ArrayList<>();
 
         // 1. 시스템 프롬프트
         String systemPrompt = promptService.loadRouterChatPrompt();
 
+        // 활성 도메인 결정: DomainResolver 결과 우선, 없으면 사용자 첫 선택값으로 폴백.
+        // 이렇게 하면 사용자가 L2 를 다중 선택했을 때 매 턴 발화에 맞는 도메인의 체크리스트가 anchor 된다.
+        String activeL1 = activeDomain != null && activeDomain.l1() != null
+                ? activeDomain.l1() : consultation.getFirstDomain();
+        String activeL2 = activeDomain != null && activeDomain.l2() != null
+                ? activeDomain.l2() : consultation.getFirstSubDomain();
+        String activeL3 = activeDomain != null && activeDomain.l3() != null
+                ? activeDomain.l3() : consultation.getFirstTag();
+
         // 분류 완료 시 체크리스트 YAML 동적 주입
-        String domain = consultation.getFirstDomain();
-        if (domain != null) {
-            String checklist = promptService.loadChecklist(domain);
+        if (activeL1 != null) {
+            String checklist = promptService.loadChecklist(activeL1);
             if (checklist != null) {
                 systemPrompt = systemPrompt + "\n\n" + checklist;
             }
@@ -136,12 +147,9 @@ public class CohereService {
         }
 
         // 이미 수집된 체크리스트 항목을 체크박스로 명시 — LLM 이 답변된 질문을 재생성하지 않도록 가이드
-        if (domain != null) {
+        if (activeL1 != null) {
             String collectedSummary = checklistCoverageService.buildCollectedSummary(
-                    domain,
-                    consultation.getFirstSubDomain(),
-                    consultation.getFirstTag(),
-                    chatHistory);
+                    activeL1, activeL2, activeL3, chatHistory);
             if (!collectedSummary.isEmpty()) {
                 systemPrompt = systemPrompt + "\n\n" + collectedSummary;
             }

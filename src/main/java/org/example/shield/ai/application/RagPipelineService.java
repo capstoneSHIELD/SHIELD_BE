@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.IntentClassificationResult;
 import org.example.shield.ai.dto.LegalChunk;
 import org.example.shield.ai.dto.MixedRetrievalResult;
+import org.example.shield.ai.dto.RagResult;
 import org.example.shield.consultation.domain.Message;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -41,14 +42,16 @@ public class RagPipelineService {
     }
 
     /**
-     * RAG 파이프라인 실행. 실패 시 빈 문자열 반환 (폴백).
+     * RAG 파이프라인 실행.
      *
      * @param chatHistory    대화 내역
      * @param domain         상담 대분류 (온톨로지 L1)
      * @param consultationId 로깅용 상담 ID
-     * @return RAG 컨텍스트 문자열 (실패 시 빈 문자열)
+     * @return RAG 컨텍스트 + Layer1 분류 결과를 묶은 {@link RagResult}.
+     *         실패 시 {@link RagResult#empty()} (context 빈 문자열, classification null).
+     *         호출자는 classification 을 활성 도메인 결정 등에 재사용 가능.
      */
-    public String execute(List<Message> chatHistory, String domain, Object consultationId) {
+    public RagResult execute(List<Message> chatHistory, String domain, Object consultationId) {
         try {
             // Layer 1: 의도 분류
             IntentClassificationResult classification =
@@ -96,12 +99,12 @@ public class RagPipelineService {
                             consultationId, lawIds.size(), hits);
                 }
             }
-            return ragContext;
+            return new RagResult(ragContext, classification);
 
         } catch (Exception e) {
             log.warn("RAG 파이프라인 실패, 폴백 (RAG 없이 진행): consultationId={}, error={}",
                     consultationId, e.getMessage());
-            return "";
+            return RagResult.empty();
         }
     }
 }
