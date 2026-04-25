@@ -30,11 +30,17 @@ public class CategoryLawMappingService {
     private final Map<String, CategoryLawMapping> mappingCache = new HashMap<>();
 
     /**
-     * 역인덱스: {@code law_id}(예: "LSI249999") → 해당 법령이 primary/secondary로
-     * 등록된 온톨로지 노드 ID 목록. Phase C-2 특별법 인제스트가 LSI 기준으로
-     * category_ids를 주입할 때 사용한다.
+     * 역인덱스: {@code law_id}(slug, 예: "law-housing-lease") → 해당 법령이
+     * primary/secondary 로 등록된 온톨로지 노드 ID 목록.
      */
     private final Map<String, List<String>> lawIdToNodeIds = new HashMap<>();
+
+    /**
+     * 역인덱스: {@code lsi_code}(법제처 LOD 식별자, 예: "LSI249999") → 노드 ID 목록.
+     * Phase C-2 특별법 인제스트({@link org.example.shield.ai.application.SpecialLawIngestService})
+     * 가 시드 파일의 source_law_id (LSI) 로 카테고리를 역조회할 때 사용한다.
+     */
+    private final Map<String, List<String>> lsiToNodeIds = new HashMap<>();
 
     public CategoryLawMappingService(ResourceLoader resourceLoader) {
         this.resourceLoader = resourceLoader;
@@ -70,17 +76,17 @@ public class CategoryLawMappingService {
 
                 mappingCache.put(categoryId, mapping);
 
-                // 역인덱스 구축: law_id → [node_id,...]
+                // 역인덱스 구축: law_id(slug) / lsi_code → [node_id,...]
                 for (LawRef ref : mapping.getPrimaryLawIds()) {
-                    indexByLawId(ref.getLawId(), categoryId);
+                    indexLawRef(ref, categoryId);
                 }
                 for (LawRef ref : mapping.getSecondaryLawIds()) {
-                    indexByLawId(ref.getLawId(), categoryId);
+                    indexLawRef(ref, categoryId);
                 }
             }
 
-            log.info("카테고리-법령 매핑 로드 완료: {}개 카테고리, 역인덱스 LSI {}건",
-                    mappingCache.size(), lawIdToNodeIds.size());
+            log.info("카테고리-법령 매핑 로드 완료: {}개 카테고리, slug 역인덱스 {}건, LSI 역인덱스 {}건",
+                    mappingCache.size(), lawIdToNodeIds.size(), lsiToNodeIds.size());
 
         } catch (IOException e) {
             log.error("category-law-mappings.yml 로드 실패", e);
@@ -182,7 +188,7 @@ public class CategoryLawMappingService {
         if (lsiOrLawId == null || lsiOrLawId.isBlank()) return List.of();
         String key = lsiOrLawId.startsWith("LSI") ? lsiOrLawId : "LSI" + lsiOrLawId;
 
-        List<String> nodeIds = lawIdToNodeIds.get(key);
+        List<String> nodeIds = lsiToNodeIds.get(key);
         if (nodeIds == null || nodeIds.isEmpty()) {
             return List.of();
         }
@@ -198,10 +204,24 @@ public class CategoryLawMappingService {
         return new ArrayList<>(out);
     }
 
-    private void indexByLawId(String lawId, String nodeId) {
-        if (lawId == null || lawId.isBlank() || "EXTERNAL".equals(lawId)) return;
-        List<String> list = lawIdToNodeIds.computeIfAbsent(lawId, k -> new ArrayList<>());
-        if (!list.contains(nodeId)) list.add(nodeId);
+    /**
+     * 단일 LawRef 의 slug(law_id)와 LSI(lsi_code)를 두 역인덱스에 모두 등록.
+     * EXTERNAL 또는 빈 값은 무시한다.
+     */
+    private void indexLawRef(LawRef ref, String nodeId) {
+        if (ref == null) return;
+
+        String lawId = ref.getLawId();
+        if (lawId != null && !lawId.isBlank() && !"EXTERNAL".equals(lawId)) {
+            List<String> list = lawIdToNodeIds.computeIfAbsent(lawId, k -> new ArrayList<>());
+            if (!list.contains(nodeId)) list.add(nodeId);
+        }
+
+        String lsi = ref.getLsiCode();
+        if (lsi != null && !lsi.isBlank() && !"EXTERNAL".equals(lsi)) {
+            List<String> list = lsiToNodeIds.computeIfAbsent(lsi, k -> new ArrayList<>());
+            if (!list.contains(nodeId)) list.add(nodeId);
+        }
     }
 
     /**
@@ -251,6 +271,7 @@ public class CategoryLawMappingService {
             LawRef ref = new LawRef();
             ref.setLawId(raw.get("law_id"));
             ref.setName(raw.get("name"));
+            ref.setLsiCode(raw.get("lsi_code"));
             refs.add(ref);
         }
         return refs;

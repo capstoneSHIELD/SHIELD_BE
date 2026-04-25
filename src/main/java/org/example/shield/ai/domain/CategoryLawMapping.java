@@ -30,7 +30,15 @@ public class CategoryLawMapping {
     @Setter
     @NoArgsConstructor
     public static class LawRef {
+        /** legal_chunks.law_id 와 동일한 slug 식별자 (예: "law-housing-lease"). */
         private String lawId;
+        /** 사람이 읽는 법률 한글명. */
         private String name;
+        /**
+         * 법제처 LOD 공식 LSI 코드 (예: "LSI249999"). 인제스트(SpecialLawIngestService)에서
+         * 시드 파일의 source_law_id 로 카테고리를 역조회할 때 사용. 외부 데이터 소스와의
+         * 연결고리 보존 목적으로 slug 와 별도로 유지한다. EXTERNAL 법률은 null.
+         */
+        private String lsiCode;
     }
 }
