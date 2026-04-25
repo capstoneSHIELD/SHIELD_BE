@@ -171,27 +171,11 @@ public class MessageService {
                         consultationId);
             }
 
-            // 5. AI 분류 결과 온톨로지 필터링 (순수 로직)
-            List<String> validSubs = null;
-            List<String> validTags = null;
-            boolean hasAnyAi = hasAny(parsed.getAiDomains())
-                    || hasAny(parsed.getAiSubDomains())
-                    || hasAny(parsed.getAiTags());
-            if (hasAnyAi) {
-                validSubs = filterValidChildren(
-                        parsed.getAiSubDomains(),
-                        firstOrNull(consultation.getUserDomains()),
-                        consultationId,
-                        "L2");
-                List<String> l2Ref = hasAny(consultation.getUserSubDomains())
-                        ? consultation.getUserSubDomains()
-                        : validSubs;
-                validTags = filterValidChildren(
-                        parsed.getAiTags(),
-                        firstOrNull(l2Ref),
-                        consultationId,
-                        "L3");
-            }
+            // 5. AI 분류 결과 산정 — Layer1 matchedNodes 우선, chat 응답 분류는 fallback
+            //    Layer1 은 온톨로지 ID 기반이라 정확하고 매 턴 동작하므로 ai_* 영속의 1순위.
+            //    matchedNodes 가 비었으면 chat 응답의 aiDomains (LLM 자유 분류) 로 폴백.
+            AiClassification aiCls = extractAiClassification(
+                    ragResult.classification(), parsed, consultation, consultationId);
 
             // 6. AI 응답 최종 반영 (독립 트랜잭션)
             AiFinalizePayload payload = new AiFinalizePayload(
@@ -201,9 +185,9 @@ public class MessageService {
                     result.tokensInput(),
                     result.tokensOutput(),
                     result.latencyMs(),
-                    hasAnyAi ? parsed.getAiDomains() : null,
-                    validSubs,
-                    validTags
+                    aiCls.domains(),
+                    aiCls.subDomains(),
+                    aiCls.tags()
             );
             Message savedAi = chatTxBoundary.finalizeAiResponse(consultationId, payload);
 
@@ -272,10 +256,14 @@ public class MessageService {
         }
         if (!parsed.isAllCompleted()) return false;
 
-        // activeDomain 이 비어있으면 사용자 첫 선택값으로 폴백 (기존 동작)
-        String l1 = activeDomain.l1() != null ? activeDomain.l1() : consultation.getFirstDomain();
-        String l2 = activeDomain.l2() != null ? activeDomain.l2() : consultation.getFirstSubDomain();
-        String l3 = activeDomain.l3() != null ? activeDomain.l3() : consultation.getFirstTag();
+        // activeDomain 의 L1 이 결정됐으면 그 깊이 그대로 사용 (L2/L3 가 null 이면 null 유지).
+        // 부분 매칭(L1 만)에 사용자 첫 L2/L3 를 끼워넣으면 자식 관계가 깨진 anchor 가
+        // 만들어져 체크리스트 매칭이 어긋남 → 자식 강제 결합 금지.
+        // L1 자체가 null 인 경우만 (AI 분류 결과 없음) 사용자 첫 선택값으로 폴백.
+        boolean hasResolved = activeDomain != null && activeDomain.l1() != null;
+        String l1 = hasResolved ? activeDomain.l1() : consultation.getFirstDomain();
+        String l2 = hasResolved ? activeDomain.l2() : consultation.getFirstSubDomain();
+        String l3 = hasResolved ? activeDomain.l3() : consultation.getFirstTag();
 
         double coverageRatio = checklistCoverageService.compute(consultationId, l1, l2, l3);
         boolean effective = checklistCoverageService.isEffectivelyCompleted(true, coverageRatio);
@@ -323,5 +311,69 @@ public class MessageService {
 
     private static String firstOrNull(List<String> list) {
         return (list == null || list.isEmpty()) ? null : list.get(0);
+    }
+
+    /**
+     * AI 분류 결과 (L1/L2/L3) 산정. Layer1 matchedNodes 우선, chat 응답 분류는 fallback.
+     *
+     * <p>Layer1 결과가 있으면 각 매칭 노드의 OntologyService.ancestorNames 으로 [L1, L2, L3]
+     * 한글명을 추출해 distinct 합집합으로 반환. 매 턴 갱신되어 ai_* DB 컬럼이 항상 AI 의
+     * 최신 인지를 반영한다.</p>
+     *
+     * <p>Layer1 결과가 비었을 때만 기존의 chat 응답 분류 (parsed.getAiDomains 등) 로 폴백.
+     * 이 경우 기존의 filterValidChildren 검증 그대로 적용 (사용자 첫 L1 기준 — 다중 선택
+     * 호환성 한계 존재, 별도 이슈로 추적).</p>
+     */
+    private AiClassification extractAiClassification(
+            org.example.shield.ai.dto.IntentClassificationResult classification,
+            org.example.shield.ai.dto.ChatParsedResponse parsed,
+            Consultation consultation,
+            UUID consultationId) {
+
+        // 1순위: Layer1 matchedNodes 기반 추출
+        if (classification != null && classification.matchedNodes() != null
+                && !classification.matchedNodes().isEmpty()) {
+            java.util.LinkedHashSet<String> l1s = new java.util.LinkedHashSet<>();
+            java.util.LinkedHashSet<String> l2s = new java.util.LinkedHashSet<>();
+            java.util.LinkedHashSet<String> l3s = new java.util.LinkedHashSet<>();
+            for (var node : classification.matchedNodes()) {
+                String[] anc = ontologyService.ancestorNames(node.id());
+                if (anc[0] != null) l1s.add(anc[0]);
+                if (anc[1] != null) l2s.add(anc[1]);
+                if (anc[2] != null) l3s.add(anc[2]);
+            }
+            log.debug("AI 분류 추출 (Layer1): consultationId={}, L1={}, L2={}, L3={}",
+                    consultationId, l1s, l2s, l3s);
+            return new AiClassification(
+                    l1s.isEmpty() ? null : new java.util.ArrayList<>(l1s),
+                    l2s.isEmpty() ? null : new java.util.ArrayList<>(l2s),
+                    l3s.isEmpty() ? null : new java.util.ArrayList<>(l3s));
+        }
+
+        // 폴백: chat 응답의 LLM 자유 분류 (기존 동작 유지)
+        boolean hasAnyAi = hasAny(parsed.getAiDomains())
+                || hasAny(parsed.getAiSubDomains())
+                || hasAny(parsed.getAiTags());
+        if (!hasAnyAi) {
+            return AiClassification.empty();
+        }
+        List<String> validSubs = filterValidChildren(
+                parsed.getAiSubDomains(),
+                firstOrNull(consultation.getUserDomains()),
+                consultationId, "L2");
+        List<String> l2Ref = hasAny(consultation.getUserSubDomains())
+                ? consultation.getUserSubDomains() : validSubs;
+        List<String> validTags = filterValidChildren(
+                parsed.getAiTags(),
+                firstOrNull(l2Ref),
+                consultationId, "L3");
+        return new AiClassification(parsed.getAiDomains(), validSubs, validTags);
+    }
+
+    /** 내부 헬퍼: AI 분류 결과 (L1/L2/L3) 캐리어. */
+    private record AiClassification(List<String> domains, List<String> subDomains, List<String> tags) {
+        static AiClassification empty() {
+            return new AiClassification(null, null, null);
+        }
     }
 }

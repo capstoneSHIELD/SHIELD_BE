@@ -59,6 +59,7 @@ public class DomainResolver {
                     .sorted(Comparator.comparingDouble(MatchedNode::confidence).reversed())
                     .toList();
 
+            // 1차: 사용자 선택과 교집합이 있는 가장 깊은 매칭 시도 (의도 존중)
             for (MatchedNode node : sorted) {
                 String[] ancestors = ontologyService.ancestorNames(node.id());
                 String l1 = ancestors[0];
@@ -83,14 +84,23 @@ public class DomainResolver {
                     return new ResolvedDomain(l1, null, null);
                 }
             }
+
+            // 2차: 사용자 선택과 교집합이 없으면 → AI 가 가장 신뢰한 매칭의 ancestors 사용 (drift 허용)
+            //   이유: 사용자가 처음에 도메인을 잘못 선택했거나 대화가 다른 영역으로 흘러간 경우,
+            //   체크리스트·RAG 가 분열되지 않도록 AI 의 인지를 신뢰해 anchor 를 옮긴다.
+            MatchedNode top = sorted.get(0);
+            String[] anc = ontologyService.ancestorNames(top.id());
+            log.debug("DomainResolver: 사용자 선택과 교집합 없음 → AI 최상위 매칭으로 drift ({}, {}, {})",
+                    anc[0], anc[1], anc[2]);
+            return new ResolvedDomain(anc[0], anc[1], anc[2]);
         }
 
-        // 모든 매칭 실패 → 사용자 첫 선택으로 폴백
+        // matchedNodes 자체가 비었을 때만 사용자 첫 선택으로 폴백
         ResolvedDomain fallback = new ResolvedDomain(
                 firstOrNull(userL1),
                 firstOrNull(userL2),
                 firstOrNull(userL3));
-        log.debug("DomainResolver: 매칭 실패 → 사용자 첫 선택 fallback ({}, {}, {})",
+        log.debug("DomainResolver: AI 분류 결과 없음 → 사용자 첫 선택 fallback ({}, {}, {})",
                 fallback.l1(), fallback.l2(), fallback.l3());
         return fallback;
     }

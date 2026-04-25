@@ -97,24 +97,28 @@ public class Consultation extends BaseEntity {
     }
 
     /**
-     * LLM 분류 결과를 반영한다.
-     * 사용자가 이미 선택한 레벨(userDomains/SubDomains/Tags 가 비어있지 않은 레벨)
-     * 은 잠기고, 비워둔 레벨만 AI 가 채운다 (per-level lock, Issue #48).
+     * AI 가 매 턴 분류한 결과를 ai_* 컬럼에 갱신한다.
      *
-     * @return 실제로 하나라도 업데이트되었으면 true
+     * <p>이전에는 사용자가 해당 레벨의 user_* 를 선택해놓으면 그 레벨의 ai_* 갱신을
+     * 차단하는 per-level lock 이 있었다 (Issue #48). 그러나 ai_* 와 user_* 는 별도
+     * 컬럼이고 서로 다른 의미를 가지므로 (user_* = 사용자가 명시한 분류,
+     * ai_* = AI 가 발화로부터 매 턴 인지한 분류) 공존하는 게 자연스럽다. lock 을
+     * 제거해 ai_* 가 항상 최신 Layer1 분류를 영속하도록 했다.</p>
+     *
+     * @return 하나라도 갱신되었으면 true
      */
     public boolean updateAiClassification(List<String> domains, List<String> subDomains,
                                           List<String> tags) {
         boolean anyUpdated = false;
-        if (!isNonEmpty(this.userDomains) && domains != null) {
+        if (domains != null) {
             this.aiDomains = domains;
             anyUpdated = true;
         }
-        if (!isNonEmpty(this.userSubDomains) && subDomains != null) {
+        if (subDomains != null) {
             this.aiSubDomains = subDomains;
             anyUpdated = true;
         }
-        if (!isNonEmpty(this.userTags) && tags != null) {
+        if (tags != null) {
             this.aiTags = tags;
             anyUpdated = true;
         }

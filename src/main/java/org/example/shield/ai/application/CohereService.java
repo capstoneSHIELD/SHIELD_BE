@@ -123,14 +123,14 @@ public class CohereService {
         // 1. 시스템 프롬프트
         String systemPrompt = promptService.loadRouterChatPrompt();
 
-        // 활성 도메인 결정: DomainResolver 결과 우선, 없으면 사용자 첫 선택값으로 폴백.
-        // 이렇게 하면 사용자가 L2 를 다중 선택했을 때 매 턴 발화에 맞는 도메인의 체크리스트가 anchor 된다.
-        String activeL1 = activeDomain != null && activeDomain.l1() != null
-                ? activeDomain.l1() : consultation.getFirstDomain();
-        String activeL2 = activeDomain != null && activeDomain.l2() != null
-                ? activeDomain.l2() : consultation.getFirstSubDomain();
-        String activeL3 = activeDomain != null && activeDomain.l3() != null
-                ? activeDomain.l3() : consultation.getFirstTag();
+        // 활성 도메인 결정: AI 가 매칭한 깊이 그대로 사용.
+        // L1 이 결정되면 L2/L3 는 활성 도메인 값 그대로 (null 도 null 유지) — 부분 매칭에
+        // 사용자 첫 L2/L3 를 강제 결합하면 자식 관계가 깨진 어긋난 anchor 가 만들어짐.
+        // L1 자체가 null 인 경우 (AI 분류 없음) 만 사용자 첫 선택값으로 폴백.
+        boolean hasResolved = activeDomain != null && activeDomain.l1() != null;
+        String activeL1 = hasResolved ? activeDomain.l1() : consultation.getFirstDomain();
+        String activeL2 = hasResolved ? activeDomain.l2() : consultation.getFirstSubDomain();
+        String activeL3 = hasResolved ? activeDomain.l3() : consultation.getFirstTag();
 
         // 분류 완료 시 체크리스트 YAML 동적 주입
         if (activeL1 != null) {
