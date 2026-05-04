@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -60,6 +61,10 @@ public class Brief extends BaseEntity {
 
     @Column(columnDefinition = "text")
     private String strategy;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     @Builder
     private Brief(UUID consultationId, UUID userId, String title, String legalField,
