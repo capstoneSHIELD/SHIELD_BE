@@ -65,27 +65,33 @@ public class DeliveryService {
             throw new BusinessException(ErrorCode.DELIVERY_ALREADY_PROCESSED) {};
         }
 
-        // 이미 다른 변호사가 수락한 의뢰서는 추가 수락 차단.
-        // 변호사 1인 선임 원칙 + 목록/상세 derived 필드의 유일성 보장용.
+        // 1차 가드: 이미 다른 변호사가 수락한 의뢰서는 추가 수락 차단 (빠른 fail).
+        // 2차 방어: Brief.@Version (낙관적 락), 3차 방어: deliveries partial unique index.
         if (status == DeliveryStatus.CONFIRMED
                 && deliveryReader.existsByBriefIdAndStatus(delivery.getBriefId(), DeliveryStatus.CONFIRMED)) {
             throw new BusinessException(ErrorCode.BRIEF_ALREADY_ACCEPTED) {};
         }
 
+        // Brief 한 번만 로드 — 이메일 이벤트 + 낙관적 락 둘 다 활용 (락 순서: Delivery → Brief).
+        Brief brief = briefReader.findById(delivery.getBriefId());
+
         switch (status) {
-            case CONFIRMED -> delivery.accept();
+            case CONFIRMED -> {
+                brief.acceptBy(delivery.getLawyerId());   // 낙관적 락 활성화 (@Version 증가)
+                delivery.accept();
+            }
             case REJECTED -> {
                 if (rejectionReason == null || rejectionReason.isBlank()) {
                     throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE) {};
                 }
                 delivery.reject(rejectionReason);
+                // REJECTED 시 Brief 는 갱신하지 않음 — 다른 변호사 수락 가능 유지
             }
             default -> throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE) {};
         }
 
         deliveryWriter.save(delivery);
 
-        Brief brief = briefReader.findById(delivery.getBriefId());
         User client = userReader.findById(brief.getUserId());
         User lawyer = userReader.findById(lawyerId);
 
