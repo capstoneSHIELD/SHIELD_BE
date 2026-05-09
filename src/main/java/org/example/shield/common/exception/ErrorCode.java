@@ -66,7 +66,11 @@ public enum ErrorCode {
     DOCUMENT_TYPE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "지원하지 않는 파일 형식입니다"),
 
     // AI
-    CHAT_AI_FAILURE(HttpStatus.INTERNAL_SERVER_ERROR, "AI 응답 생성에 실패했습니다");
+    CHAT_AI_FAILURE(HttpStatus.INTERNAL_SERVER_ERROR, "AI 응답 생성에 실패했습니다"),
+
+    // Concurrency
+    CONCURRENT_UPDATE_CONFLICT(HttpStatus.CONFLICT, "다른 사용자가 먼저 처리했습니다. 새로고침 후 다시 시도해주세요"),
+    CONSULTATION_CONCURRENT_UPDATE(HttpStatus.CONFLICT, "상담이 다른 곳에서 갱신되었습니다. 새로고침 후 다시 시도해주세요");
 
     private final HttpStatus httpStatus;
     private final String message;
