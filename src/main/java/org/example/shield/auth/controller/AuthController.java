@@ -11,6 +11,7 @@ import org.example.shield.auth.controller.dto.DevLoginRequest;
 import org.example.shield.auth.domain.JwtToken;
 import org.example.shield.auth.controller.dto.GoogleLoginRequest;
 import org.example.shield.auth.controller.dto.NaverLoginRequest;
+import org.example.shield.auth.controller.dto.KakaoLoginRequest;
 import org.example.shield.auth.controller.dto.LoginResponse;
 import org.example.shield.auth.controller.dto.TokenRefreshResponse;
 import org.example.shield.auth.exception.InvalidTokenException;
@@ -51,6 +52,18 @@ public class AuthController {
             @Valid @RequestBody NaverLoginRequest request,
             HttpServletResponse response) {
         AuthService.LoginResult result = authService.naverLogin(
+                request.authorizationCode(), request.role());
+
+        addRefreshTokenCookie(response, result.refreshToken());
+        return ResponseEntity.ok(ApiResponse.success("로그인 성공", result.response()));
+    }
+
+    @Operation(summary = "Kakao 로그인", description = "Kakao OAuth 인증 코드로 로그인 및 JWT 발급")
+    @PostMapping("/kakao")
+    public ResponseEntity<ApiResponse<LoginResponse>> kakaoLogin(
+            @Valid @RequestBody KakaoLoginRequest request,
+            HttpServletResponse response) {
+        AuthService.LoginResult result = authService.kakaoLogin(
                 request.authorizationCode(), request.role());
 
         addRefreshTokenCookie(response, result.refreshToken());
