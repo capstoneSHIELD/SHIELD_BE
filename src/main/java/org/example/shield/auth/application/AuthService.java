@@ -22,6 +22,7 @@ import java.util.UUID;
 public class AuthService {
 
     private final GoogleOAuthService googleOAuthService;
+    private final NaverOAuthService naverOAuthService;
     private final JwtService jwtService;
     private final UserReader userReader;
     private final UserWriter userWriter;
@@ -33,7 +34,7 @@ public class AuthService {
         OAuthUserInfo userInfo = googleOAuthService.getUserInfo(authorizationCode);
 
         // 신규 가입 여부를 구분하기 위해 조회 시점을 명시적으로 분리한다.
-        var existing = userReader.findByGoogleId(userInfo.googleId());
+        var existing = userReader.findByGoogleId(userInfo.providerId());
         boolean isNewUser = existing.isEmpty();
 
         // 보안: 신규 가입 시에는 클라이언트가 전달한 role 을 신뢰하지 않고
@@ -50,7 +51,44 @@ public class AuthService {
                         .name(userInfo.name())
                         .role(UserRole.USER)
                         .provider("GOOGLE")
-                        .googleId(userInfo.googleId())
+                        .googleId(userInfo.providerId())
+                        .build()
+        ));
+
+        JwtToken tokenPair = jwtService.createTokenPair(user.getId(), user.getRole().name());
+        user.updateRefreshToken(tokenPair.refreshToken());
+
+        LoginResponse response = new LoginResponse(
+                tokenPair.accessToken(),
+                tokenPair.refreshToken(),
+                user.getId(),
+                user.getName(),
+                user.getRole().name(),
+                isNewUser
+        );
+        return new LoginResult(response, tokenPair.refreshToken());
+    }
+
+    /**
+     * Naver OAuth 로그인 (Issue #83). googleLogin 과 동일 구조, naverId 컬럼으로 user 식별.
+     */
+    public LoginResult naverLogin(String authorizationCode, String role) {
+        OAuthUserInfo userInfo = naverOAuthService.getUserInfo(authorizationCode);
+
+        var existing = userReader.findByNaverId(userInfo.providerId());
+        boolean isNewUser = existing.isEmpty();
+
+        if (role != null && !role.isBlank()) {
+            parseRole(role);
+        }
+
+        User user = existing.orElseGet(() -> userWriter.save(
+                User.builder()
+                        .email(userInfo.email())
+                        .name(userInfo.name())
+                        .role(UserRole.USER)
+                        .provider("NAVER")
+                        .naverId(userInfo.providerId())
                         .build()
         ));
 
@@ -76,6 +114,7 @@ public class AuthService {
                                 .name(name)
                                 .role(parseRole(role))
                                 .provider("DEV")
+                                // dev 계정은 dev-{uuid} 를 googleId 자리에 채워 unique 충돌 방지
                                 .googleId("dev-" + UUID.randomUUID())
                                 .build()
                 ));
