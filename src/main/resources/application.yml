@@ -105,6 +105,15 @@ naver:
   client-secret: ${NAVER_CLIENT_SECRET:dummy-naver-secret}
   redirect-uri: ${NAVER_REDIRECT_URI:https://shieldai.kr/auth/naver/callback}
 
+# Kakao OAuth
+# - client-id: 카카오 개발자 콘솔의 REST API 키 (NOT JavaScript 키)
+# - client-secret: '카카오 로그인' > '보안' 에서 발급 + 활성화 (선택이지만 보안상 권장)
+# - redirect-uri: 콘솔의 'Redirect URI' 와 정확히 일치해야 함
+kakao:
+  client-id: ${KAKAO_REST_API_KEY:dummy-kakao-rest-api-key}
+  client-secret: ${KAKAO_CLIENT_SECRET:dummy-kakao-secret}
+  redirect-uri: ${KAKAO_REDIRECT_URI:https://shieldai.kr/auth/kakao/callback}
+
 # Supabase Storage
 supabase:
   url: ${SUPABASE_URL}
