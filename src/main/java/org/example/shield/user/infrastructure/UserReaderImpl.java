@@ -38,6 +38,11 @@ public class UserReaderImpl implements UserReader {
     }
 
     @Override
+    public Optional<User> findByKakaoId(String kakaoId) {
+        return userRepository.findByKakaoId(kakaoId);
+    }
+
+    @Override
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
     }

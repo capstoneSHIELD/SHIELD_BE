@@ -14,5 +14,7 @@ public interface UserReader {
 
     Optional<User> findByNaverId(String naverId);
 
+    Optional<User> findByKakaoId(String kakaoId);
+
     Optional<User> findByEmail(String email);
 }
