@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -12,6 +13,8 @@ import lombok.NoArgsConstructor;
 import org.example.shield.common.domain.BaseEntity;
 import org.example.shield.common.enums.BriefStatus;
 import org.example.shield.common.enums.PrivacySetting;
+import org.example.shield.common.exception.BusinessException;
+import org.example.shield.common.exception.ErrorCode;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -60,6 +63,10 @@ public class Brief extends BaseEntity {
 
     @Column(columnDefinition = "text")
     private String strategy;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     @Builder
     private Brief(UUID consultationId, UUID userId, String title, String legalField,
@@ -110,6 +117,24 @@ public class Brief extends BaseEntity {
 
     public void markDelivered() {
         this.status = BriefStatus.DELIVERED;
+    }
+
+    /**
+     * 변호사가 의뢰서를 수락할 때 호출. status 가 DELIVERED → CONFIRMED 로 전이되며
+     * @Version 이 증가하여 동시 수락 race 를 차단한다.
+     *
+     * @throws BusinessException(BRIEF_ALREADY_ACCEPTED) 이미 다른 변호사가 수락한 경우
+     * @throws BusinessException(INVALID_INPUT_VALUE)    DRAFT/DISCARDED 등 비정상 상태
+     */
+    public void acceptBy(UUID lawyerId) {
+        if (this.status == BriefStatus.CONFIRMED) {
+            throw new BusinessException(ErrorCode.BRIEF_ALREADY_ACCEPTED) {};
+        }
+        if (this.status != BriefStatus.DELIVERED) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE) {};
+        }
+        this.status = BriefStatus.CONFIRMED;
+        this.confirmedAt = LocalDateTime.now();
     }
 
     public void discard() {

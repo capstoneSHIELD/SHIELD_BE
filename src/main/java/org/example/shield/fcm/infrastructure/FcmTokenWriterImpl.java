@@ -1,10 +1,13 @@
 package org.example.shield.fcm.infrastructure;
 
 import lombok.RequiredArgsConstructor;
+import org.example.shield.fcm.domain.DeviceType;
 import org.example.shield.fcm.domain.FcmToken;
 import org.example.shield.fcm.domain.FcmTokenWriter;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -21,5 +24,11 @@ public class FcmTokenWriterImpl implements FcmTokenWriter {
     @Transactional
     public void deleteByToken(String token) {
         fcmTokenJpaRepository.deleteByToken(token);
+    }
+
+    @Override
+    @Transactional
+    public void upsertToken(UUID userId, String token, DeviceType deviceType) {
+        fcmTokenJpaRepository.upsertToken(userId, token, deviceType.name());
     }
 }

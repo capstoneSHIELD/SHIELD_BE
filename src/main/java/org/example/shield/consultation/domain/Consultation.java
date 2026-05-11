@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -72,6 +73,10 @@ public class Consultation extends BaseEntity {
      */
     @Column(columnDefinition = "text")
     private String lastResponseId;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     private Consultation(UUID userId, List<String> domains, List<String> subDomains, List<String> tags) {
         this.userId = userId;

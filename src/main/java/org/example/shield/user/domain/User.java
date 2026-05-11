@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -48,6 +49,10 @@ public class User {
 
     @Column(length = 20)
     private String phone;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     @Builder
     public User(String email, String name, UserRole role, String provider,
