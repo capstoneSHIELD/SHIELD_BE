@@ -23,6 +23,7 @@ public class AuthService {
 
     private final GoogleOAuthService googleOAuthService;
     private final NaverOAuthService naverOAuthService;
+    private final KakaoOAuthService kakaoOAuthService;
     private final JwtService jwtService;
     private final UserReader userReader;
     private final UserWriter userWriter;
@@ -89,6 +90,43 @@ public class AuthService {
                         .role(UserRole.USER)
                         .provider("NAVER")
                         .naverId(userInfo.providerId())
+                        .build()
+        ));
+
+        JwtToken tokenPair = jwtService.createTokenPair(user.getId(), user.getRole().name());
+        user.updateRefreshToken(tokenPair.refreshToken());
+
+        LoginResponse response = new LoginResponse(
+                tokenPair.accessToken(),
+                tokenPair.refreshToken(),
+                user.getId(),
+                user.getName(),
+                user.getRole().name(),
+                isNewUser
+        );
+        return new LoginResult(response, tokenPair.refreshToken());
+    }
+
+    /**
+     * Kakao OAuth 로그인. googleLogin/naverLogin 과 동일 구조, kakaoId 컬럼으로 user 식별.
+     */
+    public LoginResult kakaoLogin(String authorizationCode, String role) {
+        OAuthUserInfo userInfo = kakaoOAuthService.getUserInfo(authorizationCode);
+
+        var existing = userReader.findByKakaoId(userInfo.providerId());
+        boolean isNewUser = existing.isEmpty();
+
+        if (role != null && !role.isBlank()) {
+            parseRole(role);
+        }
+
+        User user = existing.orElseGet(() -> userWriter.save(
+                User.builder()
+                        .email(userInfo.email())
+                        .name(userInfo.name())
+                        .role(UserRole.USER)
+                        .provider("KAKAO")
+                        .kakaoId(userInfo.providerId())
                         .build()
         ));
 

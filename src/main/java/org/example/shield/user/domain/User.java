@@ -50,6 +50,13 @@ public class User {
     @Column(unique = true)
     private String naverId;
 
+    /**
+     * 카카오 OAuth 사용자 식별자.
+     * provider = "KAKAO" 인 경우에만 값을 가진다.
+     */
+    @Column(unique = true)
+    private String kakaoId;
+
     private String refreshToken;
 
     private String profileImageUrl;
@@ -63,13 +70,15 @@ public class User {
 
     @Builder
     public User(String email, String name, UserRole role, String provider,
-                String googleId, String naverId, String profileImageUrl, String phone) {
+                String googleId, String naverId, String kakaoId,
+                String profileImageUrl, String phone) {
         this.email = email;
         this.name = name;
         this.role = role;
         this.provider = provider;
         this.googleId = googleId;
         this.naverId = naverId;
+        this.kakaoId = kakaoId;
         this.profileImageUrl = profileImageUrl;
         this.phone = phone;
     }
