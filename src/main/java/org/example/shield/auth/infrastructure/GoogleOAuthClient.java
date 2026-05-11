@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Slf4j
-@Component
+@Component("googleOAuthClient")
 public class GoogleOAuthClient implements OAuthClient {
 
     private final WebClient webClient;
@@ -74,7 +74,7 @@ public class GoogleOAuthClient implements OAuthClient {
             if (response == null || response.email() == null) {
                 throw new OAuthFailedException(ErrorCode.OAUTH_USER_INFO_FAILED);
             }
-            return new OAuthUserInfo(response.email(), response.name(), response.id());
+            return new OAuthUserInfo(response.email(), response.name(), response.id());  // providerId = Google ID
         } catch (OAuthFailedException e) {
             throw e;
         } catch (Exception e) {

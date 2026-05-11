@@ -10,6 +10,7 @@ import org.example.shield.auth.application.AuthService;
 import org.example.shield.auth.controller.dto.DevLoginRequest;
 import org.example.shield.auth.domain.JwtToken;
 import org.example.shield.auth.controller.dto.GoogleLoginRequest;
+import org.example.shield.auth.controller.dto.NaverLoginRequest;
 import org.example.shield.auth.controller.dto.LoginResponse;
 import org.example.shield.auth.controller.dto.TokenRefreshResponse;
 import org.example.shield.auth.exception.InvalidTokenException;
@@ -38,6 +39,18 @@ public class AuthController {
             @Valid @RequestBody GoogleLoginRequest request,
             HttpServletResponse response) {
         AuthService.LoginResult result = authService.googleLogin(
+                request.authorizationCode(), request.role());
+
+        addRefreshTokenCookie(response, result.refreshToken());
+        return ResponseEntity.ok(ApiResponse.success("로그인 성공", result.response()));
+    }
+
+    @Operation(summary = "Naver 로그인", description = "Naver OAuth 인증 코드로 로그인 및 JWT 발급 (Issue #83)")
+    @PostMapping("/naver")
+    public ResponseEntity<ApiResponse<LoginResponse>> naverLogin(
+            @Valid @RequestBody NaverLoginRequest request,
+            HttpServletResponse response) {
+        AuthService.LoginResult result = authService.naverLogin(
                 request.authorizationCode(), request.role());
 
         addRefreshTokenCookie(response, result.refreshToken());

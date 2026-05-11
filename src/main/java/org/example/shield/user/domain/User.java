@@ -40,8 +40,15 @@ public class User {
     @Column(nullable = false)
     private String provider;
 
-    @Column(nullable = false, unique = true)
+    @Column(unique = true)
     private String googleId;
+
+    /**
+     * 네이버 OAuth 사용자 식별자 (Issue #83).
+     * provider = "NAVER" 인 경우에만 값을 가진다.
+     */
+    @Column(unique = true)
+    private String naverId;
 
     private String refreshToken;
 
@@ -56,12 +63,13 @@ public class User {
 
     @Builder
     public User(String email, String name, UserRole role, String provider,
-                String googleId, String profileImageUrl, String phone) {
+                String googleId, String naverId, String profileImageUrl, String phone) {
         this.email = email;
         this.name = name;
         this.role = role;
         this.provider = provider;
         this.googleId = googleId;
+        this.naverId = naverId;
         this.profileImageUrl = profileImageUrl;
         this.phone = phone;
     }

@@ -33,6 +33,11 @@ public class UserReaderImpl implements UserReader {
     }
 
     @Override
+    public Optional<User> findByNaverId(String naverId) {
+        return userRepository.findByNaverId(naverId);
+    }
+
+    @Override
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
     }
