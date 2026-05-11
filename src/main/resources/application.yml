@@ -97,6 +97,14 @@ google:
   client-secret: ${GOOGLE_CLIENT_SECRET}
   redirect-uri: ${GOOGLE_REDIRECT_URI}
 
+# Naver OAuth (Issue #83)
+# 테스트/로컬에서 env 미설정 시에도 컨텍스트 로드되도록 기본값 제공.
+# 운영 환경(EC2)에는 실제 NAVER_* 환경변수가 주입됨.
+naver:
+  client-id: ${NAVER_CLIENT_ID:dummy-naver-client-id}
+  client-secret: ${NAVER_CLIENT_SECRET:dummy-naver-secret}
+  redirect-uri: ${NAVER_REDIRECT_URI:https://shieldai.kr/auth/naver/callback}
+
 # Supabase Storage
 supabase:
   url: ${SUPABASE_URL}
