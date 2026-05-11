@@ -12,5 +12,7 @@ public interface UserReader {
 
     Optional<User> findByGoogleId(String googleId);
 
+    Optional<User> findByNaverId(String naverId);
+
     Optional<User> findByEmail(String email);
 }
