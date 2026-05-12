@@ -106,7 +106,7 @@ public interface LegalCaseJpaRepository extends JpaRepository<LegalCaseEntity, L
                      OR lc.category_ids && CAST(:categoryIds AS text[]) )
                AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
                   OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
-                  OR COALESCE(lc.holding, '') %% :vectorQuery
+                  OR COALESCE(lc.holding, '') % CAST(:vectorQuery AS text)
                   OR lc.embedding IS NOT NULL )
              ORDER BY score DESC
              LIMIT :topK
@@ -145,7 +145,7 @@ public interface LegalCaseJpaRepository extends JpaRepository<LegalCaseEntity, L
                      OR lc.category_ids && CAST(:categoryIds AS text[]) )
                AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
                   OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
-                  OR COALESCE(lc.holding, '') %% :vectorQuery
+                  OR COALESCE(lc.holding, '') % CAST(:vectorQuery AS text)
                   OR lc.embedding IS NOT NULL )
              ORDER BY score DESC
              LIMIT :topK
