@@ -87,10 +87,12 @@ public class MessageService {
      * {@code lastResponseId} 는 커밋되어야 한다. 그렇지 않으면 AI 실패
      * 시마다 사용자 입력이 유실되어 재현 가능한 데이터 손실이 발생한다.</p>
      *
-     * <p>ChatAiException 이외의 런타임 예외는 기존 기본 동작(전체 롤백)
-     * 을 유지하므로 RAG/Cohere 호출 실패는 그대로 롤백된다.</p>
+     * <p>이 메서드 자체는 트랜잭션을 열지 않는다 (클래스 javadoc 참조).
+     * DB 작업은 모두 {@link ChatTransactionalBoundary} 의 짧은 독립 트랜잭션으로 위임된다.
+     * 외부 호출(RAG/Cohere) 중 발생한 SQL 오류가 외부 트랜잭션을 rollback-only 로
+     * 만들어 후속 commit 단계에서 {@code UnexpectedRollbackException} 으로 500 응답을
+     * 유발하던 회귀를 방지하기 위함이다.</p>
      */
-    @Transactional(noRollbackFor = ChatAiException.class)
     public SendMessageResponse sendMessage(UUID consultationId, String content) {
         long pipelineStart = System.nanoTime();
         try {

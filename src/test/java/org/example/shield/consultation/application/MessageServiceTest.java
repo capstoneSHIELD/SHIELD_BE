@@ -296,31 +296,30 @@ class MessageServiceTest {
                 .isEqualTo(1L);
     }
 
-    // ── Issue #45 후속 — @Transactional(noRollbackFor=ChatAiException) 회귀 테스트 ──
+    // ── sendMessage 트랜잭션 격리 회귀 테스트 ──
 
     /**
-     * {@link MessageService#sendMessage} 는 반드시
-     * {@code @Transactional(noRollbackFor = ChatAiException.class)} 로
-     * 지정되어 있어야 한다. 이 어노테이션이 제거되거나 속성이 누락되면
-     * AI blank 응답 시 USER 메시지와 {@code lastResponseId} 까지 롤백되어
-     * Issue #45 가 재발한다 (사용자 입력 유실).
+     * {@link MessageService#sendMessage} 는 어떠한 외부 트랜잭션도 열지 않아야 한다.
      *
-     * <p>통합 테스트로 실제 트랜잭션 동작을 검증하는 것이 이상적이지만,
-     * 현재 테스트 슬라이스는 단위 레벨이므로 어노테이션 계약을
-     * 명시적으로 고정해 회귀를 방지한다.</p>
+     * <p>이전에는 {@code @Transactional(noRollbackFor = ChatAiException.class)} 로
+     * Issue #45(USER 메시지 유실)를 막았으나, RAG/Cohere 단계에서 발생한 SQL 오류가
+     * 외부 트랜잭션을 rollback-only 로 마킹하면 후속 commit 시점에
+     * {@code UnexpectedRollbackException} 으로 500 응답이 발생하는 회귀가 확인됐다.
+     *
+     * <p>현재 설계는 USER/AI/PII 영속화를 모두 {@link ChatTransactionalBoundary} 의
+     * {@code REQUIRES_NEW} 트랜잭션에 위임하여 외부 tx 의 상태와 무관하게 독립
+     * 커밋되도록 하며, sendMessage 자체는 트랜잭션 경계를 가지지 않는다. 이 계약이
+     * 깨지면 다시 외부 tx poisoning 으로 500 이 발생하므로 어노테이션을 직접 검증한다.
      */
     @Test
-    @DisplayName("sendMessage 는 @Transactional(noRollbackFor = ChatAiException.class) 계약을 유지해야 한다 (Issue #45 회귀)")
-    void sendMessage_transactionalContract_noRollbackForChatAiException() throws NoSuchMethodException {
+    @DisplayName("sendMessage 는 @Transactional 을 가지면 안 된다 (외부 tx poisoning 으로 인한 500 회귀 방지)")
+    void sendMessage_transactionalContract_noOuterTransaction() throws NoSuchMethodException {
         Method method = MessageService.class.getDeclaredMethod("sendMessage", UUID.class, String.class);
         Transactional annotation = method.getAnnotation(Transactional.class);
 
         assertThat(annotation)
-                .as("sendMessage 에 @Transactional 이 지정되어 있어야 한다")
-                .isNotNull();
-        assertThat(annotation.noRollbackFor())
-                .as("noRollbackFor 에 ChatAiException 이 포함되어야 USER 메시지 유실이 방지된다")
-                .contains(ChatAiException.class);
+                .as("sendMessage 에 @Transactional 이 지정되면 RAG/Cohere SQL 오류가 외부 tx 를 rollback-only 로 만들어 500 이 발생한다")
+                .isNull();
     }
 
     /**
