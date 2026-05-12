@@ -95,7 +95,7 @@ public interface LegalChunkJpaRepository extends JpaRepository<LegalChunkEntity,
                      OR lc.category_ids && CAST(:categoryIds AS text[]) )
                AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
                   OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
-                  OR lc.content %% :vectorQuery
+                  OR lc.content % CAST(:vectorQuery AS text)
                   OR lc.embedding IS NOT NULL )
              ORDER BY score DESC
              LIMIT :topK
@@ -131,7 +131,7 @@ public interface LegalChunkJpaRepository extends JpaRepository<LegalChunkEntity,
                      OR lc.category_ids && CAST(:categoryIds AS text[]) )
                AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
                   OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
-                  OR lc.content %% :vectorQuery
+                  OR lc.content % CAST(:vectorQuery AS text)
                   OR lc.embedding IS NOT NULL )
              ORDER BY score DESC
              LIMIT :topK
@@ -166,7 +166,7 @@ public interface LegalChunkJpaRepository extends JpaRepository<LegalChunkEntity,
              WHERE lc.abolition_date IS NULL
                AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
                   OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
-                  OR lc.content %% :vectorQuery )
+                  OR lc.content % CAST(:vectorQuery AS text) )
              ORDER BY score DESC
              LIMIT :topK
             """, nativeQuery = true)
@@ -193,7 +193,7 @@ public interface LegalChunkJpaRepository extends JpaRepository<LegalChunkEntity,
                AND lc.law_id IN (:lawIds)
                AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
                   OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
-                  OR lc.content %% :vectorQuery )
+                  OR lc.content % CAST(:vectorQuery AS text) )
              ORDER BY score DESC
              LIMIT :topK
             """, nativeQuery = true)

@@ -8,6 +8,7 @@ import org.example.shield.consultation.domain.ConsultationWriter;
 import org.example.shield.consultation.domain.Message;
 import org.example.shield.consultation.domain.MessageWriter;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
@@ -46,7 +47,7 @@ public class ChatTransactionalBoundary {
      * 사용자 입력은 절대 유실되지 않는다 (Issue #45 후속 — PR-A 의 noRollbackFor
      * 보다 한 단계 더 강력한 격리).</p>
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Message saveUserMessage(UUID consultationId, String content) {
         Message userMessage = Message.createUserMessage(consultationId, content);
         return messageWriter.save(userMessage);
@@ -55,7 +56,7 @@ public class ChatTransactionalBoundary {
     /**
      * PII 감지 시 AI 채널로 안내 메시지만 저장하는 독립 트랜잭션 경로.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Message savePiiAiMessage(UUID consultationId, String message) {
         Message piiMessage = Message.createAiMessage(
                 consultationId, message, null, null, null, null);
@@ -70,7 +71,7 @@ public class ChatTransactionalBoundary {
      *
      * <p>AI 메시지 저장 · 분류 반영 · lastMessage 갱신은 수행하지 않는다.</p>
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void persistBlankResponseId(UUID consultationId, String responseId) {
         if (responseId == null || responseId.isBlank()) {
             return;
@@ -91,7 +92,7 @@ public class ChatTransactionalBoundary {
      * @param payload        AI 응답 처리 결과 (분류·메시지·메타)
      * @return 저장된 AI {@link Message}
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Message finalizeAiResponse(UUID consultationId, AiFinalizePayload payload) {
         Consultation consultation = consultationReader.findById(consultationId);
 
