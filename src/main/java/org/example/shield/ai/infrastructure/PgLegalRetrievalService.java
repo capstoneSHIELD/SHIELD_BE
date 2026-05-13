@@ -309,26 +309,37 @@ public class PgLegalRetrievalService implements LegalRetrievalService {
     }
 
     /**
-     * HNSW {@code ef_search} 세션 파라미터를 현재 트랜잭션에 적용한다.
+     * HNSW 세션 파라미터를 현재 트랜잭션에 적용한다 — {@code ef_search} 및
+     * (pgvector 0.8.0+) {@code iterative_scan}.
      *
-     * <p>pgvector 기본값 40. 1,193행 규모에서는 ef=40에서 topK=10 recall 100%가 확인되어
-     * 기본값으로 40을 두고, 데이터가 커지면 {@code rag.retrieval.hnsw.ef-search}로
-     * 80~200 범위에서 상향하는 것을 권장한다. 값은 적어도 topK 이상이어야 한다.</p>
+     * <p>{@code ef_search}: pgvector 기본값 40. 데이터가 커지면
+     * {@code rag.retrieval.hnsw.ef-search}로 80~200 범위에서 상향한다.</p>
+     *
+     * <p>{@code iterative_scan = relaxed_order}: 카테고리·법령ID 필터를 HNSW CTE
+     * 내부로 push 한 search3Way 패턴 (B-9) 에서, 필터 셀렉티비티가 높을 때
+     * HNSW 가 후보 부족으로 누락하는 행을 보충해준다. pgvector 0.7 이하 환경에서는
+     * 이 SET 가 ERROR 를 반환하므로 별도 try 로 감싼다.</p>
      *
      * <p>{@code SET LOCAL}은 현재 트랜잭션에서만 유효하고 커넥션 풀 반납 시
      * 자동으로 해제되므로 다른 쿼리에 영향을 주지 않는다.</p>
-     *
-     * <p>HNSW 인덱스가 아직 생성되지 않았거나 파라미터가 비활성화된 환경에서도
-     * 검색이 멈추지 않도록 예외는 삼키고 로그로만 남긴다.</p>
      */
     private void applyHnswEfSearch() {
-        if (hnswEfSearch <= 1 || entityManager == null) {
+        if (entityManager == null) {
             return;
         }
+        if (hnswEfSearch > 1) {
+            try {
+                entityManager.createNativeQuery("SET LOCAL hnsw.ef_search = " + hnswEfSearch).executeUpdate();
+            } catch (Exception e) {
+                log.debug("hnsw.ef_search 설정 실패 (무시): value={}, error={}", hnswEfSearch, e.getMessage());
+            }
+        }
         try {
-            entityManager.createNativeQuery("SET LOCAL hnsw.ef_search = " + hnswEfSearch).executeUpdate();
+            entityManager.createNativeQuery("SET LOCAL hnsw.iterative_scan = relaxed_order").executeUpdate();
         } catch (Exception e) {
-            log.debug("hnsw.ef_search 설정 실패 (무시): value={}, error={}", hnswEfSearch, e.getMessage());
+            // pgvector 0.7 이하에서는 GUC 가 없어 ERROR. 폴백 동작은 기존 search3Way 가
+            // 카테고리 push 한 인덱스(GIN/B-tree) 만으로도 충분히 회수 가능하므로 무시.
+            log.debug("hnsw.iterative_scan 설정 실패 (무시 — pgvector < 0.8): {}", e.getMessage());
         }
     }
 
