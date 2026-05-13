@@ -8,6 +8,7 @@ import org.example.shield.ai.dto.CohereChatRequest;
 import org.example.shield.ai.dto.IntentClassificationResult;
 import org.example.shield.ai.dto.IntentClassificationResult.Keywords;
 import org.example.shield.ai.dto.IntentClassificationResult.MatchedNode;
+import org.example.shield.ai.infrastructure.RagMetrics;
 import org.example.shield.consultation.domain.Message;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +35,7 @@ public class IntentClassificationService {
     private final String slimOntologyJson;
     private final ResourceLoader resourceLoader;
     private final int contextWindowMessages;
+    private final RagMetrics ragMetrics;
 
     private String intentClassifierPromptTemplate;
 
@@ -42,12 +44,14 @@ public class IntentClassificationService {
             ObjectMapper objectMapper,
             @Qualifier("slimOntologyJson") String slimOntologyJson,
             ResourceLoader resourceLoader,
-            @Value("${cohere.classify.context-window-messages:6}") int contextWindowMessages) {
+            @Value("${cohere.classify.context-window-messages:6}") int contextWindowMessages,
+            RagMetrics ragMetrics) {
         this.cohereService = cohereService;
         this.objectMapper = objectMapper;
         this.slimOntologyJson = slimOntologyJson;
         this.resourceLoader = resourceLoader;
         this.contextWindowMessages = contextWindowMessages;
+        this.ragMetrics = ragMetrics;
     }
 
     @PostConstruct
@@ -83,7 +87,8 @@ public class IntentClassificationService {
                     CohereChatRequest.Message.user("위 대화 내역을 분석하여 법률 의도를 JSON으로 분류해주세요.")
             );
 
-            AiCallResult<String> result = cohereService.callClassify(messages);
+            AiCallResult<String> result = ragMetrics.timeClassify(
+                    () -> cohereService.callClassify(messages));
             return parseClassificationResult(result.data());
 
         } catch (Exception e) {

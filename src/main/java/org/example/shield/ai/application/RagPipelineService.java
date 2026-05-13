@@ -1,9 +1,11 @@
 package org.example.shield.ai.application;
 
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.IntentClassificationResult;
 import org.example.shield.ai.dto.LegalChunk;
 import org.example.shield.ai.dto.MixedRetrievalResult;
+import org.example.shield.ai.infrastructure.RagMetrics;
 import org.example.shield.consultation.domain.Message;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -25,17 +27,20 @@ public class RagPipelineService {
     private final CategoryLawMappingService categoryLawMappingService;
     private final LegalRetrievalService legalRetrievalService;
     private final RagContextBuilder ragContextBuilder;
+    private final RagMetrics ragMetrics;
     private final boolean includeCases;
 
     public RagPipelineService(IntentClassificationService intentClassificationService,
                               CategoryLawMappingService categoryLawMappingService,
                               LegalRetrievalService legalRetrievalService,
                               RagContextBuilder ragContextBuilder,
+                              RagMetrics ragMetrics,
                               @Value("${rag.retrieval.include-cases:false}") boolean includeCases) {
         this.intentClassificationService = intentClassificationService;
         this.categoryLawMappingService = categoryLawMappingService;
         this.legalRetrievalService = legalRetrievalService;
         this.ragContextBuilder = ragContextBuilder;
+        this.ragMetrics = ragMetrics;
         this.includeCases = includeCases;
         log.info("RagPipelineService 초기화 — include-cases={}", includeCases);
     }
@@ -49,6 +54,7 @@ public class RagPipelineService {
      * @return RAG 컨텍스트 문자열 (실패 시 빈 문자열)
      */
     public String execute(List<Message> chatHistory, String domain, Object consultationId) {
+        Timer.Sample pipelineSample = ragMetrics.startPipeline();
         try {
             // Layer 1: 의도 분류
             IntentClassificationResult classification =
@@ -87,9 +93,15 @@ public class RagPipelineService {
                     log.info("RAG 컨텍스트 생성 완료: consultationId={}, chunks={}", consultationId, hits);
                 }
             }
+            if (ragContext.isEmpty()) {
+                ragMetrics.stopPipelineEmpty(pipelineSample);
+            } else {
+                ragMetrics.stopPipelineSuccess(pipelineSample);
+            }
             return ragContext;
 
         } catch (Exception e) {
+            ragMetrics.stopPipelineFailure(pipelineSample);
             log.warn("RAG 파이프라인 실패, 폴백 (RAG 없이 진행): consultationId={}, error={}",
                     consultationId, e.getMessage());
             return "";

@@ -86,4 +86,59 @@ class PromptServiceTest {
         assertThat(ChecklistSlugMap.slugFor(null)).isNull();
         assertThat(ChecklistSlugMap.slugFor("존재하지 않는 이름")).isNull();
     }
+
+    @Test
+    @DisplayName("ChecklistSlugMap.slugFor — 8개 카테고리 대표 alias 매핑 (프론트 축약 라벨 호환)")
+    void checklistSlugMap_aliasMappings() {
+        // 부동산 거래
+        assertThat(ChecklistSlugMap.slugFor("부동산")).isEqualTo("real-estate");
+        assertThat(ChecklistSlugMap.slugFor("부동산거래")).isEqualTo("real-estate");
+        // 이혼·위자료·재산분할
+        assertThat(ChecklistSlugMap.slugFor("이혼")).isEqualTo("divorce");
+        assertThat(ChecklistSlugMap.slugFor("가사")).isEqualTo("divorce");
+        // 상속·유류분·유언
+        assertThat(ChecklistSlugMap.slugFor("상속")).isEqualTo("inheritance");
+        // 근로계약·해고·임금
+        assertThat(ChecklistSlugMap.slugFor("근로")).isEqualTo("labor");
+        assertThat(ChecklistSlugMap.slugFor("노동")).isEqualTo("labor");
+        // 손해배상·불법행위
+        assertThat(ChecklistSlugMap.slugFor("교통사고")).isEqualTo("damages-tort");
+        // 채무·보증·개인파산·회생
+        assertThat(ChecklistSlugMap.slugFor("파산")).isEqualTo("debt");
+        // 임대차보호
+        assertThat(ChecklistSlugMap.slugFor("임대차")).isEqualTo("lease-protection");
+        assertThat(ChecklistSlugMap.slugFor("전세")).isEqualTo("lease-protection");
+        // 기업·상사거래
+        assertThat(ChecklistSlugMap.slugFor("기업")).isEqualTo("commercial");
+    }
+
+    @Test
+    @DisplayName("ChecklistSlugMap.slugFor — 입력 trim 처리 + blank 입력 null")
+    void checklistSlugMap_trim() {
+        assertThat(ChecklistSlugMap.slugFor(" 부동산 ")).isEqualTo("real-estate");
+        assertThat(ChecklistSlugMap.slugFor("  부동산 거래  ")).isEqualTo("real-estate");
+        assertThat(ChecklistSlugMap.slugFor("   ")).isNull();
+    }
+
+    @Test
+    @DisplayName("ChecklistSlugMap.canonicalL1 — 정식명 그대로 / alias 정규화 / 미존재 null")
+    void checklistSlugMap_canonicalL1() {
+        assertThat(ChecklistSlugMap.canonicalL1("부동산 거래")).isEqualTo("부동산 거래");
+        assertThat(ChecklistSlugMap.canonicalL1("부동산")).isEqualTo("부동산 거래");
+        assertThat(ChecklistSlugMap.canonicalL1("이혼")).isEqualTo("이혼·위자료·재산분할");
+        assertThat(ChecklistSlugMap.canonicalL1("전세")).isEqualTo("임대차보호");
+        assertThat(ChecklistSlugMap.canonicalL1(" 부동산 ")).isEqualTo("부동산 거래");
+        assertThat(ChecklistSlugMap.canonicalL1(null)).isNull();
+        assertThat(ChecklistSlugMap.canonicalL1("")).isNull();
+        assertThat(ChecklistSlugMap.canonicalL1("법인세")).isNull();
+    }
+
+    @Test
+    @DisplayName("loadChecklist — alias 입력으로도 정식 카테고리 YAML 로드 (end-to-end)")
+    void loadChecklist_aliasInputLoadsCanonicalYaml() {
+        String yaml = service.loadChecklist("부동산");
+        assertThat(yaml).as("\"부동산\" alias → real-estate.yaml 로드").isNotNull();
+        assertThat(yaml).contains("slug: real-estate");
+        assertThat(yaml).contains("l1: \"부동산 거래\"");
+    }
 }
