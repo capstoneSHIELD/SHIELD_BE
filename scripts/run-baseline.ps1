@@ -15,6 +15,9 @@
 param(
     [int]$SampleCount = 2,
     [string]$ConsultationIds = "",
+    # Phase 1A — classify LLM 교체 비교 측정용. 기본은 환경변수 unset (운영 default 유지).
+    # 예: -ClassifyModel "command-r-08-2024" 로 라이트 모델 비교.
+    [string]$ClassifyModel = "",
     [switch]$SkipTrustStore,
     [switch]$Quiet
 )
@@ -73,6 +76,12 @@ if ($ConsultationIds -ne "") {
     Remove-Item Env:BASELINE_CONSULTATION_IDS -ErrorAction SilentlyContinue
 }
 $env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-21.0.11.10-hotspot"
+# Phase 1A — classify LLM override. application.yml 무변경. relaxed binding 으로 자동 적용.
+if ($ClassifyModel -ne "") {
+    $env:COHERE_CLASSIFY_MODEL = $ClassifyModel
+} else {
+    Remove-Item Env:COHERE_CLASSIFY_MODEL -ErrorAction SilentlyContinue
+}
 if ($SkipTrustStore) {
     Remove-Item Env:JAVA_TOOL_OPTIONS -ErrorAction SilentlyContinue
 } else {
@@ -84,6 +93,11 @@ if (-not $Quiet) {
     Write-Host "=== Phase 0 baseline IT ===" -ForegroundColor Cyan
     Write-Host ("  BASELINE_REAL         = " + $env:BASELINE_REAL)
     Write-Host ("  BASELINE_SAMPLE_COUNT = " + $env:BASELINE_SAMPLE_COUNT)
+    if ($env:COHERE_CLASSIFY_MODEL) {
+        Write-Host ("  COHERE_CLASSIFY_MODEL = " + $env:COHERE_CLASSIFY_MODEL) -ForegroundColor Yellow
+    } else {
+        Write-Host "  COHERE_CLASSIFY_MODEL = (unset -- yml default command-a-03-2025)"
+    }
     if ($env:BASELINE_CONSULTATION_IDS) {
         Write-Host ("  BASELINE_CONSULTATION_IDS = " + $env:BASELINE_CONSULTATION_IDS)
     } else {

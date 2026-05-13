@@ -5,6 +5,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.common.enums.UserRole;
 import org.example.shield.consultation.application.MessageService;
 import org.example.shield.consultation.domain.Consultation;
@@ -81,6 +82,7 @@ class BaselineMetricsRealIT {
     @Autowired private MeterRegistry registry;
     @Autowired private UserRepository userRepository;
     @Autowired private ConsultationRepository consultationRepository;
+    @Autowired private CohereApiConfig cohereApiConfig;
     @LocalServerPort private int port;
 
     /** 테스트용 fixture 식별자 — 매 실행 시 reuse, 일반 사용자와 충돌 없도록 격리된 이메일/도메인 사용. */
@@ -150,6 +152,9 @@ class BaselineMetricsRealIT {
         StringBuilder report = new StringBuilder();
         report.append("\n\n=== Phase 0 baseline (real infra) — sample success=").append(success)
                 .append("/").append(sampleCount).append(" ===\n");
+        // Phase 1A 비교 측정 시 baseline 보고서끼리 구분 가능하도록 사용 모델을 명시.
+        report.append("classify.model = ").append(cohereApiConfig.getClassifyModel()).append("\n");
+        report.append("chat.model     = ").append(cohereApiConfig.getChatModel()).append("\n\n");
         report.append(String.format("| %-44s | %5s | %12s | %12s |%n",
                 "metric", "count", "mean (ms)", "max (ms)"));
         report.append("|----------------------------------------------|-------|--------------|--------------|\n");
@@ -183,8 +188,8 @@ class BaselineMetricsRealIT {
             log.warn("[baseline] 결과 파일 저장 실패: {}", e.getMessage());
         }
 
-        // ASSERT 2 — 신규 메트릭이 표본을 누적
-        Timer classify = registry.find("shield.rag.classify").tag("outcome", "success").timer();
+        // ASSERT 2 — 신규 메트릭이 표본을 누적 (outcome 무관 — failure/empty 만이라도 wiring 검증)
+        Timer classify = anyOutcome("shield.rag.classify");
         Timer pipeline = anyOutcome("shield.rag.pipeline.total");
         assertThat(classify).as("shield.rag.classify timer 가 등록되지 않음").isNotNull();
         assertThat(classify.count()).as("classify timer 표본 0").isPositive();

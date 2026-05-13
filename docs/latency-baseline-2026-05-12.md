@@ -77,32 +77,42 @@ curl -s http://localhost:8080/actuator/prometheus \
 
 ---
 
-## Baseline 결과 (채우기)
+## Baseline 결과
 
-수집 환경: __________ (local / staging-? / prod-canary-?)
-앱 버전 / 커밋: ________________
-측정 시각 (KST): ________________
-샘플 수: ____ 건 (성공 / 전체)
+수집 환경: **로컬 (학교 네트워크, KMU SSL inspection 통과)**
+앱 버전 / 커밋: `rag-정상화` HEAD = `8400a5e Merge fix/hnsw-cte-refactor`
+측정 시각 (KST): 2026-05-13 18:30 / 18:34 (smoke 2회 평균치 채택은 18:34 측정)
+샘플 수: 2 / 2 (성공 / 전체)
+classify.model = `command-a-03-2025` (운영 default)
+chat.model     = `command-a-03-2025` (운영 default)
+classify timeout = 30000ms (`COHERE_TIMEOUT_READ_CLASSIFY` env override, 운영 default 는 15000ms)
 
-### 단계별 latency
+> **주의**: 학교 네트워크의 SSL inspection 프록시(KMU CA 재서명) 가 추가 지연을 부과하여
+> **운영 latency 의 상한선** 으로 해석해야 함. 운영 환경에서는 이보다 빠르거나 같을 가능성.
+> Phase 1A 비교 측정(command-r-08-2024) 은 Gradle daemon corruption 으로 학교 환경에선 재현 실패 —
+> staging/CI 측정으로 이관.
 
-| 메트릭 | 샘플 수 | 평균 (ms) | p50 (ms) | p95 (ms) | max (ms) |
-|---|---:|---:|---:|---:|---:|
-| `shield.chat.send_message{outcome="success"}` — 전체 |   |   |   |   |   |
-| `shield.rag.pipeline.total{outcome="success"}` — RAG 단계 합 (신규) |   |   |   |   |   |
-| `shield.rag.classify{outcome="success"}` — #1 LLM (신규) |   |   |   |   |   |
-| `shield.rag.retrieve{outcome="success"}` — 검색 SQL |   |   |   |   |   |
-| `shield.rag.cohere.embed{outcome="success"}` — 임베딩 |   |   |   |   |   |
-| `shield.chat.cohere.call{outcome="success"}` — #2 LLM |   |   |   |   |   |
+### 단계별 latency (smoke 2건, 학교 환경)
 
-### outcome 분포 (이상치 진단용)
+표본이 작아 (n=2) 평균/max 만 보고. p50/p95 는 의미 없는 수치라 생략.
+
+| 메트릭 | 샘플 수 | outcome | 평균 (ms) | max (ms) | 비고 |
+| --- | ---: | --- | ---: | ---: | --- |
+| `shield.chat.send_message` | 2 | success | **47047** | 56002 | wall-clock 전체 |
+| `shield.rag.pipeline.total` | 2 | success | 30660 | 30773 | classify+retrieve+build |
+| `shield.rag.classify` | 2 | **failure** | **30051** | 30087 | **30s timeout 100%** — 학교 환경 특수 (운영은 다를 가능성) |
+| `shield.rag.retrieve` | 2 | success | 587 | 661 | pgvector + BM25 정상 |
+| `shield.rag.cohere.embed` | 2 | success | 334 | 361 | Cohere embed 정상 |
+| `shield.chat.cohere.call` | 2 | success | **16243** | 25338 | **#2 본응답 LLM — 가장 큰 정상 비중** |
+
+### outcome 분포 (smoke 2건 기준)
 
 | 메트릭 | success | empty | failure | 비고 |
-|---|---:|---:|---:|---|
-| `shield.rag.pipeline.total` |   |   |   | empty 비율 높으면 Phase 1F (분류 스킵) 가치 큼 |
-| `shield.rag.classify` |   | — |   | failure 잦으면 모델/타임아웃 점검 |
-| `shield.rag.retrieve` |   |   |   | empty 비율 높으면 검색 품질 점검 |
-| `shield.chat.cohere.call` |   | — |   | (blank 는 별도 `shield.chat.blank_response` 카운터) |
+| --- | ---: | ---: | ---: | --- |
+| `shield.rag.pipeline.total` | 2 | 0 | 0 | classify 가 fallback 으로 RuntimeException 안 던지므로 pipeline 은 success |
+| `shield.rag.classify` | 0 | — | **2** | **failure 100% — 학교 환경 timeout. 운영에서 재측정 필요** |
+| `shield.rag.retrieve` | 2 | 0 | — | 정상 |
+| `shield.chat.cohere.call` | 2 | — | 0 | 정상 |
 
 ---
 
@@ -118,14 +128,28 @@ curl -s http://localhost:8080/actuator/prometheus \
 | `shield.rag.retrieve` p50 > 1s | DB/인덱스(pgvector, BM25) 튜닝이 LLM 최적화보다 우선 |
 | `send_message - (pipeline.total + cohere.call)` gap 큼 | DB tx / sanitize / appendHistory 등 비-LLM 구간 점검 |
 
-## 결론 (채우기)
+## 결론
 
-선택한 다음 Phase: ☐ 1A  ☐ 1E  ☐ 1F  ☐ 2 (캐싱)  ☐ 3 (speculative)  ☐ 측정 재실행
+선택한 다음 Phase: ☑ **1A** (`cohere.classify.model` 라이트 모델 교체) — staging 카나리 측정 → 운영 default 결정
+보조 선택: ☑ **재측정 (staging)** — 학교 환경 baseline 은 운영 추정용으로만 활용
 
-근거 (3줄 이내):
-- ____________
-- ____________
-- ____________
+근거 (학교 환경 baseline 기준):
+
+- **classify 가 timeout 100%** (`outcome=failure` 2/2) — 학교 SSL inspection + 큰 prompt (ontology JSON 7555자) 결합으로 30s 안에 안 들어옴. 라이트 모델(`command-r-08-2024`) 은 응답이 빨라 timeout 회피 기대. 운영 환경에서도 classify timeout 발생 빈도가 메트릭에 잡히면 즉시 적용 가치.
+- **`chat.cohere.call` 16–25s 가 안정적 정상 측정** — Phase 1A(classify 교체) 와 직접 무관하지만 다음 큰 병목. Phase 3 (speculative 병렬) 또는 chat 모델 자체 라이트화 검토 필요. classify p50 « chat p50 가 staging 에서도 재현되면 Phase 3 효과 큼.
+- **retrieve 0.6s, embed 0.3s 정상** — DB/벡터 경로는 충분히 빠름. Phase 4 (임베딩-only 검색) 동기 없음.
+
+## Phase 1A 실행 절차
+
+1. **staging 환경에 `COHERE_CLASSIFY_MODEL=command-r-08-2024` 환경변수 set** — application.yml 무변경, CohereApiConfig 의 relaxed binding 으로 자동 override.
+2. staging 의 BaselineMetricsRealIT 또는 운영 트래픽 일부 (카나리) 로 측정 — 같은 신규 메트릭 (`shield.rag.classify`) 가 운영 환경에서도 노출됨.
+3. **회귀 검증**: `scripts/eval_rag.py` 로 retrieval 정확도(Recall@5, nDCG) 비교. classify 결과가 retrieval 입력(`vectorQuery`, `bm25Keywords`)에 영향을 주므로 간접 측정 가능.
+4. classify p50 가 운영 default 보다 의미 있게 빠르고 retrieval 정확도 회귀가 없으면 → 운영 default 변경 PR.
+
+## 보류된 후속 단계 (Phase 0 범위 밖)
+
+- **Phase 3 (speculative 병렬)**: chat 16–25s 가 본 응답의 가장 큰 비중. 학교 환경 wall-clock 47s 중 `pipeline.total` 30s + `chat` 16s 가 직렬. 운영에서도 비슷한 ratio 면 `chat` 을 RAG 와 병렬 시작하여 max(RAG, chat) 로 줄이는 게 큰 효과.
+- **chat 모델도 라이트화 검토**: `cohere.model.chat` 도 placeholder (`CohereApiConfig.java:30`). `COHERE_MODEL_CHAT` 환경변수 override 로 시도 가능. classify 와 동일 패턴.
 
 ---
 
