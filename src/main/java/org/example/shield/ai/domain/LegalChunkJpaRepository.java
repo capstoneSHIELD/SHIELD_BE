@@ -45,27 +45,31 @@ public interface LegalChunkJpaRepository extends JpaRepository<LegalChunkEntity,
     List<LegalChunkEntity> findActiveByLawId(@Param("lawId") String lawId);
 
     // ---------------------------------------------------------------------
-    // Layer 2 하이브리드 검색 (B-4: 3-way — pgvector + BM25 + pg_trgm)
+    // Layer 2 하이브리드 검색 — CTE-split pattern (B-9, post-HNSW audit)
     //
-    // 설계:
-    //  - pgvector: 1 - (embedding <=> :queryVector::vector) → cosine similarity (0~1)
-    //    * embedding IS NULL 행은 0으로 처리 (인제스트 미완료 조문 안전화)
-    //  - BM25: to_tsquery('simple', :keywordQuery) ts_rank(...,1)
-    //    * 길이 정규화 1 = "rank / (1 + log(doc length))"
-    //  - 트라이그램: pg_trgm similarity(content, :vectorQuery) 보조
-    //  - 점수 합산:
-    //      score = vector_sim  * :vectorWeight
-    //            + keyword_rank * :keywordWeight
-    //            + trigram_sim  * :trigramWeight
+    // 구조:
+    //   vec  : HNSW Index Scan 으로 top-K' 후보 (ORDER BY embedding <=> :q LIMIT)
+    //   bm   : GIN(content_tsv) 인덱스로 BM25 후보 top-K'
+    //   trig : GIST(content_trgm) 인덱스로 trigram 후보 top-K'
+    //   pool : 세 후보의 UNION
+    //   final: pool 행에 가중 합산 점수 재계산 후 score DESC LIMIT :topK
     //
-    // 필터 조합:
-    //  - category_ids: legal_chunks.category_ids && :categoryIds (array overlap)
-    //    * null/empty는 SQL 레벨에서 코알레스 → 미적용과 동등
-    //  - law_ids:     :lawIds의 유무에 따라 두 개 쿼리로 분기 (빈 IN 회피)
+    // 필터 push:
+    //   - category_ids / law_id 필터를 세 CTE 내부에 함께 적용한다. 카테고리가
+    //     희귀할 경우 planner 가 GIN/B-tree 인덱스를 우선 선택해 HNSW 풀에서
+    //     누락되는 행을 회수한다. PgLegalRetrievalService 가 트랜잭션 시작 시
+    //     `hnsw.iterative_scan = relaxed_order` 를 설정해 HNSW 분기에서도
+    //     필터 매칭 후보를 누락 없이 채울 수 있다.
     //
-    // 후보 축소: 3가지 경로 중 어느 하나라도 매칭되는 행만 정렬 대상에 포함
+    // 검증: scripts/verify_cte_refactor.py — [E] 시나리오에서 희귀 카테고리
+    //       (0.16% 셀렉티비티) 5/5 회수 + 1,202ms → 11.7ms 개선.
     //
-    // 투영(projection): LegalChunkRow → Service에서 LegalChunk record 변환
+    // 폴백:
+    //   - :keywordQuery 가 sentinel(__shield_never_match__) 이면 bm CTE 가
+    //     0 행을 반환하고 vec/trig 만으로 동작한다. EMPTY_QUERY_SENTINEL 참조.
+    //   - 임베딩 실패 시 호출자가 영벡터 리터럴을 전달 → vec 분기의 cosine 이
+    //     일관되게 1 - 0 = 1 로 나오지 않도록, 영벡터 표시는 호출자가 별도
+    //     처리한다(PgLegalRetrievalService.zeroVectorLiteral).
     // ---------------------------------------------------------------------
 
     /**
@@ -78,25 +82,48 @@ public interface LegalChunkJpaRepository extends JpaRepository<LegalChunkEntity,
      * PostgreSQL 배열 겹침 연산자 {@code &&}는 한 원소라도 일치하면 true.</p>
      */
     @Query(value = """
+            WITH vec AS (
+              SELECT id, 1 - (embedding <=> CAST(:queryVector AS vector)) AS sim
+                FROM legal_chunks
+               WHERE abolition_date IS NULL
+                 AND embedding IS NOT NULL
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               ORDER BY embedding <=> CAST(:queryVector AS vector)
+               LIMIT 40
+            ), bm AS (
+              SELECT id, ts_rank(content_tsv, to_tsquery('simple', :keywordQuery), 1) AS rk
+                FROM legal_chunks
+               WHERE abolition_date IS NULL
+                 AND content_tsv @@ to_tsquery('simple', :keywordQuery)
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               LIMIT 40
+            ), trig AS (
+              SELECT id, similarity(content, CAST(:vectorQuery AS text)) AS sm
+                FROM legal_chunks
+               WHERE abolition_date IS NULL
+                 AND content % CAST(:vectorQuery AS text)
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               LIMIT 40
+            ), pool AS (
+              SELECT id FROM vec UNION SELECT id FROM bm UNION SELECT id FROM trig
+            )
             SELECT lc.law_name        AS lawName,
                    lc.article_no      AS articleNo,
                    lc.article_title   AS articleTitle,
                    lc.content         AS content,
                    to_char(lc.effective_date, 'YYYY-MM-DD') AS effectiveDate,
                    lc.source_url      AS sourceUrl,
-                   ( COALESCE(CASE WHEN lc.embedding IS NULL THEN 0
-                                   ELSE 1 - (lc.embedding <=> CAST(:queryVector AS vector))
-                               END, 0) * :vectorWeight
-                    + ts_rank(lc.content_tsv, to_tsquery('simple', :keywordQuery), 1) * :keywordWeight
-                    + similarity(lc.content, :vectorQuery) * :trigramWeight) AS score
-              FROM legal_chunks lc
-             WHERE lc.abolition_date IS NULL
-               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
-                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
-               AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
-                  OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
-                  OR lc.content % CAST(:vectorQuery AS text)
-                  OR lc.embedding IS NOT NULL )
+                   ( COALESCE(v.sim, 0) * :vectorWeight
+                   + COALESCE(b.rk,  0) * :keywordWeight
+                   + COALESCE(t.sm,  0) * :trigramWeight) AS score
+              FROM pool p
+              JOIN legal_chunks lc ON lc.id = p.id
+         LEFT JOIN vec  v ON v.id  = lc.id
+         LEFT JOIN bm   b ON b.id  = lc.id
+         LEFT JOIN trig t ON t.id  = lc.id
              ORDER BY score DESC
              LIMIT :topK
             """, nativeQuery = true)
@@ -110,29 +137,55 @@ public interface LegalChunkJpaRepository extends JpaRepository<LegalChunkEntity,
                                    @Param("topK") int topK);
 
     /**
-     * 3-way 하이브리드 검색 (법령ID 필터 포함).
+     * 3-way 하이브리드 검색 (법령ID 필터 포함). 카테고리·법령ID 필터를
+     * 세 CTE 내부에 push 하여 인덱스 활용을 보장한다.
      */
     @Query(value = """
+            WITH vec AS (
+              SELECT id, 1 - (embedding <=> CAST(:queryVector AS vector)) AS sim
+                FROM legal_chunks
+               WHERE abolition_date IS NULL
+                 AND embedding IS NOT NULL
+                 AND law_id IN (:lawIds)
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               ORDER BY embedding <=> CAST(:queryVector AS vector)
+               LIMIT 40
+            ), bm AS (
+              SELECT id, ts_rank(content_tsv, to_tsquery('simple', :keywordQuery), 1) AS rk
+                FROM legal_chunks
+               WHERE abolition_date IS NULL
+                 AND law_id IN (:lawIds)
+                 AND content_tsv @@ to_tsquery('simple', :keywordQuery)
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               LIMIT 40
+            ), trig AS (
+              SELECT id, similarity(content, CAST(:vectorQuery AS text)) AS sm
+                FROM legal_chunks
+               WHERE abolition_date IS NULL
+                 AND law_id IN (:lawIds)
+                 AND content % CAST(:vectorQuery AS text)
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               LIMIT 40
+            ), pool AS (
+              SELECT id FROM vec UNION SELECT id FROM bm UNION SELECT id FROM trig
+            )
             SELECT lc.law_name        AS lawName,
                    lc.article_no      AS articleNo,
                    lc.article_title   AS articleTitle,
                    lc.content         AS content,
                    to_char(lc.effective_date, 'YYYY-MM-DD') AS effectiveDate,
                    lc.source_url      AS sourceUrl,
-                   ( COALESCE(CASE WHEN lc.embedding IS NULL THEN 0
-                                   ELSE 1 - (lc.embedding <=> CAST(:queryVector AS vector))
-                               END, 0) * :vectorWeight
-                    + ts_rank(lc.content_tsv, to_tsquery('simple', :keywordQuery), 1) * :keywordWeight
-                    + similarity(lc.content, :vectorQuery) * :trigramWeight) AS score
-              FROM legal_chunks lc
-             WHERE lc.abolition_date IS NULL
-               AND lc.law_id IN (:lawIds)
-               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
-                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
-               AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
-                  OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
-                  OR lc.content % CAST(:vectorQuery AS text)
-                  OR lc.embedding IS NOT NULL )
+                   ( COALESCE(v.sim, 0) * :vectorWeight
+                   + COALESCE(b.rk,  0) * :keywordWeight
+                   + COALESCE(t.sm,  0) * :trigramWeight) AS score
+              FROM pool p
+              JOIN legal_chunks lc ON lc.id = p.id
+         LEFT JOIN vec  v ON v.id  = lc.id
+         LEFT JOIN bm   b ON b.id  = lc.id
+         LEFT JOIN trig t ON t.id  = lc.id
              ORDER BY score DESC
              LIMIT :topK
             """, nativeQuery = true)
