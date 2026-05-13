@@ -29,22 +29,37 @@ $OutputEncoding           = [System.Text.Encoding]::UTF8
 $projectRoot = "C:\Users\이총명\Documents\GitHub\SHIELD_BE"
 $null = subst S: $projectRoot 2>&1
 
-# 2) Truststore copy.
-#    JAVA_TOOL_OPTIONS splits on whitespace -- the JVM cannot handle
-#    "-Djavax.net.ssl.trustStore=C:\Program Files\..." because of the space.
-#    Solution: copy cacerts to a space-free path the first time.
-$tsTarget = "C:\GradleHome\jdk25-cacerts"
+# 2) Truststore: build merged store (JDK21 cacerts base + Windows-ROOT CAs).
+#    - JAVA_TOOL_OPTIONS splits on whitespace -- output path must have no spaces.
+#    - Windows-ROOT merge picks up corporate proxy CAs (SSL inspection environments)
+#      and any CA Windows trusts but the bundled JDK cacerts is missing.
+$tsTarget = "C:\GradleHome\jdk-cacerts-merged"
+$tsBase   = "C:\Program Files\Microsoft\jdk-21.0.11.10-hotspot\lib\security\cacerts"
+$keytool  = "C:\Program Files\Microsoft\jdk-21.0.11.10-hotspot\bin\keytool.exe"
 if (-not $SkipTrustStore) {
-    $tsSource = "C:\Program Files\Java\jdk-25\lib\security\cacerts"
-    if (-not (Test-Path $tsSource)) {
-        Write-Warning "JDK25 cacerts not found at $tsSource ; falling back to system truststore."
+    if (-not (Test-Path $tsBase)) {
+        Write-Warning "JDK21 cacerts base not found at $tsBase ; falling back to system truststore."
         $SkipTrustStore = $true
     } else {
-        if (-not (Test-Path (Split-Path $tsTarget -Parent))) {
-            New-Item -ItemType Directory -Force (Split-Path $tsTarget -Parent) | Out-Null
-        }
-        if ((-not (Test-Path $tsTarget)) -or ((Get-Item $tsSource).LastWriteTime -gt (Get-Item $tsTarget).LastWriteTime)) {
-            Copy-Item $tsSource $tsTarget -Force
+        New-Item -ItemType Directory -Force (Split-Path $tsTarget -Parent) | Out-Null
+        # Rebuild merged truststore if absent or stale (older than base cacerts).
+        $needRebuild = (-not (Test-Path $tsTarget)) -or ((Get-Item $tsBase).LastWriteTime -gt (Get-Item $tsTarget).LastWriteTime)
+        if ($needRebuild) {
+            Write-Host "Building merged truststore (JDK21 cacerts + Windows-ROOT) ..." -ForegroundColor DarkCyan
+            Copy-Item $tsBase $tsTarget -Force
+            # Merge Windows root CA store. -srcstorepass empty since Windows-ROOT is unprotected.
+            & $keytool -importkeystore `
+                -srcstoretype Windows-ROOT `
+                -srcstorepass '' `
+                -destkeystore $tsTarget `
+                -deststoretype JKS `
+                -deststorepass changeit `
+                -noprompt 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "keytool merge exit=$LASTEXITCODE -- truststore may still work (some certs were already present)"
+            }
+            $count = (& $keytool -list -keystore $tsTarget -storepass changeit 2>&1 | Select-String '^Your keystore contains').Line
+            if ($count) { Write-Host "  -> $count" }
         }
     }
 }
