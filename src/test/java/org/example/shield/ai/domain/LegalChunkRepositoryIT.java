@@ -5,16 +5,26 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.support.NoOpCacheManager;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.auditing.DateTimeProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.jdbc.Sql;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import javax.sql.DataSource;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -33,25 +43,54 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * <p>실행 전제: 로컬/CI 에 Docker 데몬이 떠있어야 한다. 없으면 컨테이너 시작 단계에서 skip 처리되지
  * 않고 fail 하므로 Docker 미설치 환경에서는 {@code -PexcludeIT} 같은 별도 Gradle 옵션이 필요하다.
  */
-@DataJpaTest
+@DataJpaTest(properties = "spring.flyway.enabled=false")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
+@Sql(scripts = "/it-schema/legal_chunks_only.sql",
+        executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
+@Import(LegalChunkRepositoryIT.AuditingStubConfig.class)
 class LegalChunkRepositoryIT {
+
+    /**
+     * {@code ShieldApplication} 이 켜는 횡단 관심사 빈들(auditing, caching)을 위한 stub.
+     * {@code @DataJpaTest} 슬라이스에는 안 들어오지만 {@code @EnableJpaAuditing}/{@code @EnableCaching}
+     * 어노테이션이 메인 앱 클래스에 달려 있어 슬라이스 컨텍스트에도 따라 들어옴 → 참조 빈이 없어 실패.
+     * 본 IT 는 auditing/caching 동작을 검증하지 않으므로 fixed-clock + no-op 으로만 채운다.
+     */
+    @TestConfiguration
+    static class AuditingStubConfig {
+        @Bean("auditingDateTimeProvider")
+        DateTimeProvider auditingDateTimeProvider() {
+            return () -> Optional.of(OffsetDateTime.now(ZoneId.of("Asia/Seoul")));
+        }
+
+        @Bean
+        CacheManager cacheManager() {
+            return new NoOpCacheManager();
+        }
+    }
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
             DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres")
     );
 
+    static {
+        // @DynamicPropertySource 는 Spring context bootstrap 시점에 평가되는데
+        // 그때 @Container 라이프사이클이 아직 안 돈 상태라 getJdbcUrl 이 실패한다.
+        // 컨테이너를 명시적으로 미리 띄워 두 시점을 정렬한다.
+        POSTGRES.start();
+    }
+
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry r) {
-        // 운영과 동일한 stringtype=unspecified 를 붙여 trigram % 의 unknown 타입 바인딩까지 재현
+        // 운영과 동일한 stringtype=unspecified 를 붙여 trigram % 의 unknown 타입 바인딩까지 재현.
+        // Flyway 는 @DataJpaTest properties 로 비활성화 — 운영 마이그레이션은 pre-Flyway 스키마를
+        // 가정하므로 fresh 컨테이너에 그대로 적용 불가. 본 IT 는 @Sql 로 legal_chunks 만 만들어
+        // searchHybrid 의 trigram 회귀만 검증한다.
         r.add("spring.datasource.url", () -> POSTGRES.getJdbcUrl() + "?stringtype=unspecified");
         r.add("spring.datasource.username", POSTGRES::getUsername);
         r.add("spring.datasource.password", POSTGRES::getPassword);
-        r.add("spring.flyway.url", POSTGRES::getJdbcUrl);
-        r.add("spring.flyway.user", POSTGRES::getUsername);
-        r.add("spring.flyway.password", POSTGRES::getPassword);
     }
 
     @Autowired LegalChunkJpaRepository repository;
