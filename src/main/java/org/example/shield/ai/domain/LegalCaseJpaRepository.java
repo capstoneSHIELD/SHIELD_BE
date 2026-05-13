@@ -71,13 +71,10 @@ public interface LegalCaseJpaRepository extends JpaRepository<LegalCaseEntity, L
 
     // ---------------------------------------------------------------------
     // C-5 (Issue #42) — 3-way 하이브리드 검색 (pgvector + BM25 + pg_trgm)
-    //
-    // 설계 (legal_chunks 대비 차이점):
-    //  - trigram 은 holding(판결요지) 컬럼에만 걸림. idx_legal_cases_holding_trgm 활용.
-    //  - content_tsv 는 case_name + case_no + headnote + holding + reasoning concat 의
-    //    GENERATED tsvector 라 BM25 는 법령과 동일 패턴.
-    //  - law_id 필터는 없음. 대신 case_type 필터를 선택적으로 걸 수 있도록 두 가지 시그니처 제공.
-    //  - Projection 은 LegalChunkRow 와 형태가 달라 별도 LegalCaseRow 인터페이스 제공.
+    // B-9: CTE-split pattern. legal_chunks 와 동일한 구조이며 차이는 다음과 같다.
+    //  - trigram 컬럼이 holding(판결요지) 이다. idx_legal_cases_holding_trgm 활용.
+    //  - law_id 필터가 없는 대신 선택적 case_type IN 필터를 제공.
+    //  - Projection 은 LegalCaseRow 인터페이스로 별도.
     // ---------------------------------------------------------------------
 
     /**
@@ -87,6 +84,33 @@ public interface LegalCaseJpaRepository extends JpaRepository<LegalCaseEntity, L
      * {@code :categoryIds} 는 {@code String[]}. null/빈 배열이면 카테고리 필터 미적용.</p>
      */
     @Query(value = """
+            WITH vec AS (
+              SELECT id, 1 - (embedding <=> CAST(:queryVector AS vector)) AS sim
+                FROM legal_cases
+               WHERE embedding IS NOT NULL
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               ORDER BY embedding <=> CAST(:queryVector AS vector)
+               LIMIT 40
+            ), bm AS (
+              SELECT id, ts_rank(content_tsv, to_tsquery('simple', :keywordQuery), 1) AS rk
+                FROM legal_cases
+               WHERE content_tsv @@ to_tsquery('simple', :keywordQuery)
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               LIMIT 40
+            ), trig AS (
+              -- holding 컬럼 직접 비교 — GIN(gin_trgm_ops) 인덱스 활용. NULL 은 `% v` 가 NULL 이
+              -- 되어 WHERE 에서 자연 배제되고, LegalChunkJpaRepository 와 패턴 일관성을 갖춘다.
+              SELECT id, similarity(holding, CAST(:vectorQuery AS text)) AS sm
+                FROM legal_cases
+               WHERE holding % CAST(:vectorQuery AS text)
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               LIMIT 40
+            ), pool AS (
+              SELECT id FROM vec UNION SELECT id FROM bm UNION SELECT id FROM trig
+            )
             SELECT lc.id              AS id,
                    lc.case_no         AS caseNo,
                    lc.court           AS court,
@@ -96,18 +120,14 @@ public interface LegalCaseJpaRepository extends JpaRepository<LegalCaseEntity, L
                    lc.headnote        AS headnote,
                    lc.holding         AS holding,
                    lc.source_url      AS sourceUrl,
-                   ( COALESCE(CASE WHEN lc.embedding IS NULL THEN 0
-                                   ELSE 1 - (lc.embedding <=> CAST(:queryVector AS vector))
-                               END, 0) * :vectorWeight
-                    + ts_rank(lc.content_tsv, to_tsquery('simple', :keywordQuery), 1) * :keywordWeight
-                    + similarity(COALESCE(lc.holding, ''), :vectorQuery) * :trigramWeight) AS score
-              FROM legal_cases lc
-             WHERE ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
-                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
-               AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
-                  OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
-                  OR COALESCE(lc.holding, '') % CAST(:vectorQuery AS text)
-                  OR lc.embedding IS NOT NULL )
+                   ( COALESCE(v.sim, 0) * :vectorWeight
+                   + COALESCE(b.rk,  0) * :keywordWeight
+                   + COALESCE(t.sm,  0) * :trigramWeight) AS score
+              FROM pool p
+              JOIN legal_cases lc ON lc.id = p.id
+         LEFT JOIN vec  v ON v.id  = lc.id
+         LEFT JOIN bm   b ON b.id  = lc.id
+         LEFT JOIN trig t ON t.id  = lc.id
              ORDER BY score DESC
              LIMIT :topK
             """, nativeQuery = true)
@@ -125,6 +145,35 @@ public interface LegalCaseJpaRepository extends JpaRepository<LegalCaseEntity, L
      * {@code :caseTypes} 가 null/empty 이면 호출부에서 필터 없는 버전을 써야 한다.
      */
     @Query(value = """
+            WITH vec AS (
+              SELECT id, 1 - (embedding <=> CAST(:queryVector AS vector)) AS sim
+                FROM legal_cases
+               WHERE embedding IS NOT NULL
+                 AND case_type IN (:caseTypes)
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               ORDER BY embedding <=> CAST(:queryVector AS vector)
+               LIMIT 40
+            ), bm AS (
+              SELECT id, ts_rank(content_tsv, to_tsquery('simple', :keywordQuery), 1) AS rk
+                FROM legal_cases
+               WHERE case_type IN (:caseTypes)
+                 AND content_tsv @@ to_tsquery('simple', :keywordQuery)
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               LIMIT 40
+            ), trig AS (
+              -- holding 컬럼 직접 비교 (search3WayCases 와 동일 — GIN 인덱스 활용 + 일관성)
+              SELECT id, similarity(holding, CAST(:vectorQuery AS text)) AS sm
+                FROM legal_cases
+               WHERE case_type IN (:caseTypes)
+                 AND holding % CAST(:vectorQuery AS text)
+                 AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                       OR category_ids && CAST(:categoryIds AS text[]) )
+               LIMIT 40
+            ), pool AS (
+              SELECT id FROM vec UNION SELECT id FROM bm UNION SELECT id FROM trig
+            )
             SELECT lc.id              AS id,
                    lc.case_no         AS caseNo,
                    lc.court           AS court,
@@ -134,19 +183,14 @@ public interface LegalCaseJpaRepository extends JpaRepository<LegalCaseEntity, L
                    lc.headnote        AS headnote,
                    lc.holding         AS holding,
                    lc.source_url      AS sourceUrl,
-                   ( COALESCE(CASE WHEN lc.embedding IS NULL THEN 0
-                                   ELSE 1 - (lc.embedding <=> CAST(:queryVector AS vector))
-                               END, 0) * :vectorWeight
-                    + ts_rank(lc.content_tsv, to_tsquery('simple', :keywordQuery), 1) * :keywordWeight
-                    + similarity(COALESCE(lc.holding, ''), :vectorQuery) * :trigramWeight) AS score
-              FROM legal_cases lc
-             WHERE lc.case_type IN (:caseTypes)
-               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
-                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
-               AND ( lc.content_tsv @@ plainto_tsquery('simple', :vectorQuery)
-                  OR lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
-                  OR COALESCE(lc.holding, '') % CAST(:vectorQuery AS text)
-                  OR lc.embedding IS NOT NULL )
+                   ( COALESCE(v.sim, 0) * :vectorWeight
+                   + COALESCE(b.rk,  0) * :keywordWeight
+                   + COALESCE(t.sm,  0) * :trigramWeight) AS score
+              FROM pool p
+              JOIN legal_cases lc ON lc.id = p.id
+         LEFT JOIN vec  v ON v.id  = lc.id
+         LEFT JOIN bm   b ON b.id  = lc.id
+         LEFT JOIN trig t ON t.id  = lc.id
              ORDER BY score DESC
              LIMIT :topK
             """, nativeQuery = true)
