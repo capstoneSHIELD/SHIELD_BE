@@ -453,4 +453,82 @@ class MessageServiceTest {
         assertThat(meterRegistry.timer(ChatMetrics.METRIC_SEND_MESSAGE, "outcome", "success").count())
                 .isEqualTo(1L);
     }
+
+    // ── Issue #88 — 상담 진행률 응답 필드 ─────────────────────────────────
+
+    /**
+     * 첫 USER 메시지 — 저장 후 누적 1턴이 되므로 progress = (1, 10, 10).
+     */
+    @Test
+    @DisplayName("첫 메시지 응답에 progress(1, 10, 10) 포함")
+    void sendMessage_firstTurn_progressIsTenPercent() {
+        given(messageReader.countByConsultationIdAndRole(consultationId, MessageRole.USER))
+                .willReturn(0L);
+
+        ChatParsedResponse parsed = new ChatParsedResponse();
+        parsed.setNextQuestion("어떤 상황이신가요?");
+        parsed.setAiDomains(List.of());
+        parsed.setAiSubDomains(List.of());
+        parsed.setAiTags(List.of());
+        given(cohereService.chat(any(), anyString(), anyString(), any()))
+                .willReturn(new AiCallResult<>("resp-first", parsed, 100, 42, 250));
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "첫 입력");
+
+        assertThat(response.progress()).isNotNull();
+        assertThat(response.progress().currentTurn()).isEqualTo(1);
+        assertThat(response.progress().maxTurns()).isEqualTo(10);
+        assertThat(response.progress().progressPercent()).isEqualTo(10);
+    }
+
+    /**
+     * 10번째 USER 메시지 — 진행률 100%.
+     */
+    @Test
+    @DisplayName("10번째 메시지 응답에 progress(10, 10, 100) 포함")
+    void sendMessage_lastTurn_progressIsHundredPercent() {
+        given(messageReader.countByConsultationIdAndRole(consultationId, MessageRole.USER))
+                .willReturn(9L);
+
+        ChatParsedResponse parsed = new ChatParsedResponse();
+        parsed.setNextQuestion("거의 끝났습니다.");
+        parsed.setAllCompleted(false);
+        parsed.setAiDomains(List.of());
+        parsed.setAiSubDomains(List.of());
+        parsed.setAiTags(List.of());
+        given(cohereService.chat(any(), anyString(), anyString(), any()))
+                .willReturn(new AiCallResult<>("resp-last", parsed, 100, 42, 250));
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "10번째 입력");
+
+        assertThat(response.progress()).isNotNull();
+        assertThat(response.progress().currentTurn()).isEqualTo(10);
+        assertThat(response.progress().maxTurns()).isEqualTo(10);
+        assertThat(response.progress().progressPercent()).isEqualTo(100);
+    }
+
+    /**
+     * PII 거부 분기 — USER 메시지가 저장되지 않으므로 progress 는 기존 turn 그대로(증가 없음).
+     */
+    @Test
+    @DisplayName("PII 거부 시 progress 는 기존 turn 그대로 유지 (증가 없음)")
+    void sendMessage_piiRejected_progressDoesNotIncrement() {
+        // 기존 3턴 완료된 상담에서 4번째 시도가 PII 로 거부됨
+        given(messageReader.countByConsultationIdAndRole(consultationId, MessageRole.USER))
+                .willReturn(3L);
+        given(sanitizeService.sanitizeUserText(anyString()))
+                .willThrow(new SanitizeService.PiiDetectedException("주민번호 감지"));
+        given(chatTxBoundary.savePiiAiMessage(eq(consultationId), anyString()))
+                .willAnswer(inv -> Message.createAiMessage(consultationId, inv.getArgument(1),
+                        null, null, null, null));
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "주민번호 1234");
+
+        assertThat(response.progress()).isNotNull();
+        assertThat(response.progress().currentTurn())
+                .as("PII 거부 시 USER 미저장 → 기존 3턴 유지")
+                .isEqualTo(3);
+        assertThat(response.progress().maxTurns()).isEqualTo(10);
+        assertThat(response.progress().progressPercent()).isEqualTo(30);
+    }
 }
