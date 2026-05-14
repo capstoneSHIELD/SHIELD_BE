@@ -8,6 +8,7 @@ import org.example.shield.admin.controller.dto.LawyerDetailResponse;
 import org.example.shield.admin.controller.dto.PendingLawyerResponse;
 import org.example.shield.admin.controller.dto.VerificationChecksResponse;
 import org.example.shield.admin.controller.dto.VerificationLogResponse;
+import org.example.shield.admin.application.event.LawyerVerifiedEvent;
 import org.example.shield.admin.controller.dto.VerificationResponse;
 import org.example.shield.admin.domain.VerificationCheckReader;
 import org.example.shield.admin.domain.VerificationLog;
@@ -18,7 +19,6 @@ import org.example.shield.common.enums.VerificationStatus;
 import org.example.shield.common.exception.BusinessException;
 import org.example.shield.common.exception.ErrorCode;
 import org.example.shield.common.response.PageResponse;
-import org.example.shield.lawyer.application.LawyerEmbeddingService;
 import org.example.shield.lawyer.domain.LawyerProfile;
 import org.example.shield.lawyer.domain.LawyerReader;
 import org.example.shield.lawyer.domain.LawyerWriter;
@@ -27,6 +27,7 @@ import org.example.shield.lawyer.infrastructure.LawyerProfileRepository;
 import org.example.shield.user.domain.User;
 import org.example.shield.user.domain.UserReader;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -56,7 +57,7 @@ public class AdminService {
     private final VerificationLogReader verificationLogReader;
     private final VerificationLogRepository verificationLogRepository;
     private final VerificationCheckReader verificationCheckReader;
-    private final LawyerEmbeddingService lawyerEmbeddingService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public DashboardStatsResponse getDashboardStats() {
         log.info("대시보드 통계 조회");
@@ -210,13 +211,11 @@ public class AdminService {
         lawyer.updateVerificationStatus(newStatus);
         lawyerWriter.save(lawyer);
 
-        // VERIFIED 로 전환된 경우 매칭용 임베딩을 업서트 (Issue #50)
+        // VERIFIED 로 전환된 경우 매칭용 임베딩 업서트를 트랜잭션 커밋 후로 분리 (Issue #50, Gemini PR #90 ④).
+        // 외부 Cohere API 호출이 verification 트랜잭션의 커넥션을 점유하지 않도록
+        // AFTER_COMMIT 단계에서 LawyerVerifiedEventListener 가 처리한다.
         if (newStatus == VerificationStatus.VERIFIED) {
-            try {
-                lawyerEmbeddingService.upsertEmbedding(lawyer);
-            } catch (Exception ex) {
-                log.warn("변호사 임베딩 생성 실패 (승인은 성공) lawyerId={} error={}", lawyerId, ex.getMessage());
-            }
+            eventPublisher.publishEvent(new LawyerVerifiedEvent(lawyerId));
         }
 
         VerificationLog log = VerificationLog.create(lawyerId, adminId, previousStatus, newStatus.name(), reason);

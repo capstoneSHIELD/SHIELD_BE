@@ -27,7 +27,9 @@ ssh -i "$EC2_KEY" "$EC2_HOST" "sudo systemctl restart shield-backend"
 
 echo "[4/4] 헬스체크 중..."
 sleep 15
-HEALTH=$(curl -s -o /dev/null -w "%{http_code}" https://shieldai.kr/actuator/health || echo "000")
+# 공인 도메인(https://shieldai.kr) 은 DNS/CDN/LB 캐싱으로 이전 인스턴스를 가리킬 수 있으므로
+# 방금 배포한 EC2 의 localhost 로 직접 확인한다 (Gemini PR #90 ⑦).
+HEALTH=$(ssh -i "$EC2_KEY" "$EC2_HOST" "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/actuator/health" 2>/dev/null || echo "000")
 if [ "$HEALTH" = "200" ]; then
     echo "배포 성공! HTTP $HEALTH"
 else

@@ -119,7 +119,10 @@ public class IntentClassificationService {
                 default -> null;
             };
             if (role == null) continue;
-            sb.append(role).append(": ").append(msg.getContent()).append("\n");
+            String content = msg.getContent();
+            // null/blank content 가 StringBuilder 에 "null" 로 들어가면 LLM 프롬프트가 오염되므로 skip (Gemini PR #90 ⑥).
+            if (content == null || content.isBlank()) continue;
+            sb.append(role).append(": ").append(content).append("\n");
         }
         return sb.toString().trim();
     }
