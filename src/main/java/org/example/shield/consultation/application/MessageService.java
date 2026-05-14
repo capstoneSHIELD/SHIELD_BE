@@ -117,7 +117,8 @@ public class MessageService {
             }
 
             // 1. USER 메시지 저장 (독립 트랜잭션 — 후속 실패와 무관하게 보존)
-            chatTxBoundary.saveUserMessage(consultationId, content);
+            //    sanitizedText 도 함께 캐싱하여 LLM history 구성 시 반복 sanitize 회피 (Gemini PR #90 ⑤).
+            chatTxBoundary.saveUserMessage(consultationId, content, sanitizedText);
 
             // 대화 내역 1회 조회 — RAG와 chat() 양쪽에서 공유 (중복 DB 쿼리 방지)
             List<Message> chatHistory = messageReader.findAllByConsultationId(consultationId);

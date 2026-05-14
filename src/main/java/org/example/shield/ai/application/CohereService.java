@@ -223,8 +223,12 @@ public class CohereService {
                 continue;
             }
             if (msg.getRole() == MessageRole.USER) {
-                // TODO: 저장 시점에 sanitize된 텍스트를 별도 필드에 보관하면 중복 sanitize 제거 가능
-                String sanitized = sanitizeService.sanitizeUserText(raw);
+                // 저장 시점에 캐싱된 sanitizedContent 우선 사용 (Gemini PR #90 ⑤).
+                // V13 마이그레이션 이전 legacy 행은 NULL 이므로 fallback 으로 호출 시점에 sanitize.
+                String sanitized = msg.getSanitizedContent();
+                if (sanitized == null) {
+                    sanitized = sanitizeService.sanitizeUserText(raw);
+                }
                 if (sanitized == null || sanitized.isBlank()) {
                     log.warn("Skipping post-sanitize blank USER message in {} history: messageId={}",
                             context, msg.getId());
