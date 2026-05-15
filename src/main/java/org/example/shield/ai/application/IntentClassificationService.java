@@ -93,7 +93,7 @@ public class IntentClassificationService {
     public IntentClassificationResult classify(List<Message> recentMessages, String domain) {
         try {
             String conversationHistory = buildConversationHistory(recentMessages);
-            String systemPrompt = buildSystemPrompt(recentMessages, domain);
+            String systemPrompt = buildSystemPrompt(domain);
 
             List<CohereChatRequest.Message> messages = List.of(
                     CohereChatRequest.Message.system(systemPrompt),
@@ -120,11 +120,11 @@ public class IntentClassificationService {
         return cohereService.callClassify(messages);
     }
 
-    String buildSystemPrompt(List<Message> recentMessages) {
-        return buildSystemPrompt(recentMessages, null);
+    String buildSystemPrompt() {
+        return buildSystemPrompt(null);
     }
 
-    String buildSystemPrompt(List<Message> recentMessages, String domain) {
+    String buildSystemPrompt(String domain) {
         return buildSystemPromptForOntology(selectOntologyJson(domain));
     }
 

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 사용자 선택과 AI 분류를 온톨로지 canonical path 로 정규화하고 충돌 여부를 계산한다.
@@ -97,7 +98,7 @@ public class ClassificationResolver {
                     List<String> tagPath = ontologyService.pathOf(tag);
                     if (tagPath.size() >= 3
                             && domain.equals(tagPath.get(0))
-                            && subDomain.equals(tagPath.get(1))) {
+                            && Objects.equals(subDomain, tagPath.get(1))) {
                         tags.add(tagPath.get(2));
                     }
                 }
