@@ -7,6 +7,8 @@ import org.example.shield.brief.domain.Brief;
 import org.example.shield.brief.domain.BriefReader;
 import org.example.shield.brief.exception.BriefNotFoundException;
 import org.example.shield.common.enums.VerificationStatus;
+import org.example.shield.consultation.application.ClassificationResolution;
+import org.example.shield.consultation.application.ClassificationResolver;
 import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.ConsultationReader;
 import org.example.shield.common.response.PageResponse;
@@ -52,6 +54,7 @@ class LawyerMatchingServiceTest {
     @Mock private UserReader userReader;
     @Mock private LawyerEmbeddingRepository lawyerEmbeddingRepository;
     @Mock private QueryEmbeddingService queryEmbeddingService;
+    @Mock private ClassificationResolver classificationResolver;
 
     private final LawyerEmbeddingTextBuilder embeddingTextBuilder = new LawyerEmbeddingTextBuilder();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -84,10 +87,9 @@ class LawyerMatchingServiceTest {
         idField.set(brief, UUID.randomUUID());
         if (stubConsultation) {
             Consultation consultation = mock(Consultation.class);
-            when(consultation.getEffectiveDomains()).thenReturn(List.of());
-            when(consultation.getEffectiveSubDomains()).thenReturn(List.of());
-            when(consultation.getEffectiveTags()).thenReturn(List.of());
             when(consultationReader.findById(brief.getConsultationId())).thenReturn(consultation);
+            when(classificationResolver.resolve(consultation))
+                    .thenReturn(new ClassificationResolution(false, null, null, null));
         }
         return brief;
     }

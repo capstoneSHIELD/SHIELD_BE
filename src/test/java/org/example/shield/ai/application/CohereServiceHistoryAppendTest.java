@@ -4,6 +4,8 @@ import org.example.shield.ai.dto.CohereChatRequest;
 import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
+import org.example.shield.consultation.application.ClassificationCandidate;
+import org.example.shield.consultation.application.ClassificationResolver;
 import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.Message;
 import org.junit.jupiter.api.BeforeEach;
@@ -151,6 +153,10 @@ class CohereServiceHistoryAppendTest {
         CohereService chatService = createServiceWithSanitize(sanitizeService);
         setField(chatService, "config", config);
         setField(chatService, "promptService", promptService);
+        ClassificationResolver classificationResolver = mock(ClassificationResolver.class);
+        when(classificationResolver.candidateForCollection(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(ClassificationCandidate.empty());
+        setField(chatService, "classificationResolver", classificationResolver);
 
         Consultation consultation = mock(Consultation.class);
         when(consultation.getFirstDomain()).thenReturn(null);

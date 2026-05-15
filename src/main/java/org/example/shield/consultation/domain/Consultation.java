@@ -99,31 +99,38 @@ public class Consultation extends BaseEntity {
         this.userDomains = domains;
         this.userSubDomains = subDomains;
         this.userTags = tags;
+        clearAiClassification();
     }
 
     /**
      * LLM 분류 결과를 반영한다.
-     * 사용자가 이미 선택한 레벨(userDomains/SubDomains/Tags 가 비어있지 않은 레벨)
-     * 은 잠기고, 비워둔 레벨만 AI 가 채운다 (per-level lock, Issue #48).
+     * 사용자 선택과 AI 판단이 충돌할 수 있으므로 AI 결과는 별도 ai* 필드에 항상 보존한다.
+     * 최종 사용 분류는 서비스 계층의 ClassificationResolver 가 계산한다.
      *
      * @return 실제로 하나라도 업데이트되었으면 true
      */
     public boolean updateAiClassification(List<String> domains, List<String> subDomains,
                                           List<String> tags) {
         boolean anyUpdated = false;
-        if (!isNonEmpty(this.userDomains) && domains != null) {
+        if (domains != null) {
             this.aiDomains = domains;
             anyUpdated = true;
         }
-        if (!isNonEmpty(this.userSubDomains) && subDomains != null) {
+        if (subDomains != null) {
             this.aiSubDomains = subDomains;
             anyUpdated = true;
         }
-        if (!isNonEmpty(this.userTags) && tags != null) {
+        if (tags != null) {
             this.aiTags = tags;
             anyUpdated = true;
         }
         return anyUpdated;
+    }
+
+    public void clearAiClassification() {
+        this.aiDomains = null;
+        this.aiSubDomains = null;
+        this.aiTags = null;
     }
 
     public void updateLastResponseId(String responseId) {

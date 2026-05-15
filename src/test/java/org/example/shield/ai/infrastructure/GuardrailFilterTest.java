@@ -70,6 +70,28 @@ class GuardrailFilterTest {
     }
 
     @Test
+    @DisplayName("의뢰서 미확인 keyIssue 와 문장은 제거")
+    void briefUnconfirmedTextRemoved() {
+        BriefParsedResponse response = new BriefParsedResponse();
+        response.setTitle("치과 의료사고 의뢰서");
+        response.setContent("크라운 치료를 1년 전 받았습니다. 손해액은 미확인입니다. 위험 고지는 듣지 못했습니다.");
+        BriefParsedResponse.KeyIssue confirmed = new BriefParsedResponse.KeyIssue();
+        confirmed.setTitle("설명 여부");
+        confirmed.setDescription("위험 고지를 듣지 못했다고 진술했습니다.");
+        BriefParsedResponse.KeyIssue unknown = new BriefParsedResponse.KeyIssue();
+        unknown.setTitle("미확인 항목: 손해액");
+        unknown.setDescription("손해액은 미확인입니다.");
+        response.setKeyIssues(List.of(confirmed, unknown));
+
+        BriefParsedResponse result = filter.filterBriefResponse(response);
+
+        assertThat(result.getContent()).doesNotContain("미확인");
+        assertThat(result.getContent()).contains("크라운 치료").contains("위험 고지");
+        assertThat(result.getKeyIssues()).hasSize(1);
+        assertThat(result.getKeyIssues().get(0).getTitle()).isEqualTo("설명 여부");
+    }
+
+    @Test
     @DisplayName("null 응답 처리")
     void nullResponse() {
         assertThat(filter.filterChatResponse(null)).isNull();

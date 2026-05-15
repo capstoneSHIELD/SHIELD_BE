@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * 체크리스트 커버리지 검증 서비스 (P0-II, Issue #40 3레벨 커버리지).
@@ -39,6 +40,10 @@ public class ChecklistCoverageService {
     private final ChecklistLoader checklistLoader;
 
     private static final double COVERAGE_THRESHOLD = 0.85;
+
+    private static final Pattern TIME_EXPRESSION_PATTERN = Pattern.compile(
+            "(\\d+\\s*(년|개월|달|주|일)\\s*전|몇\\s*(년|개월|달|주|일)\\s*전|작년|재작년|올해|지난\\s*해|최근|\\d{4}\\s*년|\\d{1,2}\\s*월|\\d{1,2}\\s*일)"
+    );
 
     /**
      * L1 만 사용하는 커버리지 계산 (기존 호출처 호환).
@@ -82,8 +87,7 @@ public class ChecklistCoverageService {
 
         int matched = 0;
         for (String item : items) {
-            Set<String> tokens = ChecklistTokenizer.tokensOf(item);
-            if (ChecklistTokenizer.anyTokenMatches(tokens, haystack)) {
+            if (matchesItem(item, haystack)) {
                 matched++;
             }
         }
@@ -133,8 +137,7 @@ public class ChecklistCoverageService {
         int firstUncheckedIdx = -1;
         for (int i = 0; i < items.size(); i++) {
             String item = items.get(i);
-            Set<String> tokens = ChecklistTokenizer.tokensOf(item);
-            boolean hit = !haystack.isEmpty() && ChecklistTokenizer.anyTokenMatches(tokens, haystack);
+            boolean hit = matchesItem(item, haystack);
             sb.append(hit ? "- [x] " : "- [ ] ").append(item).append('\n');
             if (hit) {
                 matched++;
@@ -180,8 +183,7 @@ public class ChecklistCoverageService {
 
         List<String> missing = new ArrayList<>();
         for (String item : items) {
-            Set<String> tokens = ChecklistTokenizer.tokensOf(item);
-            boolean hit = !haystack.isEmpty() && ChecklistTokenizer.anyTokenMatches(tokens, haystack);
+            boolean hit = matchesItem(item, haystack);
             if (!hit) missing.add(item);
         }
         if (missing.isEmpty()) return "";
@@ -192,7 +194,7 @@ public class ChecklistCoverageService {
         }
         sb.append('\n');
         sb.append("위 항목은 체크리스트 필수 슬롯이지만 대화에서 명시적으로 답변되지 않았습니다. ");
-        sb.append("대화 문맥에 근거가 있다면 합리적으로 추론해 채우고, 근거가 불충분하면 \"미확인\"으로 명시하세요. ");
+        sb.append("대화 문맥에 근거가 있다면 합리적으로 추론해 채우고, 근거가 불충분하면 의뢰서 본문과 keyIssues에서 제외하세요. ");
         sb.append("근거 없이 새 사실을 만들어내지 마세요.");
 
         log.debug("missing slots: {}/{}, L1={}, L2={}, L3={}",
@@ -242,6 +244,25 @@ public class ChecklistCoverageService {
                 if (!s.isBlank()) dst.add(s);
             }
         }
+    }
+
+    private boolean matchesItem(String item, String haystack) {
+        if (haystack == null || haystack.isEmpty()) return false;
+        Set<String> tokens = ChecklistTokenizer.tokensOf(item);
+        if (ChecklistTokenizer.anyTokenMatches(tokens, haystack)) {
+            return true;
+        }
+        return isTimeSlot(item) && TIME_EXPRESSION_PATTERN.matcher(haystack).find();
+    }
+
+    private boolean isTimeSlot(String item) {
+        if (item == null || item.isBlank()) return false;
+        String normalized = ChecklistTokenizer.normalizeForMatch(item);
+        return normalized.contains("시기")
+                || normalized.contains("일시")
+                || normalized.contains("시점")
+                || normalized.contains("경과")
+                || normalized.contains("기간");
     }
 
     /** 해당 상담의 모든 USER 메시지를 NFC+소문자로 합친 문자열. */

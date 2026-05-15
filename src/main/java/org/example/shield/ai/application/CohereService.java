@@ -11,6 +11,8 @@ import org.example.shield.ai.infrastructure.CohereClient;
 import org.example.shield.ai.infrastructure.GuardrailFilter;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
+import org.example.shield.consultation.application.ClassificationCandidate;
+import org.example.shield.consultation.application.ClassificationResolver;
 import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.Message;
 import org.example.shield.consultation.domain.MessageReader;
@@ -40,8 +42,8 @@ public class CohereService {
     private final GuardrailFilter guardrailFilter;
     private final MessageReader messageReader;
     private final CohereClient cohereClient;
-    private final OntologyService ontologyService;
     private final ChecklistCoverageService checklistCoverageService;
+    private final ClassificationResolver classificationResolver;
 
     /**
      * Phase 1 대화 — 사용자 메시지 처리 후 AI 응답 반환.
@@ -125,7 +127,8 @@ public class CohereService {
         String systemPrompt = promptService.loadRouterChatPrompt();
 
         // 분류 완료 시 체크리스트 YAML 동적 주입
-        String domain = consultation.getFirstDomain();
+        ClassificationCandidate collectionCandidate = classificationResolver.candidateForCollection(consultation);
+        String domain = collectionCandidate.firstDomain();
         if (domain != null) {
             String checklist = promptService.loadChecklist(domain);
             if (checklist != null) {
@@ -143,8 +146,8 @@ public class CohereService {
         if (domain != null) {
             String collectedSummary = checklistCoverageService.buildCollectedSummary(
                     domain,
-                    consultation.getFirstSubDomain(),
-                    consultation.getFirstTag(),
+                    collectionCandidate.firstSubDomain(),
+                    collectionCandidate.firstTag(),
                     chatHistory);
             if (!collectedSummary.isEmpty()) {
                 systemPrompt = systemPrompt + "\n\n" + collectedSummary;
@@ -176,7 +179,7 @@ public class CohereService {
      * <p>체크리스트 L1 이 확정된 경우, 대화에서 수집되지 못한 슬롯 목록을
      * system 프롬프트에 힌트로 주입한다. 10턴 상한으로 조기 종료된 상담에서
      * LLM 이 대화 근거 기반 추론으로 누락 슬롯을 채울 수 있도록 돕는 용도.
-     * (근거 없는 슬롯은 brief.md 규칙에 따라 "미확인" 으로 표기)</p>
+     * 근거 없는 슬롯은 brief.md 규칙에 따라 의뢰서에서 제외한다.</p>
      */
     private List<CohereChatRequest.Message> buildBriefMessages(Consultation consultation) {
         List<CohereChatRequest.Message> msgs = new ArrayList<>();
@@ -186,16 +189,24 @@ public class CohereService {
 
         // 1. 의뢰서 전용 시스템 프롬프트 + (L1 확정 시) 미수집 슬롯 추론 가이드
         String systemPrompt = promptService.loadRouterBriefPrompt();
-        String l1 = consultation.getFirstDomain();
+        ClassificationCandidate candidate = classificationResolver.resolve(consultation).effectiveCandidate();
+        if (candidate == null || !candidate.hasAny()) {
+            candidate = classificationResolver.candidateForCollection(consultation);
+        }
+        String l1 = candidate.firstDomain();
         if (l1 != null) {
             String missing = checklistCoverageService.buildMissingSlotsGuidance(
                     l1,
-                    consultation.getFirstSubDomain(),
-                    consultation.getFirstTag(),
+                    candidate.firstSubDomain(),
+                    candidate.firstTag(),
                     history);
             if (!missing.isEmpty()) {
                 systemPrompt = systemPrompt + "\n\n" + missing;
             }
+        }
+        String factDigest = buildConversationFactDigest(history);
+        if (!factDigest.isEmpty()) {
+            systemPrompt = systemPrompt + "\n\n" + factDigest;
         }
         msgs.add(CohereChatRequest.Message.system(systemPrompt));
 
@@ -295,25 +306,10 @@ public class CohereService {
         if (hasL2) sb.append("- 중분류: ").append(String.join(", ", c.getUserSubDomains())).append("\n");
         if (hasL3) sb.append("- 소분류: ").append(String.join(", ", c.getUserTags())).append("\n");
 
-        sb.append("\n## 분류 제약 (엄수)\n");
-        sb.append("- 대분류는 재분류하지 마세요 (사용자 확정).\n");
-
-        if (!hasL2) {
-            List<String> allowedL2 = ontologyService.childrenOf(userL1.get(0));
-            sb.append("- aiSubDomains는 아래 목록에서만 선택:\n");
-            sb.append("  ").append(allowedL2).append("\n");
-        } else {
-            sb.append("- 중분류는 재분류하지 마세요 (사용자 확정).\n");
-        }
-
-        if (!hasL3) {
-            String l2Ref = hasL2 ? c.getUserSubDomains().get(0) : "확정될 aiSubDomains";
-            sb.append("- aiTags는 '").append(l2Ref).append("'의 직계 자식(L3)에서만 선택하세요.\n");
-        } else {
-            sb.append("- 소분류는 재분류하지 마세요 (사용자 확정).\n");
-        }
-
-        sb.append("\n사용자 선택과 중복되는 질문은 하지 마세요.");
+        sb.append("\n## 분류 기준\n");
+        sb.append("- 사용자 사전 선택은 참고값입니다. 대화에서 드러난 실제 사건 분야가 다르면 실제 사건 기준의 aiDomains/aiSubDomains/aiTags를 반환하세요.\n");
+        sb.append("- 단, 사용자 선택과 실제 사건이 일치하면 같은 온톨로지 노드명을 반환하세요.\n");
+        sb.append("- 사용자 선택과 중복되는 질문은 하지 마세요.");
         return sb.toString();
     }
 
@@ -335,5 +331,34 @@ public class CohereService {
         truncated.add(messages.get(0)); // system prompt
         truncated.addAll(messages.subList(messages.size() - maxMessages, messages.size()));
         return truncated;
+    }
+
+    private String buildConversationFactDigest(List<Message> history) {
+        if (history == null || history.isEmpty()) return "";
+
+        StringBuilder sb = new StringBuilder("## 대화에서 확인된 사용자 진술 (의뢰서 본문에 반영)\n");
+        int count = 0;
+        for (Message msg : history) {
+            if (msg.getRole() != MessageRole.USER) continue;
+            String text = msg.getSanitizedContent();
+            if (text == null) {
+                text = msg.getContent();
+                if (text != null && !text.isBlank()) {
+                    text = sanitizeService.sanitizeUserText(text);
+                }
+            }
+            if (text == null || text.isBlank()) continue;
+            sb.append("- ").append(truncateForPrompt(text.trim(), 280)).append('\n');
+            count++;
+            if (count >= 12) break;
+        }
+        if (count == 0) return "";
+        sb.append("\n위 사용자 진술의 치료 시기, 치료 종류, 권유 주체, 대안 제시 여부, 위험 고지 여부, 피해 내용을 빠뜨리지 말고 사실관계 본문에 반영하세요.");
+        return sb.toString();
+    }
+
+    private static String truncateForPrompt(String text, int maxLength) {
+        if (text.length() <= maxLength) return text;
+        return text.substring(0, maxLength) + "...";
     }
 }
