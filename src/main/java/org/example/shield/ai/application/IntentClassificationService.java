@@ -2,17 +2,21 @@ package org.example.shield.ai.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.CohereChatRequest;
 import org.example.shield.ai.dto.IntentClassificationResult;
 import org.example.shield.ai.dto.IntentClassificationResult.Keywords;
 import org.example.shield.ai.dto.IntentClassificationResult.MatchedNode;
+import org.example.shield.ai.infrastructure.OpenAiClassifyClient;
 import org.example.shield.ai.infrastructure.RagMetrics;
 import org.example.shield.consultation.domain.Message;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import jakarta.annotation.PostConstruct;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
@@ -22,10 +26,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Layer 1: 의도 분류 서비스.
- * 슬림 온톨로지 JSON + 최근 대화 내역을 LLM에 전달하여 법률 의도를 분류.
- */
 @Service
 @Slf4j
 public class IntentClassificationService {
@@ -36,22 +36,43 @@ public class IntentClassificationService {
     private final ResourceLoader resourceLoader;
     private final int contextWindowMessages;
     private final RagMetrics ragMetrics;
+    private final OpenAiClassifyClient openAiClassifyClient;
+    private final String classifyProvider;
 
     private String intentClassifierPromptTemplate;
 
+    /**
+     * Test-friendly constructor for parser/prompt unit tests.
+     */
     public IntentClassificationService(
             CohereService cohereService,
             ObjectMapper objectMapper,
             @Qualifier("slimOntologyJson") String slimOntologyJson,
             ResourceLoader resourceLoader,
-            @Value("${cohere.classify.context-window-messages:6}") int contextWindowMessages,
+            @Value("${cohere.classify.context-window-messages:4}") int contextWindowMessages,
             RagMetrics ragMetrics) {
+        this(cohereService, objectMapper, slimOntologyJson, resourceLoader,
+                contextWindowMessages, ragMetrics, null, "cohere");
+    }
+
+    @Autowired
+    public IntentClassificationService(
+            CohereService cohereService,
+            ObjectMapper objectMapper,
+            @Qualifier("slimOntologyJson") String slimOntologyJson,
+            ResourceLoader resourceLoader,
+            @Value("${cohere.classify.context-window-messages:4}") int contextWindowMessages,
+            RagMetrics ragMetrics,
+            OpenAiClassifyClient openAiClassifyClient,
+            @Value("${ai.classify.provider:cohere}") String classifyProvider) {
         this.cohereService = cohereService;
         this.objectMapper = objectMapper;
         this.slimOntologyJson = slimOntologyJson;
         this.resourceLoader = resourceLoader;
         this.contextWindowMessages = contextWindowMessages;
         this.ragMetrics = ragMetrics;
+        this.openAiClassifyClient = openAiClassifyClient;
+        this.classifyProvider = classifyProvider == null ? "cohere" : classifyProvider.trim().toLowerCase();
     }
 
     @PostConstruct
@@ -62,50 +83,97 @@ public class IntentClassificationService {
                             .getInputStream(),
                     StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new RuntimeException("의도 분류 프롬프트 로드 실패", e);
+            throw new RuntimeException("Failed to load intent classifier prompt", e);
         }
     }
 
-    /**
-     * 대화 내역을 분석하여 법률 의도를 분류.
-     *
-     * @param recentMessages 최근 메시지 목록 (최대 3턴)
-     * @param domain         현재 상담 대분류 (폴백용)
-     * @return IntentClassificationResult
-     */
     public IntentClassificationResult classify(List<Message> recentMessages, String domain) {
         try {
-            String promptTemplate = intentClassifierPromptTemplate;
             String conversationHistory = buildConversationHistory(recentMessages);
-
-            String systemPrompt = promptTemplate
-                    .replace("{ONTOLOGY_JSON}", slimOntologyJson)
-                    .replace("{CONVERSATION_HISTORY}", conversationHistory);
+            String systemPrompt = buildSystemPrompt(recentMessages, domain);
 
             List<CohereChatRequest.Message> messages = List.of(
                     CohereChatRequest.Message.system(systemPrompt),
-                    CohereChatRequest.Message.user("위 대화 내역을 분석하여 법률 의도를 JSON으로 분류해주세요.")
+                    CohereChatRequest.Message.user(buildConversationPrompt(conversationHistory))
             );
 
             AiCallResult<String> result = ragMetrics.timeClassify(
-                    () -> cohereService.callClassify(messages));
+                    () -> callConfiguredClassifier(messages));
             return parseClassificationResult(result.data());
 
         } catch (Exception e) {
-            log.warn("의도 분류 실패, 폴백 적용: domain={}, error={}", domain, e.getMessage());
+            log.warn("Intent classification failed, using fallback: domain={}, error={}", domain, e.getMessage());
             return createFallbackResult(domain);
         }
     }
 
-    /**
-     * 프롬프트 조립용 — 테스트에서 접근 가능하도록 패키지 접근 수준.
-     */
+    private AiCallResult<String> callConfiguredClassifier(List<CohereChatRequest.Message> messages) {
+        if ("openai".equals(classifyProvider)) {
+            if (openAiClassifyClient == null) {
+                throw new RuntimeException("OpenAI classify provider is selected but client is not configured");
+            }
+            return openAiClassifyClient.callRawJson(messages);
+        }
+        return cohereService.callClassify(messages);
+    }
+
     String buildSystemPrompt(List<Message> recentMessages) {
+        return buildSystemPrompt(recentMessages, null);
+    }
+
+    String buildSystemPrompt(List<Message> recentMessages, String domain) {
+        return buildSystemPromptForOntology(selectOntologyJson(domain));
+    }
+
+    private String buildSystemPromptForOntology(String ontologyJson) {
         String promptTemplate = intentClassifierPromptTemplate;
-        String conversationHistory = buildConversationHistory(recentMessages);
         return promptTemplate
-                .replace("{ONTOLOGY_JSON}", slimOntologyJson)
-                .replace("{CONVERSATION_HISTORY}", conversationHistory);
+                .replace("{ONTOLOGY_JSON}", ontologyJson)
+                .replace("{CONVERSATION_HISTORY}", "");
+    }
+
+    private String buildConversationPrompt(String conversationHistory) {
+        String history = conversationHistory == null || conversationHistory.isBlank()
+                ? "(no conversation)"
+                : conversationHistory;
+        return "Conversation:\n" + history + "\n\nReturn compact JSON only.";
+    }
+
+    private String selectOntologyJson(String domain) {
+        String scopedDomain = ChecklistSlugMap.canonicalL1(domain);
+        if (scopedDomain == null && domain != null && !domain.isBlank()) {
+            scopedDomain = domain.trim();
+        }
+        if (scopedDomain == null || scopedDomain.isBlank()) {
+            return slimOntologyJson;
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(slimOntologyJson);
+            JsonNode children = root.path("c");
+            if (!children.isArray()) {
+                return slimOntologyJson;
+            }
+            for (JsonNode child : children) {
+                if (matchesOntologyNode(child, scopedDomain)) {
+                    ObjectNode scopedRoot = objectMapper.createObjectNode();
+                    scopedRoot.put("id", root.path("id").asText("law-000"));
+                    scopedRoot.put("name", root.path("name").asText("law"));
+                    ArrayNode scopedChildren = scopedRoot.putArray("c");
+                    scopedChildren.add(child.deepCopy());
+                    return objectMapper.writeValueAsString(scopedRoot);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to scope ontology for domain={}, using full ontology: {}", domain, e.getMessage());
+        }
+        return slimOntologyJson;
+    }
+
+    private boolean matchesOntologyNode(JsonNode node, String domain) {
+        String trimmed = domain.trim();
+        return trimmed.equals(node.path("id").asText())
+                || trimmed.equals(node.path("name").asText());
     }
 
     private String buildConversationHistory(List<Message> messages) {
@@ -114,13 +182,12 @@ public class IntentClassificationService {
         for (int i = start; i < messages.size(); i++) {
             Message msg = messages.get(i);
             String role = switch (msg.getRole()) {
-                case USER -> "사용자";
-                case CHATBOT -> "상담봇";
+                case USER -> "user";
+                case CHATBOT -> "assistant";
                 default -> null;
             };
             if (role == null) continue;
             String content = msg.getContent();
-            // null/blank content 가 StringBuilder 에 "null" 로 들어가면 LLM 프롬프트가 오염되므로 skip (Gemini PR #90 ⑥).
             if (content == null || content.isBlank()) continue;
             sb.append(role).append(": ").append(content).append("\n");
         }
@@ -133,35 +200,16 @@ public class IntentClassificationService {
 
             String intentSummary = root.path("intent_summary").asText("");
 
-            List<MatchedNode> matchedNodes = new ArrayList<>();
-            JsonNode nodesNode = root.path("matched_nodes");
-            if (nodesNode.isArray()) {
-                for (JsonNode node : nodesNode) {
-                    matchedNodes.add(new MatchedNode(
-                            node.path("id").asText(),
-                            node.path("name").asText(),
-                            node.path("confidence").asDouble(0.0)
-                    ));
-                }
-            }
-
-            List<String> coreKeywords = new ArrayList<>();
-            JsonNode coreNode = root.path("keywords").path("core");
-            if (coreNode.isArray()) {
-                coreNode.forEach(n -> coreKeywords.add(n.asText()));
-            }
-
-            List<String> expandedKeywords = new ArrayList<>();
-            JsonNode expandedNode = root.path("keywords").path("expanded");
-            if (expandedNode.isArray()) {
-                expandedNode.forEach(n -> expandedKeywords.add(n.asText()));
-            }
-
-            List<String> retrievalQueries = new ArrayList<>();
-            JsonNode queriesNode = root.path("retrieval_queries");
-            if (queriesNode.isArray()) {
-                queriesNode.forEach(n -> retrievalQueries.add(n.asText()));
-            }
+            List<MatchedNode> matchedNodes = parseMatchedNodes(root);
+            List<String> coreKeywords = parseStringArray(
+                    root.path("core_keywords").isArray()
+                            ? root.path("core_keywords")
+                            : root.path("keywords").path("core"));
+            List<String> expandedKeywords = parseStringArray(
+                    root.path("expanded_keywords").isArray()
+                            ? root.path("expanded_keywords")
+                            : root.path("keywords").path("expanded"));
+            List<String> retrievalQueries = parseRetrievalQueries(root);
 
             return new IntentClassificationResult(
                     intentSummary,
@@ -171,17 +219,85 @@ public class IntentClassificationService {
             );
 
         } catch (Exception e) {
-            log.error("의도 분류 JSON 파싱 실패: {}", e.getMessage());
-            throw new RuntimeException("의도 분류 JSON 파싱 실패", e);
+            log.error("Intent classification JSON parsing failed: {}", e.getMessage());
+            throw new RuntimeException("Intent classification JSON parsing failed", e);
         }
+    }
+
+    private List<MatchedNode> parseMatchedNodes(JsonNode root) {
+        List<MatchedNode> matchedNodes = new ArrayList<>();
+
+        JsonNode compactIdsNode = root.path("matched_node_ids");
+        if (compactIdsNode.isArray()) {
+            compactIdsNode.forEach(n -> addMatchedNode(matchedNodes, n.asText(), "", 0.0));
+            return matchedNodes;
+        }
+
+        if (root.hasNonNull("matched_node_id")) {
+            addMatchedNode(matchedNodes, root.path("matched_node_id").asText(), "", 0.0);
+            return matchedNodes;
+        }
+
+        JsonNode nodesNode = root.path("matched_nodes");
+        if (nodesNode.isArray()) {
+            for (JsonNode node : nodesNode) {
+                addMatchedNode(
+                        matchedNodes,
+                        node.path("id").asText(),
+                        node.path("name").asText(),
+                        node.path("confidence").asDouble(0.0)
+                );
+            }
+        }
+        return matchedNodes;
+    }
+
+    private void addMatchedNode(List<MatchedNode> matchedNodes, String id, String name, double confidence) {
+        if (id == null || id.isBlank()) {
+            return;
+        }
+        matchedNodes.add(new MatchedNode(id, name == null ? "" : name, confidence));
+    }
+
+    private List<String> parseStringArray(JsonNode node) {
+        List<String> values = new ArrayList<>();
+        if (node.isArray()) {
+            node.forEach(n -> {
+                String value = n.asText();
+                if (value != null && !value.isBlank()) {
+                    values.add(value);
+                }
+            });
+        }
+        return values;
+    }
+
+    private List<String> parseRetrievalQueries(JsonNode root) {
+        List<String> retrievalQueries = new ArrayList<>();
+        if (root.hasNonNull("retrieval_query")) {
+            String retrievalQuery = root.path("retrieval_query").asText();
+            if (!retrievalQuery.isBlank()) {
+                retrievalQueries.add(retrievalQuery);
+            }
+        }
+        JsonNode queriesNode = root.path("retrieval_queries");
+        if (queriesNode.isArray()) {
+            queriesNode.forEach(n -> {
+                String value = n.asText();
+                if (value != null && !value.isBlank() && !retrievalQueries.contains(value)) {
+                    retrievalQueries.add(value);
+                }
+            });
+        }
+        return retrievalQueries;
     }
 
     private IntentClassificationResult createFallbackResult(String domain) {
         return new IntentClassificationResult(
-                "분류 실패 — 기본 분야 기반 폴백",
+                "Intent classification fallback",
                 List.of(),
                 new Keywords(List.of(), List.of()),
-                List.of(domain != null ? domain + " 관련 법률 조항" : "법률 상담")
+                List.of(domain != null ? domain + " legal query" : "legal consultation")
         );
     }
 }

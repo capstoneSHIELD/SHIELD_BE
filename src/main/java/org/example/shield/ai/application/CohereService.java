@@ -100,7 +100,11 @@ public class CohereService {
      * @return AiCallResult<String> — raw JSON 문자열
      */
     public AiCallResult<String> callClassify(List<CohereChatRequest.Message> messages) {
-        CohereChatRequest request = CohereChatRequest.forClassify(config.getClassifyModel(), messages);
+        CohereChatRequest request = CohereChatRequest.forClassify(
+                config.getClassifyModel(),
+                messages,
+                config.getClassifyTemperature(),
+                config.getClassifyMaxTokens());
         return cohereClient.callRawJson(request, Duration.ofMillis(config.getClassifyReadTimeout()));
     }
 
@@ -158,7 +162,9 @@ public class CohereService {
         appendHistory(msgs, chatHistory, "chat");
 
         // 3. 새 사용자 메시지 (이미 sanitize됨)
-        msgs.add(CohereChatRequest.Message.user(latestSanitizedUserText));
+        if (!historyAlreadyContainsLatestUserMessage(chatHistory, latestSanitizedUserText)) {
+            msgs.add(CohereChatRequest.Message.user(latestSanitizedUserText));
+        }
 
         // 4. History truncation: system prompt + last N messages
         return truncateMessages(msgs, config.getMaxHistoryMessages());
@@ -239,6 +245,31 @@ public class CohereService {
                 msgs.add(CohereChatRequest.Message.assistant(raw));
             }
         }
+    }
+
+    private boolean historyAlreadyContainsLatestUserMessage(List<Message> history, String latestSanitizedUserText) {
+        if (latestSanitizedUserText == null || latestSanitizedUserText.isBlank() || history == null || history.isEmpty()) {
+            return false;
+        }
+
+        for (int i = history.size() - 1; i >= 0; i--) {
+            Message msg = history.get(i);
+            if (msg.getRole() != MessageRole.USER) {
+                continue;
+            }
+
+            String raw = msg.getContent();
+            if (raw == null || raw.isBlank()) {
+                return false;
+            }
+
+            String sanitized = msg.getSanitizedContent();
+            if (sanitized == null) {
+                sanitized = sanitizeService.sanitizeUserText(raw);
+            }
+            return latestSanitizedUserText.equals(sanitized);
+        }
+        return false;
     }
 
     /**
