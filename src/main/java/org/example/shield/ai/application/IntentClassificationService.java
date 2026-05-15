@@ -40,6 +40,8 @@ public class IntentClassificationService {
     private final String classifyProvider;
 
     private String intentClassifierPromptTemplate;
+    private JsonNode slimOntologyRoot;
+    private boolean slimOntologyParseAttempted;
 
     /**
      * Test-friendly constructor for parser/prompt unit tests.
@@ -85,6 +87,7 @@ public class IntentClassificationService {
         } catch (IOException e) {
             throw new RuntimeException("Failed to load intent classifier prompt", e);
         }
+        parseSlimOntologyRoot();
     }
 
     public IntentClassificationResult classify(List<Message> recentMessages, String domain) {
@@ -127,9 +130,7 @@ public class IntentClassificationService {
 
     private String buildSystemPromptForOntology(String ontologyJson) {
         String promptTemplate = intentClassifierPromptTemplate;
-        return promptTemplate
-                .replace("{ONTOLOGY_JSON}", ontologyJson)
-                .replace("{CONVERSATION_HISTORY}", "");
+        return promptTemplate.replace("{ONTOLOGY_JSON}", ontologyJson);
     }
 
     private String buildConversationPrompt(String conversationHistory) {
@@ -148,26 +149,50 @@ public class IntentClassificationService {
             return slimOntologyJson;
         }
 
-        try {
-            JsonNode root = objectMapper.readTree(slimOntologyJson);
-            JsonNode children = root.path("c");
-            if (!children.isArray()) {
-                return slimOntologyJson;
-            }
-            for (JsonNode child : children) {
-                if (matchesOntologyNode(child, scopedDomain)) {
+        JsonNode root = getSlimOntologyRoot();
+        if (root == null) {
+            return slimOntologyJson;
+        }
+
+        JsonNode children = root.path("c");
+        if (!children.isArray()) {
+            return slimOntologyJson;
+        }
+        for (JsonNode child : children) {
+            if (matchesOntologyNode(child, scopedDomain)) {
+                try {
                     ObjectNode scopedRoot = objectMapper.createObjectNode();
                     scopedRoot.put("id", root.path("id").asText("law-000"));
                     scopedRoot.put("name", root.path("name").asText("law"));
                     ArrayNode scopedChildren = scopedRoot.putArray("c");
                     scopedChildren.add(child.deepCopy());
                     return objectMapper.writeValueAsString(scopedRoot);
+                } catch (Exception e) {
+                    log.warn("Failed to serialize scoped ontology for domain={}, using full ontology: {}",
+                            domain, e.getMessage());
+                    return slimOntologyJson;
                 }
             }
-        } catch (Exception e) {
-            log.warn("Failed to scope ontology for domain={}, using full ontology: {}", domain, e.getMessage());
         }
         return slimOntologyJson;
+    }
+
+    private JsonNode getSlimOntologyRoot() {
+        if (!slimOntologyParseAttempted) {
+            parseSlimOntologyRoot();
+        }
+        return slimOntologyRoot;
+    }
+
+    private void parseSlimOntologyRoot() {
+        slimOntologyParseAttempted = true;
+        try {
+            slimOntologyRoot = objectMapper.readTree(slimOntologyJson);
+        } catch (Exception e) {
+            slimOntologyRoot = null;
+            log.warn("Failed to parse slim ontology once, using full ontology string without scoping: {}",
+                    e.getMessage());
+        }
     }
 
     private boolean matchesOntologyNode(JsonNode node, String domain) {

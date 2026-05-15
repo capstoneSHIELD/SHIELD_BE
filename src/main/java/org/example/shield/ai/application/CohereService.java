@@ -353,7 +353,7 @@ public class CohereService {
             if (count >= 12) break;
         }
         if (count == 0) return "";
-        sb.append("\n위 사용자 진술의 치료 시기, 치료 종류, 권유 주체, 대안 제시 여부, 위험 고지 여부, 피해 내용을 빠뜨리지 말고 사실관계 본문에 반영하세요.");
+        sb.append("\n위 사용자 진술에서 확인된 시기, 대상, 행위 주체, 주요 경위, 상대방의 설명·고지·제안 여부, 손해 또는 요청 사항을 빠뜨리지 말고 사실관계 본문에 반영하세요.");
         return sb.toString();
     }
 
