@@ -8,6 +8,7 @@ import org.example.shield.common.enums.ConsultationStatus;
 import org.example.shield.common.response.ApiResponse;
 import org.example.shield.common.response.PageResponse;
 import org.example.shield.consultation.application.AnalysisService;
+import org.example.shield.consultation.application.ClassificationResolver;
 import org.example.shield.consultation.application.ConsultationService;
 import org.example.shield.consultation.application.MessageService;
 import org.example.shield.consultation.controller.dto.ConsultationResponse;
@@ -50,6 +51,7 @@ public class ConsultationController {
     private final AnalysisService analysisService;
     private final ConsultationReader consultationReader;
     private final ConsultationWriter consultationWriter;
+    private final ClassificationResolver classificationResolver;
 
     @Operation(summary = "상담 생성", description = "새로운 상담을 생성하고 환영 메시지를 반환합니다")
     @PostMapping
@@ -118,6 +120,10 @@ public class ConsultationController {
 
         // P0-IV 멱등성 가드: 원자적 상태 전이 COLLECTING → ANALYZING
         Consultation consultation = consultationReader.findById(consultationId);
+        if (classificationResolver.resolve(consultation).conflict()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.error("분류 확인이 필요합니다"));
+        }
         if (consultation.getStatus() != ConsultationStatus.COLLECTING) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiResponse.error("이미 분석이 진행 중이거나 완료된 상담입니다"));

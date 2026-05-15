@@ -114,12 +114,8 @@ public class ChatTransactionalBoundary {
 
         // 2. AI 분류 결과 반영 (이미 온톨로지 필터링 완료된 값)
         if (payload.hasAnyClassification()) {
-            boolean updated = consultation.updateAiClassification(
+            consultation.updateAiClassification(
                     payload.aiDomains(), payload.aiSubDomains(), payload.aiTags());
-            if (!updated) {
-                log.warn("LLM attempted to override locked classification: consultationId={}, aiDomains={}",
-                        consultationId, payload.aiDomains());
-            }
         }
 
         // 3. AI 메시지 영속화

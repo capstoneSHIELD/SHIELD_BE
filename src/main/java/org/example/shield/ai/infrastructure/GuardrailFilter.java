@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.text.Normalizer;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 
 /**
@@ -43,6 +44,9 @@ public class GuardrailFilter {
             Pattern.compile("변호사.*?(추천|소개|연결)")
     );
 
+    private static final Pattern UNCONFIRMED_SENTENCE =
+            Pattern.compile("[^.!?。！？\\n]*미확인[^.!?。！？\\n]*[.!?。！？]?");
+
     /**
      * 금칙어 검출 시 대체 메시지.
      */
@@ -78,9 +82,17 @@ public class GuardrailFilter {
             return response;
         }
 
+        response.setTitle(removeUnconfirmedText(response.getTitle()));
+        if (response.getTitle() == null || response.getTitle().isBlank()) {
+            response.setTitle("상담 내용 의뢰서");
+        }
+        response.setContent(removeUnconfirmedText(response.getContent()));
+
         // strategy 필터링
         if (response.getStrategy() != null) {
-            String normalized = Normalizer.normalize(response.getStrategy(), Normalizer.Form.NFC);
+            String normalized = removeUnconfirmedText(response.getStrategy());
+            response.setStrategy(normalized);
+            normalized = Normalizer.normalize(normalized, Normalizer.Form.NFC);
             if (containsForbiddenPattern(normalized)) {
                 log.warn("의뢰서 strategy 금칙어 검출 — 제거");
                 response.setStrategy("구체적인 법률 전략은 변호사와 상담 후 결정하시기 바랍니다.");
@@ -89,9 +101,19 @@ public class GuardrailFilter {
 
         // keyIssues[].description 필터링
         if (response.getKeyIssues() != null) {
-            for (BriefParsedResponse.KeyIssue issue : response.getKeyIssues()) {
+            List<BriefParsedResponse.KeyIssue> filteredIssues = response.getKeyIssues().stream()
+                    .filter(issue -> issue != null
+                            && !containsUnconfirmed(issue.getTitle())
+                            && !containsUnconfirmed(issue.getDescription()))
+                    .collect(Collectors.toList());
+            response.setKeyIssues(filteredIssues);
+
+            for (BriefParsedResponse.KeyIssue issue : filteredIssues) {
+                issue.setTitle(removeUnconfirmedText(issue.getTitle()));
                 if (issue.getDescription() != null) {
-                    String normalized = Normalizer.normalize(issue.getDescription(), Normalizer.Form.NFC);
+                    String normalized = removeUnconfirmedText(issue.getDescription());
+                    issue.setDescription(normalized);
+                    normalized = Normalizer.normalize(normalized, Normalizer.Form.NFC);
                     if (containsForbiddenPattern(normalized)) {
                         log.warn("의뢰서 keyIssue description 금칙어 검출 — 대체");
                         issue.setDescription("상세 법률 분석은 변호사 검토가 필요합니다.");
@@ -101,6 +123,19 @@ public class GuardrailFilter {
         }
 
         return response;
+    }
+
+    private String removeUnconfirmedText(String text) {
+        if (text == null) return null;
+        String normalized = Normalizer.normalize(text, Normalizer.Form.NFC);
+        String cleaned = UNCONFIRMED_SENTENCE.matcher(normalized).replaceAll(" ");
+        cleaned = cleaned.replaceAll("\\s{2,}", " ").trim();
+        return cleaned;
+    }
+
+    private boolean containsUnconfirmed(String text) {
+        if (text == null) return false;
+        return Normalizer.normalize(text, Normalizer.Form.NFC).contains("미확인");
     }
 
     private boolean containsForbiddenPattern(String text) {

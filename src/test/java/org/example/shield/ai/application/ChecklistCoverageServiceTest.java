@@ -182,8 +182,26 @@ class ChecklistCoverageServiceTest {
         assertThat(summary).isNotEmpty();
         assertThat(summary).contains("## 미수집 슬롯");
         assertThat(summary).contains("- "); // 최소 1개 bullet
-        assertThat(summary).contains("미확인"); // 추론 가이드 문구
+        assertThat(summary).contains("제외"); // 추론 가이드 문구
         assertThat(summary).contains("근거 없이"); // 할루시네이션 금지 문구
+    }
+
+    @Test
+    @DisplayName("buildCollectedSummary — '1년 전' 시간 표현은 의료사고 시점 슬롯 답변으로 인정")
+    void collectedSummary_timeExpression_marksMedicalTimingSlot() {
+        UUID cid = UUID.randomUUID();
+        List<Message> messages = List.of(
+                userMsg(cid, "치과 크라운 치료는 1년 전에 받았고 그때부터 문제가 생겼습니다.")
+        );
+
+        String summary = service.buildCollectedSummary(
+                "손해배상·불법행위",
+                "의료사고",
+                "진료 과실 및 설명의무",
+                messages);
+
+        assertThat(summary).contains("- [x] 진료 과정 및 과실 시점");
+        assertThat(summary).contains("- [x] 진료·수술 경과 및 문제 시점");
     }
 
     @Test

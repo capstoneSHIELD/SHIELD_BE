@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  */
 @DataJpaTest(properties = "spring.flyway.enabled=false")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @Sql(scripts = "/it-schema/legal_chunks_only.sql",
         executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)
 @Import(LegalChunkRepositoryIT.AuditingStubConfig.class)
@@ -79,7 +79,6 @@ class LegalChunkRepositoryIT {
         // @DynamicPropertySource 는 Spring context bootstrap 시점에 평가되는데
         // 그때 @Container 라이프사이클이 아직 안 돈 상태라 getJdbcUrl 이 실패한다.
         // 컨테이너를 명시적으로 미리 띄워 두 시점을 정렬한다.
-        POSTGRES.start();
     }
 
     @DynamicPropertySource

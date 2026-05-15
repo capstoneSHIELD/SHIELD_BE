@@ -106,11 +106,15 @@ public class CohereChatRequest {
      * temperature 0.1로 결정적 출력, max_tokens 512로 경량 호출.
      */
     public static CohereChatRequest forClassify(String model, List<Message> messages) {
+        return forClassify(model, messages, 0.1, 512);
+    }
+
+    public static CohereChatRequest forClassify(String model, List<Message> messages, double temperature, int maxTokens) {
         return CohereChatRequest.builder()
                 .model(model)
                 .messages(messages)
-                .temperature(0.1)
-                .maxTokens(512)
+                .temperature(temperature)
+                .maxTokens(maxTokens)
                 .responseFormat(Map.of("type", "json_object"))
                 .build();
     }

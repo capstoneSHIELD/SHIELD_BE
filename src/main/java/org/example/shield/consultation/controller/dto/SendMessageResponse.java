@@ -1,6 +1,8 @@
 package org.example.shield.consultation.controller.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import org.example.shield.consultation.application.ClassificationCandidate;
+import org.example.shield.consultation.application.ClassificationResolution;
 import org.example.shield.consultation.domain.Message;
 
 import java.time.LocalDateTime;
@@ -14,23 +16,32 @@ public record SendMessageResponse(
         String content,
         LocalDateTime createdAt,
         boolean allCompleted,
-        Classification classification
+        ClassificationResolution classification
 ) {
     public static SendMessageResponse from(Message message, boolean allCompleted) {
+        return from(message, allCompleted, null);
+    }
+
+    public static SendMessageResponse from(Message message, boolean allCompleted,
+                                           ClassificationResolution classification) {
         return new SendMessageResponse(
                 message.getId(),
                 message.getRole().name(),
                 message.getContent(),
                 message.getCreatedAt(),
                 allCompleted,
-                null
+                classification
         );
     }
 
     public static SendMessageResponse from(Message message, boolean allCompleted,
                                            List<String> primaryField, List<String> tags) {
-        Classification classif = (allCompleted && primaryField != null)
-                ? new Classification(primaryField, tags)
+        ClassificationResolution classif = (allCompleted && primaryField != null)
+                ? new ClassificationResolution(
+                        false,
+                        null,
+                        null,
+                        new ClassificationCandidate(primaryField, List.of(), tags))
                 : null;
         return new SendMessageResponse(
                 message.getId(),
@@ -41,9 +52,4 @@ public record SendMessageResponse(
                 classif
         );
     }
-
-    public record Classification(
-            List<String> primaryField,
-            List<String> tags
-    ) {}
 }

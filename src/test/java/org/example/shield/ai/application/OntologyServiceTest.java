@@ -79,4 +79,13 @@ class OntologyServiceTest {
     void childrenOf_unknown_empty() {
         assertThat(service.childrenOf("없는부모")).isEmpty();
     }
+
+    @Test
+    @DisplayName("pathOf — L3 에서 L2/L1 부모 경로를 복원")
+    void pathOf_medicalMalpracticeTag_returnsAncestors() {
+        assertThat(service.pathOf("진료 과실 및 설명의무"))
+                .containsExactly("손해배상·불법행위", "의료사고", "진료 과실 및 설명의무");
+        assertThat(service.parentOf("진료 과실 및 설명의무")).isEqualTo("의료사고");
+        assertThat(service.parentOf("의료사고")).isEqualTo("손해배상·불법행위");
+    }
 }

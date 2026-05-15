@@ -1,5 +1,6 @@
 package org.example.shield.consultation.controller.dto;
 
+import org.example.shield.consultation.application.ClassificationResolution;
 import org.example.shield.consultation.domain.Consultation;
 
 import java.time.LocalDateTime;
@@ -15,6 +16,7 @@ public record ConsultationResponse(
         List<String> aiDomains,
         List<String> aiSubDomains,
         List<String> aiTags,
+        ClassificationResolution classification,
         String lastMessage,
         LocalDateTime lastMessageAt,
         LocalDateTime createdAt,
@@ -22,7 +24,8 @@ public record ConsultationResponse(
 ) {
     public record BriefSummary(UUID briefId, String title, String status) {}
 
-    public static ConsultationResponse from(Consultation consultation, BriefSummary brief) {
+    public static ConsultationResponse from(Consultation consultation, BriefSummary brief,
+                                            ClassificationResolution classification) {
         return new ConsultationResponse(
                 consultation.getId(),
                 consultation.getStatus().name(),
@@ -32,6 +35,7 @@ public record ConsultationResponse(
                 consultation.getAiDomains(),
                 consultation.getAiSubDomains(),
                 consultation.getAiTags(),
+                classification,
                 consultation.getLastMessage(),
                 consultation.getLastMessageAt(),
                 consultation.getCreatedAt(),

@@ -45,13 +45,13 @@ public class CohereApiConfig {
     @Value("${cohere.chat.max-history-messages:20}")
     private int maxHistoryMessages;
 
-    @Value("${cohere.classify.model:command-a-03-2025}")
+    @Value("${cohere.classify.model:command-r7b-12-2024}")
     private String classifyModel;
 
     @Value("${cohere.classify.temperature:0.1}")
     private double classifyTemperature;
 
-    @Value("${cohere.classify.max-tokens:512}")
+    @Value("${cohere.classify.max-tokens:384}")
     private int classifyMaxTokens;
 
     @Value("${cohere.timeout.read-classify:15000}")
