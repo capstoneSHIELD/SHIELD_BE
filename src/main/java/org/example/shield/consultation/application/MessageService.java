@@ -112,7 +112,10 @@ public class MessageService {
             } catch (SanitizeService.PiiDetectedException e) {
                 Message savedPii = chatTxBoundary.savePiiAiMessage(consultationId, e.getMessage());
                 chatMetrics.recordSendMessage(pipelineStart, "pii");
-                return SendMessageResponse.from(savedPii, false);
+                // PII 거부 시 USER 메시지는 저장되지 않으므로 진행률 증가 없음
+                SendMessageResponse.Progress piiProgress =
+                        SendMessageResponse.Progress.of((int) existingUserTurns, maxUserTurns);
+                return SendMessageResponse.from(savedPii, false, piiProgress);
             }
 
             // 1. USER 메시지 저장 (독립 트랜잭션 — 후속 실패와 무관하게 보존)
@@ -195,10 +198,14 @@ public class MessageService {
                     consultationId, consultation, parsed, turnLimitReached);
 
             chatMetrics.recordSendMessage(pipelineStart, turnLimitReached ? "turn_limit_reached" : "success");
+            // 방금 저장된 USER 메시지를 포함한 누적 턴 수로 진행률 계산
+            SendMessageResponse.Progress progress =
+                    SendMessageResponse.Progress.of((int) existingUserTurns + 1, maxUserTurns);
             return SendMessageResponse.from(
                     savedAi,
                     effectiveAllCompleted,
-                    classificationResolver.resolve(consultation));
+                    classificationResolver.resolve(consultation),
+                    progress);
         } catch (ChatAiException | ConsultationTurnLimitExceededException e) {
             throw e; // already metered
         } catch (RuntimeException e) {

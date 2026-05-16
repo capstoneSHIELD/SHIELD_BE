@@ -152,9 +152,9 @@ WITH vec AS (
            OR category_ids && CAST(%(categoryIds)s AS text[]) )
    LIMIT 40
 ), trig AS (
-  SELECT id, similarity(COALESCE(holding, ''), CAST(%(vectorQuery)s AS text)) AS sm
+  SELECT id, similarity(holding, CAST(%(vectorQuery)s AS text)) AS sm
     FROM legal_cases
-   WHERE COALESCE(holding, '') %% CAST(%(vectorQuery)s AS text)
+   WHERE holding %% CAST(%(vectorQuery)s AS text)
      AND ( COALESCE(CARDINALITY(CAST(%(categoryIds)s AS text[])), 0) = 0
            OR category_ids && CAST(%(categoryIds)s AS text[]) )
    LIMIT 40

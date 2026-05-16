@@ -25,6 +25,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
@@ -42,6 +44,7 @@ public class IntentClassificationService {
     private String intentClassifierPromptTemplate;
     private JsonNode slimOntologyRoot;
     private boolean slimOntologyParseAttempted;
+    private final Map<String, String> scopedOntologyJsonCache = new ConcurrentHashMap<>();
 
     /**
      * Test-friendly constructor for parser/prompt unit tests.
@@ -149,6 +152,10 @@ public class IntentClassificationService {
             return slimOntologyJson;
         }
 
+        return scopedOntologyJsonCache.computeIfAbsent(scopedDomain, this::buildScopedOntologyJson);
+    }
+
+    private String buildScopedOntologyJson(String scopedDomain) {
         JsonNode root = getSlimOntologyRoot();
         if (root == null) {
             return slimOntologyJson;
@@ -169,7 +176,7 @@ public class IntentClassificationService {
                     return objectMapper.writeValueAsString(scopedRoot);
                 } catch (Exception e) {
                     log.warn("Failed to serialize scoped ontology for domain={}, using full ontology: {}",
-                            domain, e.getMessage());
+                            scopedDomain, e.getMessage());
                     return slimOntologyJson;
                 }
             }

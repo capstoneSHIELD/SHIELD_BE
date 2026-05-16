@@ -100,9 +100,11 @@ public interface LegalCaseJpaRepository extends JpaRepository<LegalCaseEntity, L
                        OR category_ids && CAST(:categoryIds AS text[]) )
                LIMIT 40
             ), trig AS (
-              SELECT id, similarity(COALESCE(holding, ''), CAST(:vectorQuery AS text)) AS sm
+              -- holding 컬럼 직접 비교 — GIN(gin_trgm_ops) 인덱스 활용. NULL 은 `% v` 가 NULL 이
+              -- 되어 WHERE 에서 자연 배제되고, LegalChunkJpaRepository 와 패턴 일관성을 갖춘다.
+              SELECT id, similarity(holding, CAST(:vectorQuery AS text)) AS sm
                 FROM legal_cases
-               WHERE COALESCE(holding, '') % CAST(:vectorQuery AS text)
+               WHERE holding % CAST(:vectorQuery AS text)
                  AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
                        OR category_ids && CAST(:categoryIds AS text[]) )
                LIMIT 40
@@ -161,10 +163,11 @@ public interface LegalCaseJpaRepository extends JpaRepository<LegalCaseEntity, L
                        OR category_ids && CAST(:categoryIds AS text[]) )
                LIMIT 40
             ), trig AS (
-              SELECT id, similarity(COALESCE(holding, ''), CAST(:vectorQuery AS text)) AS sm
+              -- holding 컬럼 직접 비교 (search3WayCases 와 동일 — GIN 인덱스 활용 + 일관성)
+              SELECT id, similarity(holding, CAST(:vectorQuery AS text)) AS sm
                 FROM legal_cases
                WHERE case_type IN (:caseTypes)
-                 AND COALESCE(holding, '') % CAST(:vectorQuery AS text)
+                 AND holding % CAST(:vectorQuery AS text)
                  AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
                        OR category_ids && CAST(:categoryIds AS text[]) )
                LIMIT 40
