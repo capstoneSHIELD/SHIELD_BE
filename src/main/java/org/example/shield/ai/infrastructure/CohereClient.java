@@ -1,7 +1,6 @@
 package org.example.shield.ai.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.application.AiClient;
 import org.example.shield.ai.config.CohereApiConfig;
@@ -13,6 +12,7 @@ import org.example.shield.ai.dto.CohereChatResponse;
 import org.example.shield.ai.dto.CohereEmbedRequest;
 import org.example.shield.ai.dto.CohereEmbedResponse;
 import org.example.shield.consultation.exception.AnalysisFailedException;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -32,13 +32,20 @@ import java.util.List;
  * - meta.billed_units.{input,output}_tokens: 사용자 청구 기준 토큰
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class CohereClient implements AiClient {
 
     private final WebClient cohereWebClient;
     private final ObjectMapper objectMapper;
     private final CohereApiConfig config;
+
+    public CohereClient(@Qualifier("cohereWebClient") WebClient cohereWebClient,
+                        ObjectMapper objectMapper,
+                        CohereApiConfig config) {
+        this.cohereWebClient = cohereWebClient;
+        this.objectMapper = objectMapper;
+        this.config = config;
+    }
 
     @Override
     public AiCallResult<ChatParsedResponse> callChat(
@@ -213,19 +220,25 @@ public class CohereClient implements AiClient {
     }
 
     private Integer extractInputTokens(CohereChatResponse r) {
-        if (r.getMeta() == null) return null;
-        if (r.getMeta().getBilledUnits() != null && r.getMeta().getBilledUnits().getInputTokens() != null) {
-            return r.getMeta().getBilledUnits().getInputTokens();
+        CohereChatResponse.Meta usage = usageOf(r);
+        if (usage == null) return null;
+        if (usage.getBilledUnits() != null && usage.getBilledUnits().getInputTokens() != null) {
+            return usage.getBilledUnits().getInputTokens();
         }
-        return r.getMeta().getTokens() != null ? r.getMeta().getTokens().getInputTokens() : null;
+        return usage.getTokens() != null ? usage.getTokens().getInputTokens() : null;
     }
 
     private Integer extractOutputTokens(CohereChatResponse r) {
-        if (r.getMeta() == null) return null;
-        if (r.getMeta().getBilledUnits() != null && r.getMeta().getBilledUnits().getOutputTokens() != null) {
-            return r.getMeta().getBilledUnits().getOutputTokens();
+        CohereChatResponse.Meta usage = usageOf(r);
+        if (usage == null) return null;
+        if (usage.getBilledUnits() != null && usage.getBilledUnits().getOutputTokens() != null) {
+            return usage.getBilledUnits().getOutputTokens();
         }
-        return r.getMeta().getTokens() != null ? r.getMeta().getTokens().getOutputTokens() : null;
+        return usage.getTokens() != null ? usage.getTokens().getOutputTokens() : null;
+    }
+
+    private CohereChatResponse.Meta usageOf(CohereChatResponse r) {
+        return r.getUsage() != null ? r.getUsage() : r.getMeta();
     }
 
     private <T> T parseResponse(String contentJson, Class<T> type) {

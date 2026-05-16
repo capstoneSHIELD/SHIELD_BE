@@ -66,6 +66,12 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    // Repository 네이티브 SQL 회귀 가드용 — 실제 PostgreSQL + pg_trgm/pgvector 컨테이너 (Issue #88 후속)
+    // 운영과 동일한 stringtype=unspecified · trigram % 연산자 경로를 검증한다. Docker 필요.
+    // Spring Boot 4 BOM 이 testcontainers 모듈 버전을 관리하지 않아 명시 버전 지정.
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:postgresql:1.20.4'
+    testImplementation 'org.testcontainers:junit-jupiter:1.20.4'
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'

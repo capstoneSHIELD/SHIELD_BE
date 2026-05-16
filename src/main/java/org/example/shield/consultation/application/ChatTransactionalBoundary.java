@@ -46,11 +46,24 @@ public class ChatTransactionalBoundary {
      * <p>후속 Cohere 호출이 실패하거나 blank 응답을 반환하더라도
      * 사용자 입력은 절대 유실되지 않는다 (Issue #45 후속 — PR-A 의 noRollbackFor
      * 보다 한 단계 더 강력한 격리).</p>
+     *
+     * <p>{@code sanitizedContent} 는 PII 마스킹된 본문이다. 매 LLM 호출마다 history 의
+     * 모든 USER 메시지를 다시 sanitize 하지 않도록 저장 시점에 함께 캐싱한다
+     * (Gemini PR #90 ⑤).</p>
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Message saveUserMessage(UUID consultationId, String content, String sanitizedContent) {
+        Message userMessage = Message.createUserMessage(consultationId, content, sanitizedContent);
+        return messageWriter.save(userMessage);
+    }
+
+    /**
+     * Sanitize 결과 없이 저장하는 호환성용 overload — 신규 production 경로는
+     * {@link #saveUserMessage(UUID, String, String)} 를 사용해야 sanitize 캐싱 효과가 산다.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Message saveUserMessage(UUID consultationId, String content) {
-        Message userMessage = Message.createUserMessage(consultationId, content);
-        return messageWriter.save(userMessage);
+        return saveUserMessage(consultationId, content, null);
     }
 
     /**
@@ -101,12 +114,8 @@ public class ChatTransactionalBoundary {
 
         // 2. AI 분류 결과 반영 (이미 온톨로지 필터링 완료된 값)
         if (payload.hasAnyClassification()) {
-            boolean updated = consultation.updateAiClassification(
+            consultation.updateAiClassification(
                     payload.aiDomains(), payload.aiSubDomains(), payload.aiTags());
-            if (!updated) {
-                log.warn("LLM attempted to override locked classification: consultationId={}, aiDomains={}",
-                        consultationId, payload.aiDomains());
-            }
         }
 
         // 3. AI 메시지 영속화

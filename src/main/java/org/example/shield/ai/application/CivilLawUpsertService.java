@@ -49,7 +49,23 @@ public class CivilLawUpsertService {
             Optional<LegalChunkEntity> existing = chunkRepository.findActiveByNaturalKey(
                     a.lawId(), a.articleNo(), chunkIndex);
             if (existing.isPresent()) {
-                existing.get().updateEmbedding(vec, embedModel);
+                // 시드 본문·메타데이터까지 동기화 — 임베딩만 갱신하면 content 변경분이
+                // DB 에 반영되지 않는다 (Gemini PR #90 ②). entityMaker 가 categoryIds /
+                // lodUri / legislationTerms 등 카테고리 매핑까지 처리하므로 fresh entity
+                // 의 값을 그대로 사용해 일관성을 유지한다.
+                LegalChunkEntity fresh = entityMaker.apply(a, vec);
+                LegalChunkEntity e = existing.get();
+                e.updateContent(
+                        fresh.getLawName(),
+                        fresh.getArticleTitle(),
+                        fresh.getContent(),
+                        fresh.getEffectiveDate(),
+                        fresh.getAbolitionDate(),
+                        fresh.getSourceUrl(),
+                        fresh.getCategoryIds(),
+                        fresh.getLodUri(),
+                        fresh.getLegislationTerms());
+                e.updateEmbedding(vec, embedModel);
                 count++;
             } else {
                 LegalChunkEntity e = entityMaker.apply(a, vec);

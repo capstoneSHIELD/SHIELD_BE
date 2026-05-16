@@ -37,6 +37,7 @@ public class AnalysisService {
     private final ConsultationWriter consultationWriter;
     private final BriefWriter briefWriter;
     private final NotificationSender notificationSender;
+    private final ClassificationResolver classificationResolver;
 
     /**
      * 의뢰서 비동기 생성.
@@ -56,8 +57,9 @@ public class AnalysisService {
             BriefParsedResponse parsed = result.data();
 
             // 3. Brief 엔티티 생성 + 저장
-            String legalField = consultation.getFirstDomain() != null
-                    ? consultation.getFirstDomain() : "UNKNOWN";
+            ClassificationCandidate candidate = classificationResolver.resolve(consultation).effectiveCandidate();
+            String legalField = candidate != null && candidate.firstDomain() != null
+                    ? candidate.firstDomain() : "UNKNOWN";
 
             List<KeyIssue> keyIssueList = parsed.getKeyIssues() != null
                     ? parsed.getKeyIssues().stream()

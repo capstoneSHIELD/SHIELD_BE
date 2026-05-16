@@ -148,4 +148,30 @@ public class LegalChunkEntity {
         this.embedding = embedding;
         this.embeddingModel = embeddingModel;
     }
+
+    /**
+     * 시드 데이터의 본문·메타데이터가 바뀐 경우 기존 레코드를 동기화한다 (Gemini PR #90 ②③).
+     *
+     * <p>natural key (law_id + article_no + chunk_index) 는 불변이므로 제외한다.
+     * embedding은 별도 {@link #updateEmbedding}로 처리한다.</p>
+     */
+    public void updateContent(String lawName,
+                              String articleTitle,
+                              String content,
+                              LocalDate effectiveDate,
+                              LocalDate abolitionDate,
+                              String sourceUrl,
+                              String[] categoryIds,
+                              String lodUri,
+                              String[] legislationTerms) {
+        this.lawName = lawName;
+        this.articleTitle = articleTitle;
+        this.content = content;
+        this.effectiveDate = effectiveDate;
+        this.abolitionDate = abolitionDate;
+        this.sourceUrl = sourceUrl;
+        this.categoryIds = categoryIds;
+        this.lodUri = lodUri;
+        this.legislationTerms = legislationTerms;
+    }
 }

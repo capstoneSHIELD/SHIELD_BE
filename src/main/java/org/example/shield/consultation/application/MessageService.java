@@ -5,7 +5,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.application.ChecklistCoverageService;
 import org.example.shield.ai.application.CohereService;
-import org.example.shield.ai.application.OntologyService;
 import org.example.shield.ai.application.RagPipelineService;
 import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.dto.AiCallResult;
@@ -66,9 +65,9 @@ public class MessageService {
     private final SanitizeService sanitizeService;
     private final ChecklistCoverageService checklistCoverageService;
     private final RagPipelineService ragPipelineService;
-    private final OntologyService ontologyService;
     private final ChatTransactionalBoundary chatTxBoundary;
     private final ChatMetrics chatMetrics;
+    private final ClassificationResolver classificationResolver;
 
     /**
      * 사용자 메시지 상한. 도달(=) 시 현재 턴을 마지막으로 처리하고 {@code effectiveAllCompleted=true}
@@ -120,7 +119,8 @@ public class MessageService {
             }
 
             // 1. USER 메시지 저장 (독립 트랜잭션 — 후속 실패와 무관하게 보존)
-            chatTxBoundary.saveUserMessage(consultationId, content);
+            //    sanitizedText 도 함께 캐싱하여 LLM history 구성 시 반복 sanitize 회피 (Gemini PR #90 ⑤).
+            chatTxBoundary.saveUserMessage(consultationId, content, sanitizedText);
 
             // 대화 내역 1회 조회 — RAG와 chat() 양쪽에서 공유 (중복 DB 쿼리 방지)
             List<Message> chatHistory = messageReader.findAllByConsultationId(consultationId);
@@ -132,7 +132,9 @@ public class MessageService {
 
             // 2. [RAG] 도메인 정보가 있을 때만 실행 — 트랜잭션 밖
             String ragContext = "";
-            String domainForRag = consultation.getFirstDomain();
+            ClassificationCandidate collectionCandidate =
+                    classificationResolver.candidateForCollection(consultation);
+            String domainForRag = collectionCandidate.firstDomain();
             if (domainForRag != null) {
                 ragContext = ragPipelineService.execute(chatHistory, domainForRag, consultationId);
             }
@@ -164,27 +166,12 @@ public class MessageService {
                         consultationId);
             }
 
-            // 5. AI 분류 결과 온톨로지 필터링 (순수 로직)
-            List<String> validSubs = null;
-            List<String> validTags = null;
-            boolean hasAnyAi = hasAny(parsed.getAiDomains())
-                    || hasAny(parsed.getAiSubDomains())
-                    || hasAny(parsed.getAiTags());
-            if (hasAnyAi) {
-                validSubs = filterValidChildren(
-                        parsed.getAiSubDomains(),
-                        firstOrNull(consultation.getUserDomains()),
-                        consultationId,
-                        "L2");
-                List<String> l2Ref = hasAny(consultation.getUserSubDomains())
-                        ? consultation.getUserSubDomains()
-                        : validSubs;
-                validTags = filterValidChildren(
-                        parsed.getAiTags(),
-                        firstOrNull(l2Ref),
-                        consultationId,
-                        "L3");
-            }
+            // 5. AI 분류 결과 온톨로지 정규화 (L3만 와도 L2/L1 부모 복원)
+            ClassificationCandidate aiCandidate = classificationResolver.canonicalizeStrict(
+                    parsed.getAiDomains(),
+                    parsed.getAiSubDomains(),
+                    parsed.getAiTags());
+            boolean hasAnyAi = aiCandidate.hasAny();
 
             // 6. AI 응답 최종 반영 (독립 트랜잭션)
             AiFinalizePayload payload = new AiFinalizePayload(
@@ -194,9 +181,9 @@ public class MessageService {
                     result.tokensInput(),
                     result.tokensOutput(),
                     result.latencyMs(),
-                    hasAnyAi ? parsed.getAiDomains() : null,
-                    validSubs,
-                    validTags
+                    hasAnyAi ? aiCandidate.domains() : null,
+                    hasAnyAi ? aiCandidate.subDomains() : null,
+                    hasAnyAi ? aiCandidate.tags() : null
             );
             Message savedAi = chatTxBoundary.finalizeAiResponse(consultationId, payload);
 
@@ -214,7 +201,11 @@ public class MessageService {
             // 방금 저장된 USER 메시지를 포함한 누적 턴 수로 진행률 계산
             SendMessageResponse.Progress progress =
                     SendMessageResponse.Progress.of((int) existingUserTurns + 1, maxUserTurns);
-            return SendMessageResponse.from(savedAi, effectiveAllCompleted, progress);
+            return SendMessageResponse.from(
+                    savedAi,
+                    effectiveAllCompleted,
+                    classificationResolver.resolve(consultation),
+                    progress);
         } catch (ChatAiException | ConsultationTurnLimitExceededException e) {
             throw e; // already metered
         } catch (RuntimeException e) {
@@ -265,9 +256,10 @@ public class MessageService {
         }
         if (!parsed.isAllCompleted()) return false;
 
-        String l1 = consultation.getFirstDomain();
-        String l2 = consultation.getFirstSubDomain();
-        String l3 = consultation.getFirstTag();
+        ClassificationCandidate candidate = classificationResolver.candidateForCollection(consultation);
+        String l1 = candidate.firstDomain();
+        String l2 = candidate.firstSubDomain();
+        String l3 = candidate.firstTag();
 
         double coverageRatio = checklistCoverageService.compute(consultationId, l1, l2, l3);
         boolean effective = checklistCoverageService.isEffectivelyCompleted(true, coverageRatio);
@@ -289,31 +281,4 @@ public class MessageService {
         return PageResponse.from(responsePage);
     }
 
-    private boolean hasAny(List<String> list) {
-        return list != null && !list.isEmpty();
-    }
-
-    /**
-     * LLM 이 반환한 하위 분류 중 온톨로지상 parentName 의 직계 자식인 것만 남긴다.
-     * parentName 이 null 이면 검증을 건너뛴다 (부모 자체가 미정이면 환각 판정 불가).
-     */
-    private List<String> filterValidChildren(List<String> aiNodes, String parentName,
-                                             UUID consultationId, String level) {
-        if (!hasAny(aiNodes)) return null;
-        if (parentName == null) return aiNodes;
-
-        List<String> valid = aiNodes.stream()
-                .filter(name -> ontologyService.isChildOf(name, parentName))
-                .toList();
-
-        if (valid.size() < aiNodes.size()) {
-            log.warn("온톨로지 위반 {} 제거: consultationId={}, parent={}, 원본={}, 유효={}",
-                    level, consultationId, parentName, aiNodes, valid);
-        }
-        return valid.isEmpty() ? null : valid;
-    }
-
-    private static String firstOrNull(List<String> list) {
-        return (list == null || list.isEmpty()) ? null : list.get(0);
-    }
 }

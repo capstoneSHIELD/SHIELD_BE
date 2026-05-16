@@ -28,6 +28,7 @@ public class ConsultationService {
     private final ConsultationWriter consultationWriter;
     private final MessageWriter messageWriter;
     private final BriefReader briefReader;
+    private final ClassificationResolver classificationResolver;
 
     private static final String WELCOME_MESSAGE =
             "반갑습니다. SHIELD 법률 AI입니다. 어떤 법률 문제로 어려움을 겪고 계신가요? 구체적인 상황을 말씀해 주시면 정보 정리를 도와드리겠습니다.";
@@ -58,12 +59,16 @@ public class ConsultationService {
                 .findOptionalByConsultationId(consultationId)
                 .map(b -> new ConsultationResponse.BriefSummary(b.getId(), b.getTitle(), b.getStatus().name()))
                 .orElse(null);
-        return ConsultationResponse.from(consultation, briefSummary);
+        return ConsultationResponse.from(
+                consultation,
+                briefSummary,
+                classificationResolver.resolve(consultation));
     }
 
     public PageResponse<ConsultationResponse> getMyConsultations(UUID userId, Pageable pageable) {
         Page<Consultation> consultations = consultationReader.findAllByUserId(userId, pageable);
-        Page<ConsultationResponse> responsePage = consultations.map(c -> ConsultationResponse.from(c, null));
+        Page<ConsultationResponse> responsePage = consultations.map(c ->
+                ConsultationResponse.from(c, null, classificationResolver.resolve(c)));
         return PageResponse.from(responsePage);
     }
 

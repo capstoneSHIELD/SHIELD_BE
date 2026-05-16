@@ -3,6 +3,7 @@ package org.example.shield.ai.infrastructure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.dto.ChatParsedResponse;
+import org.example.shield.ai.dto.CohereChatResponse;
 import org.example.shield.consultation.exception.AnalysisFailedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,13 +24,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CohereClientParseResponseTest {
 
     private CohereClient client;
+    private ObjectMapper objectMapper;
     private Method parseResponse;
 
     @BeforeEach
     void setUp() throws Exception {
         // @RequiredArgsConstructor 대신 리플렉션으로 필드 주입 (WebClient bean 불필요)
         client = newInstance();
-        setField(client, "objectMapper", new ObjectMapper());
+        objectMapper = new ObjectMapper();
+        setField(client, "objectMapper", objectMapper);
         setField(client, "config", new CohereApiConfig());
         setField(client, "cohereWebClient", WebClient.builder().build());
         parseResponse = CohereClient.class.getDeclaredMethod(

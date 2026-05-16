@@ -42,6 +42,8 @@ public class CohereChatResponse {
 
     private Meta meta;
 
+    private Meta usage;
+
     /**
      * 응답 텍스트 추출: message.content[0].text
      * content는 배열이며 여러 type(text/tool_call 등)이 올 수 있으나
@@ -95,6 +97,9 @@ public class CohereChatResponse {
          * 실제 모델 투입/출력 토큰 (pre-billing).
          */
         private TokenUsage tokens;
+
+        @JsonProperty("cached_tokens")
+        private Integer cachedTokens;
     }
 
     @Getter

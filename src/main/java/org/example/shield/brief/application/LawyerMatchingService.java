@@ -11,6 +11,8 @@ import org.example.shield.brief.domain.BriefReader;
 import org.example.shield.brief.exception.BriefNotFoundException;
 import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.ConsultationReader;
+import org.example.shield.consultation.application.ClassificationCandidate;
+import org.example.shield.consultation.application.ClassificationResolver;
 import org.example.shield.common.enums.VerificationStatus;
 import org.example.shield.common.response.PageResponse;
 import org.example.shield.lawyer.application.LawyerEmbeddingTextBuilder;
@@ -61,6 +63,7 @@ public class LawyerMatchingService {
     private final LawyerEmbeddingTextBuilder embeddingTextBuilder;
     private final QueryEmbeddingService queryEmbeddingService;
     private final ObjectMapper objectMapper;
+    private final ClassificationResolver classificationResolver;
 
     /**
      * 변호사 매칭 결과 조회 (Issue #76 Phase 2 — Redis 캐싱 적용).
@@ -89,9 +92,10 @@ public class LawyerMatchingService {
 
         // 상담의 대/중/소분류를 우선 사용 (user > ai 폴백).
         Consultation consultation = consultationReader.findById(brief.getConsultationId());
-        List<String> domains = consultation.getEffectiveDomains();
-        List<String> subDomains = consultation.getEffectiveSubDomains();
-        List<String> tags = consultation.getEffectiveTags();
+        ClassificationCandidate candidate = classificationResolver.resolve(consultation).effectiveCandidate();
+        List<String> domains = candidate != null ? candidate.domains() : List.of();
+        List<String> subDomains = candidate != null ? candidate.subDomains() : List.of();
+        List<String> tags = candidate != null ? candidate.tags() : List.of();
 
         // 상담에 대분류 없으면 Brief.legalField 로 폴백.
         if (domains.isEmpty() && brief.getLegalField() != null) {

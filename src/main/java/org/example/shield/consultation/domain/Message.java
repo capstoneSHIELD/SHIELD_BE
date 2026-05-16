@@ -45,6 +45,14 @@ public class Message {
     @Column(nullable = false, columnDefinition = "text")
     private String content;
 
+    /**
+     * USER 메시지의 PII 마스킹 결과 캐시 (Gemini PR #90 ⑤).
+     * 저장 시점에 채워 두면 LLM history 구성마다 sanitize 를 반복하지 않아도 된다.
+     * NULL 이면 V13 마이그레이션 이전 legacy 행 — 호출 시점에 fallback 으로 sanitize 한다.
+     */
+    @Column(name = "sanitized_content", columnDefinition = "text")
+    private String sanitizedContent;
+
     private String model;
 
     private Integer tokensInput;
@@ -58,24 +66,35 @@ public class Message {
     private LocalDateTime createdAt;
 
     @Builder
-    private Message(UUID consultationId, MessageRole role, String content,
+    private Message(UUID consultationId, MessageRole role, String content, String sanitizedContent,
                     String model, Integer tokensInput, Integer tokensOutput,
                     Integer latencyMs) {
         this.consultationId = consultationId;
         this.role = role;
         this.content = content;
+        this.sanitizedContent = sanitizedContent;
         this.model = model;
         this.tokensInput = tokensInput;
         this.tokensOutput = tokensOutput;
         this.latencyMs = latencyMs;
     }
 
-    public static Message createUserMessage(UUID consultationId, String content) {
+    public static Message createUserMessage(UUID consultationId, String content, String sanitizedContent) {
         return Message.builder()
                 .consultationId(consultationId)
                 .role(MessageRole.USER)
                 .content(content)
+                .sanitizedContent(sanitizedContent)
                 .build();
+    }
+
+    /**
+     * Sanitize 결과 캐시 없이 USER 메시지를 생성한다. {@link #createUserMessage(UUID, String, String)}
+     * 가 사용되기 전 코드 및 테스트 호환성용. 신규 production 경로는 sanitizedContent 를 함께 전달해야
+     * LLM history 구성 시 반복 sanitize 를 회피할 수 있다.
+     */
+    public static Message createUserMessage(UUID consultationId, String content) {
+        return createUserMessage(consultationId, content, null);
     }
 
     public static Message createAiMessage(UUID consultationId, String content,

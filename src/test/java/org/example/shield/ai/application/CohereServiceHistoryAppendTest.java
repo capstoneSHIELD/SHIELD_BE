@@ -1,8 +1,12 @@
 package org.example.shield.ai.application;
 
 import org.example.shield.ai.dto.CohereChatRequest;
+import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
+import org.example.shield.consultation.application.ClassificationCandidate;
+import org.example.shield.consultation.application.ClassificationResolver;
+import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.Message;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -137,6 +141,40 @@ class CohereServiceHistoryAppendTest {
         assertThat(msgs).isEmpty();
     }
 
+    @Test
+    @DisplayName("buildChatMessages does not append latest USER again when history already contains it")
+    void buildChatMessages_latestUserAlreadyInHistory_notDuplicated() throws Exception {
+        CohereApiConfig config = mock(CohereApiConfig.class);
+        when(config.getMaxHistoryMessages()).thenReturn(20);
+
+        PromptService promptService = mock(PromptService.class);
+        when(promptService.loadRouterChatPrompt()).thenReturn("system");
+
+        CohereService chatService = createServiceWithSanitize(sanitizeService);
+        setField(chatService, "config", config);
+        setField(chatService, "promptService", promptService);
+        ClassificationResolver classificationResolver = mock(ClassificationResolver.class);
+        when(classificationResolver.candidateForCollection(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(ClassificationCandidate.empty());
+        setField(chatService, "classificationResolver", classificationResolver);
+
+        Consultation consultation = mock(Consultation.class);
+        when(consultation.getFirstDomain()).thenReturn(null);
+
+        Message latest = Message.createUserMessage(UUID.randomUUID(), "raw user", "clean user");
+        Method buildChatMessages = CohereService.class.getDeclaredMethod(
+                "buildChatMessages", Consultation.class, String.class, String.class, List.class);
+        buildChatMessages.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<CohereChatRequest.Message> messages = (List<CohereChatRequest.Message>) buildChatMessages.invoke(
+                chatService, consultation, "clean user", "", List.of(latest));
+
+        assertThat(messages)
+                .filteredOn(message -> "user".equals(message.getRole()))
+                .hasSize(1);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     /** Message 는 @GeneratedValue 로 id 가 null 이므로, 로그에 쓰일 id 를 리플렉션으로 주입. */
@@ -167,5 +205,11 @@ class CohereServiceHistoryAppendTest {
         f.setAccessible(true);
         f.set(s, sanitize);
         return s;
+    }
+
+    private void setField(CohereService service, String fieldName, Object value) throws Exception {
+        Field field = CohereService.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(service, value);
     }
 }

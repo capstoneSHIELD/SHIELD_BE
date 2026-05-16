@@ -78,9 +78,10 @@ class MessageServiceTest {
     @Spy
     private ChatMetrics chatMetrics = new ChatMetrics(meterRegistry);
 
-    // 실제 온톨로지 JSON 을 로드한 real OntologyService 주입 — 환각 필터 동작을 end-to-end 로 검증.
+    // 실제 온톨로지 JSON 을 로드한 resolver 주입 — 부모 복원/환각 필터 동작을 end-to-end 로 검증.
     @Spy
-    private OntologyService ontologyService = createRealOntologyService();
+    private ClassificationResolver classificationResolver =
+            new ClassificationResolver(createRealOntologyService());
 
     @InjectMocks
     private MessageService messageService;
@@ -138,7 +139,7 @@ class MessageServiceTest {
                 .isInstanceOf(ChatAiException.class);
 
         // USER 는 먼저 저장되어야 한다 (독립 tx)
-        verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력");
+        verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력", "clean");
         // AI 응답 finalize 는 호출되지 않는다
         verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
 
@@ -161,7 +162,7 @@ class MessageServiceTest {
 
         assertThatThrownBy(() -> messageService.sendMessage(consultationId, "사용자 입력"))
                 .isInstanceOf(ChatAiException.class);
-        verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력");
+        verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력", "clean");
         verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
     }
 
@@ -181,7 +182,7 @@ class MessageServiceTest {
         assertThat(response).isNotNull();
 
         ArgumentCaptor<AiFinalizePayload> captor = ArgumentCaptor.forClass(AiFinalizePayload.class);
-        verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력");
+        verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력", "clean");
         verify(chatTxBoundary, times(1)).finalizeAiResponse(eq(consultationId), captor.capture());
 
         AiFinalizePayload p = captor.getValue();
@@ -213,7 +214,7 @@ class MessageServiceTest {
                 .hasMessage("Cohere 500");
 
         // USER 는 별도 tx 로 이미 커밋되었으므로 boundary 호출은 1회 수행
-        verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력");
+        verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력", "clean");
         verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
 
         assertThat(meterRegistry.timer(ChatMetrics.METRIC_COHERE_CALL, "outcome", "failure").count())
@@ -273,6 +274,50 @@ class MessageServiceTest {
         assertThat(p.aiTags()).containsExactly("보증금 및 차임");
     }
 
+    @Test
+    @DisplayName("AI 가 L3 만 반환해도 온톨로지 부모 L2/L1 을 payload 에 채운다")
+    void sendMessage_aiTagOnly_fillsParentClassification() {
+        Consultation real = Consultation.create(consultationId, null, null, null);
+        given(consultationReader.findById(consultationId)).willReturn(real);
+
+        ChatParsedResponse parsed = new ChatParsedResponse();
+        parsed.setNextQuestion("치료 당시 설명을 어떻게 들으셨나요?");
+        parsed.setAiTags(List.of("진료 과실 및 설명의무"));
+        given(cohereService.chat(any(), anyString(), anyString(), any()))
+                .willReturn(new AiCallResult<>("resp-medical", parsed, 100, 42, 250));
+
+        messageService.sendMessage(consultationId, "치과 크라운 과잉치료 같아요");
+
+        ArgumentCaptor<AiFinalizePayload> captor = ArgumentCaptor.forClass(AiFinalizePayload.class);
+        verify(chatTxBoundary).finalizeAiResponse(eq(consultationId), captor.capture());
+        AiFinalizePayload p = captor.getValue();
+        assertThat(p.aiDomains()).containsExactly("손해배상·불법행위");
+        assertThat(p.aiSubDomains()).containsExactly("의료사고");
+        assertThat(p.aiTags()).containsExactly("진료 과실 및 설명의무");
+    }
+
+    @Test
+    @DisplayName("사용자 선택과 AI 분류가 충돌하면 응답 classification.conflict=true")
+    void sendMessage_classificationConflict_exposedInResponse() {
+        Consultation real = Consultation.create(consultationId,
+                List.of("부동산 거래"), List.of("부동산 임대차"), null);
+        given(consultationReader.findById(consultationId)).willReturn(real);
+        given(ragPipelineService.execute(any(), anyString(), any())).willReturn("");
+
+        ChatParsedResponse parsed = new ChatParsedResponse();
+        parsed.setNextQuestion("치과 치료 당시 설명받은 위험이 있었나요?");
+        parsed.setAiTags(List.of("진료 과실 및 설명의무"));
+        given(cohereService.chat(any(), anyString(), anyString(), any()))
+                .willReturn(new AiCallResult<>("resp-conflict", parsed, 100, 42, 250));
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "임플란트 설명을 못 들었습니다");
+
+        assertThat(response.classification()).isNotNull();
+        assertThat(response.classification().conflict()).isTrue();
+        assertThat(response.classification().userCandidate().domains()).containsExactly("부동산 거래");
+        assertThat(response.classification().aiCandidate().domains()).containsExactly("손해배상·불법행위");
+    }
+
     // ── PII 안내 응답 — early return 경로 ──────────────────────────────────
 
     @Test
@@ -288,7 +333,7 @@ class MessageServiceTest {
 
         assertThat(response).isNotNull();
         verify(chatTxBoundary, times(1)).savePiiAiMessage(eq(consultationId), anyString());
-        verify(chatTxBoundary, never()).saveUserMessage(any(), any());
+        verify(chatTxBoundary, never()).saveUserMessage(any(), anyString(), anyString());
         verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
         verify(cohereService, never()).chat(any(), any(), any(), any());
 
@@ -340,10 +385,11 @@ class MessageServiceTest {
         given(cohereService.chat(any(), anyString(), anyString(), any()))
                 .willReturn(new AiCallResult<>("resp-blank-regression", parsed, 100, 0, 250));
         // PR-C 리팩터링 이후 USER 메시지는 chatTxBoundary.saveUserMessage 로 저장된다.
-        given(chatTxBoundary.saveUserMessage(eq(consultationId), anyString()))
+        given(chatTxBoundary.saveUserMessage(eq(consultationId), anyString(), anyString()))
                 .willAnswer(inv -> {
                     String text = inv.getArgument(1);
-                    return Message.createUserMessage(consultationId, text);
+                    String sanitized = inv.getArgument(2);
+                    return Message.createUserMessage(consultationId, text, sanitized);
                 });
 
         // when / then
@@ -352,7 +398,7 @@ class MessageServiceTest {
 
         // USER 메시지만 저장되어야 한다 (AI 메시지는 blank 차단으로 저장 X)
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(chatTxBoundary, times(1)).saveUserMessage(eq(consultationId), captor.capture());
+        verify(chatTxBoundary, times(1)).saveUserMessage(eq(consultationId), captor.capture(), anyString());
         assertThat(captor.getValue()).isEqualTo("사용자 입력");
 
         // lastResponseId 도 dirty state 로 남아 있어야 한다 (감사 로깅 목적)
@@ -419,7 +465,7 @@ class MessageServiceTest {
         assertThatThrownBy(() -> messageService.sendMessage(consultationId, "11번째 입력"))
                 .isInstanceOf(ConsultationTurnLimitExceededException.class);
 
-        verify(chatTxBoundary, never()).saveUserMessage(any(), anyString());
+        verify(chatTxBoundary, never()).saveUserMessage(any(), anyString(), anyString());
         verify(cohereService, never()).chat(any(), anyString(), anyString(), any());
         verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
 
