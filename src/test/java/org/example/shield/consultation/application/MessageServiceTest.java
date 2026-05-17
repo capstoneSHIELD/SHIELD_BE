@@ -5,11 +5,17 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.example.shield.ai.application.ChecklistCoverageService;
 import org.example.shield.ai.application.CohereService;
+import org.example.shield.ai.application.BackendIntentRouter;
+import org.example.shield.ai.application.IntentClassificationService;
+import org.example.shield.ai.application.IntentRouteDecision;
 import org.example.shield.ai.application.OntologyService;
 import org.example.shield.ai.application.RagPipelineService;
+import org.example.shield.ai.application.SlotLedgerService;
 import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.ChatParsedResponse;
+import org.example.shield.ai.dto.IntentRouterResponse;
+import org.example.shield.ai.dto.RagPipelineResult;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
 import org.example.shield.common.exception.ChatAiException;
@@ -72,6 +78,9 @@ class MessageServiceTest {
     @Mock private RagPipelineService ragPipelineService;
     @Mock private Consultation consultation;
     @Mock private ChatTransactionalBoundary chatTxBoundary;
+    @Mock private SlotLedgerService slotLedgerService;
+    @Mock private IntentClassificationService intentClassificationService;
+    @Mock private BackendIntentRouter backendIntentRouter;
 
     // 실제 MeterRegistry — 카운터 증감까지 검증한다.
     private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -116,8 +125,14 @@ class MessageServiceTest {
         given(sanitizeService.sanitizeUserText(anyString())).willReturn("clean");
         given(messageReader.findAllByConsultationId(consultationId)).willReturn(Collections.emptyList());
         given(cohereApiConfig.getChatModel()).willReturn("command-a-03-2025");
+        IntentRouterResponse defaultIntent = IntentRouterResponse.fallback("legal consultation");
+        given(intentClassificationService.route(any(), any())).willReturn(defaultIntent);
+        given(backendIntentRouter.route(any(), any(), any(), anyString()))
+                .willReturn(IntentRouteDecision.continueToCohere("test"));
+        given(ragPipelineService.executeDetailed(any(), anyString(), any(), any()))
+                .willAnswer(inv -> new RagPipelineResult(inv.getArgument(3), "", List.of()));
         // boundary 의 finalize 는 기본적으로 저장된 Message 를 리턴하도록 느슨하게 stub
-        given(chatTxBoundary.finalizeAiResponse(eq(consultationId), any(AiFinalizePayload.class)))
+        given(chatTxBoundary.finalizeAiResponse(eq(consultationId), any(AiFinalizePayload.class), any()))
                 .willAnswer(inv -> {
                     AiFinalizePayload p = inv.getArgument(1);
                     return Message.createAiMessage(consultationId, p.nextQuestion(),
@@ -141,7 +156,7 @@ class MessageServiceTest {
         // USER 는 먼저 저장되어야 한다 (독립 tx)
         verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력", "clean");
         // AI 응답 finalize 는 호출되지 않는다
-        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
+        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any(), any());
 
         // 메트릭 — blank 카운터 1건, send_message timer outcome=blank
         assertThat(meterRegistry.counter(ChatMetrics.METRIC_BLANK_RESPONSE, "stage", "chat").count())
@@ -163,7 +178,7 @@ class MessageServiceTest {
         assertThatThrownBy(() -> messageService.sendMessage(consultationId, "사용자 입력"))
                 .isInstanceOf(ChatAiException.class);
         verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력", "clean");
-        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
+        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any(), any());
     }
 
     @Test
@@ -183,7 +198,7 @@ class MessageServiceTest {
 
         ArgumentCaptor<AiFinalizePayload> captor = ArgumentCaptor.forClass(AiFinalizePayload.class);
         verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력", "clean");
-        verify(chatTxBoundary, times(1)).finalizeAiResponse(eq(consultationId), captor.capture());
+        verify(chatTxBoundary, times(1)).finalizeAiResponse(eq(consultationId), captor.capture(), any());
 
         AiFinalizePayload p = captor.getValue();
         assertThat(p.responseId()).isEqualTo("resp-ok-1");
@@ -201,6 +216,25 @@ class MessageServiceTest {
                 .isEqualTo(1L);
     }
 
+    @Test
+    @DisplayName("intent router fixed response skips RAG and Cohere and persists template response")
+    void sendMessage_intentRouterFixedResponse_skipsCohere() {
+        given(backendIntentRouter.route(any(), any(), any(), anyString()))
+                .willReturn(IntentRouteDecision.fixedResponse("법적 판단은 단정할 수 없습니다.", "ask_legal_advice"));
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "제가 이길 수 있나요?");
+
+        assertThat(response).isNotNull();
+        assertThat(response.content()).isEqualTo("법적 판단은 단정할 수 없습니다.");
+        verify(cohereService, never()).chat(any(), anyString(), anyString(), any());
+        verify(ragPipelineService, never()).executeDetailed(any(), anyString(), any(), any());
+
+        ArgumentCaptor<AiFinalizePayload> captor = ArgumentCaptor.forClass(AiFinalizePayload.class);
+        verify(chatTxBoundary).finalizeAiResponse(eq(consultationId), captor.capture(), any());
+        assertThat(captor.getValue().responseId()).isEqualTo("intent-router:ask_legal_advice");
+        assertThat(captor.getValue().model()).isEqualTo("backend-intent-router");
+    }
+
     // ── Cohere 실패 시 메트릭 / tx 분리 검증 ──────────────────────────────
 
     @Test
@@ -215,7 +249,7 @@ class MessageServiceTest {
 
         // USER 는 별도 tx 로 이미 커밋되었으므로 boundary 호출은 1회 수행
         verify(chatTxBoundary, times(1)).saveUserMessage(consultationId, "사용자 입력", "clean");
-        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
+        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any(), any());
 
         assertThat(meterRegistry.timer(ChatMetrics.METRIC_COHERE_CALL, "outcome", "failure").count())
                 .isEqualTo(1L);
@@ -244,7 +278,7 @@ class MessageServiceTest {
         messageService.sendMessage(consultationId, "사용자 입력");
 
         ArgumentCaptor<AiFinalizePayload> captor = ArgumentCaptor.forClass(AiFinalizePayload.class);
-        verify(chatTxBoundary).finalizeAiResponse(eq(consultationId), captor.capture());
+        verify(chatTxBoundary).finalizeAiResponse(eq(consultationId), captor.capture(), any());
         AiFinalizePayload p = captor.getValue();
         assertThat(p.aiSubDomains()).containsExactly("부동산 임대차");
         assertThat(p.aiTags()).containsExactly("보증금 및 차임");
@@ -267,7 +301,7 @@ class MessageServiceTest {
         messageService.sendMessage(consultationId, "사용자 입력");
 
         ArgumentCaptor<AiFinalizePayload> captor = ArgumentCaptor.forClass(AiFinalizePayload.class);
-        verify(chatTxBoundary).finalizeAiResponse(eq(consultationId), captor.capture());
+        verify(chatTxBoundary).finalizeAiResponse(eq(consultationId), captor.capture(), any());
         AiFinalizePayload p = captor.getValue();
         assertThat(p.aiDomains()).containsExactly("부동산 거래");
         assertThat(p.aiSubDomains()).containsExactly("부동산 임대차");
@@ -289,7 +323,7 @@ class MessageServiceTest {
         messageService.sendMessage(consultationId, "치과 크라운 과잉치료 같아요");
 
         ArgumentCaptor<AiFinalizePayload> captor = ArgumentCaptor.forClass(AiFinalizePayload.class);
-        verify(chatTxBoundary).finalizeAiResponse(eq(consultationId), captor.capture());
+        verify(chatTxBoundary).finalizeAiResponse(eq(consultationId), captor.capture(), any());
         AiFinalizePayload p = captor.getValue();
         assertThat(p.aiDomains()).containsExactly("손해배상·불법행위");
         assertThat(p.aiSubDomains()).containsExactly("의료사고");
@@ -334,7 +368,7 @@ class MessageServiceTest {
         assertThat(response).isNotNull();
         verify(chatTxBoundary, times(1)).savePiiAiMessage(eq(consultationId), anyString());
         verify(chatTxBoundary, never()).saveUserMessage(any(), anyString(), anyString());
-        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
+        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any(), any());
         verify(cohereService, never()).chat(any(), any(), any(), any());
 
         assertThat(meterRegistry.timer(ChatMetrics.METRIC_SEND_MESSAGE, "outcome", "pii").count())
@@ -445,7 +479,7 @@ class MessageServiceTest {
 
         // Cohere 호출과 finalize 는 정상 수행 (분류/슬롯 업데이트 기회 보존)
         verify(cohereService, times(1)).chat(any(), anyString(), anyString(), any());
-        verify(chatTxBoundary, times(1)).finalizeAiResponse(eq(consultationId), any(AiFinalizePayload.class));
+        verify(chatTxBoundary, times(1)).finalizeAiResponse(eq(consultationId), any(AiFinalizePayload.class), any());
 
         // 메트릭 outcome=turn_limit_reached
         assertThat(meterRegistry.timer(ChatMetrics.METRIC_SEND_MESSAGE, "outcome", "turn_limit_reached").count())
@@ -467,7 +501,7 @@ class MessageServiceTest {
 
         verify(chatTxBoundary, never()).saveUserMessage(any(), anyString(), anyString());
         verify(cohereService, never()).chat(any(), anyString(), anyString(), any());
-        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any());
+        verify(chatTxBoundary, never()).finalizeAiResponse(any(), any(), any());
 
         // 메트릭 outcome=turn_limit (guard 단계에서 기록)
         assertThat(meterRegistry.timer(ChatMetrics.METRIC_SEND_MESSAGE, "outcome", "turn_limit").count())

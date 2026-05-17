@@ -5,10 +5,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.application.ChecklistCoverageService;
 import org.example.shield.ai.application.CohereService;
+import org.example.shield.ai.application.BackendIntentRouter;
+import org.example.shield.ai.application.IntentClassificationService;
+import org.example.shield.ai.application.IntentRouteDecision;
 import org.example.shield.ai.application.RagPipelineService;
+import org.example.shield.ai.application.SlotLedgerService;
 import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.ChatParsedResponse;
+import org.example.shield.ai.dto.IntentRouterResponse;
+import org.example.shield.ai.dto.RagPipelineResult;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
 import org.example.shield.common.exception.ChatAiException;
@@ -68,6 +74,9 @@ public class MessageService {
     private final ChatTransactionalBoundary chatTxBoundary;
     private final ChatMetrics chatMetrics;
     private final ClassificationResolver classificationResolver;
+    private final SlotLedgerService slotLedgerService;
+    private final IntentClassificationService intentClassificationService;
+    private final BackendIntentRouter backendIntentRouter;
 
     /**
      * 사용자 메시지 상한. 도달(=) 시 현재 턴을 마지막으로 처리하고 {@code effectiveAllCompleted=true}
@@ -134,9 +143,38 @@ public class MessageService {
             String ragContext = "";
             ClassificationCandidate collectionCandidate =
                     classificationResolver.candidateForCollection(consultation);
+            slotLedgerService.ensureInitialized(consultation, collectionCandidate, chatHistory);
             String domainForRag = collectionCandidate.firstDomain();
+            IntentRouterResponse intentResult = intentClassificationService.route(chatHistory, domainForRag);
+            IntentRouteDecision routeDecision = backendIntentRouter.route(
+                    consultation, intentResult, chatHistory, sanitizedText);
+            if (routeDecision.skipCohere()) {
+                AiFinalizePayload fixedPayload = new AiFinalizePayload(
+                        "intent-router:" + routeDecision.reason(),
+                        routeDecision.responseText(),
+                        "backend-intent-router",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                );
+                Message savedAi = chatTxBoundary.finalizeAiResponse(
+                        consultationId, fixedPayload, consultation.getSlotState());
+                chatMetrics.recordSendMessage(pipelineStart, "success");
+                SendMessageResponse.Progress progress =
+                        SendMessageResponse.Progress.of((int) existingUserTurns + 1, maxUserTurns);
+                return SendMessageResponse.from(
+                        savedAi,
+                        false,
+                        classificationResolver.resolve(consultation),
+                        progress);
+            }
             if (domainForRag != null) {
-                ragContext = ragPipelineService.execute(chatHistory, domainForRag, consultationId);
+                RagPipelineResult ragResult = ragPipelineService.executeDetailed(
+                        chatHistory, domainForRag, consultationId, intentResult);
+                ragContext = ragResult.ragContext();
             }
 
             // 3. Cohere Chat v2 호출 — 트랜잭션 밖 + Micrometer 타이밍
@@ -172,6 +210,7 @@ public class MessageService {
                     parsed.getAiSubDomains(),
                     parsed.getAiTags());
             boolean hasAnyAi = aiCandidate.hasAny();
+            slotLedgerService.appendAskedQuestion(consultation, nextQuestion);
 
             // 6. AI 응답 최종 반영 (독립 트랜잭션)
             AiFinalizePayload payload = new AiFinalizePayload(
@@ -185,7 +224,8 @@ public class MessageService {
                     hasAnyAi ? aiCandidate.subDomains() : null,
                     hasAnyAi ? aiCandidate.tags() : null
             );
-            Message savedAi = chatTxBoundary.finalizeAiResponse(consultationId, payload);
+            Message savedAi = chatTxBoundary.finalizeAiResponse(
+                    consultationId, payload, consultation.getSlotState());
 
             // DB에 반영된 AI 분류 결과를 로컬 객체에도 동기화하여 후속 커버리지 계산에 사용
             if (payload.hasAnyClassification()) {

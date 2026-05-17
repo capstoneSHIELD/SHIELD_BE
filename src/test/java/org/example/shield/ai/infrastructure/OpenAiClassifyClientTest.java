@@ -46,7 +46,17 @@ class OpenAiClassifyClientTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> schema = (Map<String, Object>) jsonSchema.get("schema");
         assertThat(schema.get("additionalProperties")).isEqualTo(false);
-        assertThat(schema.toString()).contains("schema_version", "matched_node_ids", "core_keywords", "retrieval_query");
+        assertThat(jsonSchema.get("name")).isEqualTo("shield_intent_router_v2");
+        assertThat(schema.toString()).contains(
+                "schema_version",
+                "2.0",
+                "dialogueIntent",
+                "ASK_LEGAL_ADVICE",
+                "extractedSlots",
+                "caseType",
+                "matched_node_ids",
+                "core_keywords",
+                "retrieval_query");
     }
 
     @Test

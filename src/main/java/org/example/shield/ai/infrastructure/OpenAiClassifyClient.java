@@ -105,7 +105,7 @@ public class OpenAiClassifyClient {
         return Map.of(
                 "type", "json_schema",
                 "json_schema", Map.of(
-                        "name", "shield_intent_classification_v1",
+                        "name", "shield_intent_router_v2",
                         "strict", true,
                         "schema", classifierSchema()
                 )
@@ -113,32 +113,82 @@ public class OpenAiClassifyClient {
     }
 
     private Map<String, Object> classifierSchema() {
+        Map<String, Object> slotSchema = objectSchema(
+                List.of("slotId", "value", "rawText", "confidence", "valueType", "needsConfirmation"),
+                Map.of(
+                        "slotId", Map.of("type", "string"),
+                        "value", Map.of("type", "string"),
+                        "rawText", Map.of("type", "string"),
+                        "confidence", Map.of("type", "number"),
+                        "valueType", Map.of("type", "string"),
+                        "needsConfirmation", Map.of("type", "boolean")
+                )
+        );
+        Map<String, Object> caseTypeSchema = objectSchema(
+                List.of("l1", "l2", "l3", "confidence"),
+                Map.of(
+                        "l1", Map.of("type", "string"),
+                        "l2", Map.of("type", "string"),
+                        "l3", Map.of("type", "string"),
+                        "confidence", Map.of("type", "number")
+                )
+        );
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("schema_version", Map.of("type", "string", "enum", List.of("2.0")));
+        properties.put("dialogueIntent", Map.of(
+                "type", "string",
+                "enum", List.of("PROVIDE_INFO", "CORRECT_INFO", "CONFIRM", "CHANGE_TOPIC",
+                        "ASK_LEGAL_ADVICE", "IRRELEVANT", "GREETING", "END_CONSULTATION")));
+        properties.put("intentConfidence", Map.of("type", "number"));
+        properties.put("extractedSlots", Map.of("type", "array", "items", slotSchema));
+        properties.put("caseType", caseTypeSchema);
+        properties.put("intent_summary", Map.of("type", "string"));
+        properties.put("matched_node_ids", Map.of(
+                "type", "array",
+                "items", Map.of("type", "string")
+        ));
+        properties.put("core_keywords", Map.of(
+                "type", "array",
+                "items", Map.of("type", "string")
+        ));
+        properties.put("retrieval_query", Map.of("type", "string"));
+        properties.put("retrievalQueries", Map.of(
+                "type", "array",
+                "items", Map.of("type", "string")
+        ));
+        properties.put("correctedSlotIds", Map.of(
+                "type", "array",
+                "items", Map.of("type", "string")
+        ));
+        properties.put("topicChanged", Map.of("type", "boolean"));
+
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
         schema.put("additionalProperties", false);
         schema.put("required", List.of(
                 "schema_version",
+                "dialogueIntent",
+                "intentConfidence",
+                "extractedSlots",
+                "caseType",
                 "intent_summary",
                 "matched_node_ids",
                 "core_keywords",
-                "retrieval_query"
+                "retrieval_query",
+                "retrievalQueries",
+                "correctedSlotIds",
+                "topicChanged"
         ));
-        schema.put("properties", Map.of(
-                "schema_version", Map.of(
-                        "type", "string",
-                        "enum", List.of("1.0")
-                ),
-                "intent_summary", Map.of("type", "string"),
-                "matched_node_ids", Map.of(
-                        "type", "array",
-                        "items", Map.of("type", "string")
-                ),
-                "core_keywords", Map.of(
-                        "type", "array",
-                        "items", Map.of("type", "string")
-                ),
-                "retrieval_query", Map.of("type", "string")
-        ));
+        schema.put("properties", properties);
+        return schema;
+    }
+
+    private Map<String, Object> objectSchema(List<String> required, Map<String, Object> properties) {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("additionalProperties", false);
+        schema.put("required", required);
+        schema.put("properties", properties);
         return schema;
     }
 

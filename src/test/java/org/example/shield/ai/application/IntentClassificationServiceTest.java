@@ -1,7 +1,9 @@
 package org.example.shield.ai.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.shield.ai.dto.DialogueIntent;
 import org.example.shield.ai.dto.IntentClassificationResult;
+import org.example.shield.ai.dto.IntentRouterResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -74,6 +76,52 @@ class IntentClassificationServiceTest {
         assertThat(result.keywords().core()).containsExactly("wage", "dismissal");
         assertThat(result.keywords().expanded()).isEmpty();
         assertThat(result.retrievalQueries()).containsExactly("unpaid wage dismissal legal remedy");
+    }
+
+    @Test
+    @DisplayName("P2 intent router JSON is parsed with 8-class intent and extracted slots")
+    void parseIntentRouterResponse_p2Json() {
+        String json = """
+                {
+                  "schema_version": "2.0",
+                  "dialogueIntent": "ASK_LEGAL_ADVICE",
+                  "intentConfidence": 0.91,
+                  "extractedSlots": [
+                    {
+                      "slotId": "static_001",
+                      "value": "30000000",
+                      "rawText": "보증금은 3천만원",
+                      "confidence": 0.89,
+                      "valueType": "money",
+                      "needsConfirmation": false
+                    }
+                  ],
+                  "caseType": {
+                    "l1": "부동산 거래",
+                    "l2": "부동산 임대차",
+                    "l3": "보증금 및 차임",
+                    "confidence": 0.87
+                  },
+                  "intent_summary": "보증금과 승소 가능성 질문",
+                  "matched_node_ids": ["law-001"],
+                  "core_keywords": ["보증금"],
+                  "retrieval_query": "전세 보증금 반환",
+                  "retrievalQueries": ["전세 보증금 반환"],
+                  "correctedSlotIds": [],
+                  "topicChanged": false
+                }
+                """;
+
+        IntentRouterResponse result = service.parseIntentRouterResponse(json);
+
+        assertThat(result.schemaVersion()).isEqualTo("2.0");
+        assertThat(result.dialogueIntent()).isEqualTo(DialogueIntent.ASK_LEGAL_ADVICE);
+        assertThat(result.intentConfidence()).isEqualTo(0.91);
+        assertThat(result.extractedSlots()).hasSize(1);
+        assertThat(result.extractedSlots().get(0).slotId()).isEqualTo("static_001");
+        assertThat(result.caseType().l1()).isEqualTo("부동산 거래");
+        assertThat(result.retrievalQueries()).containsExactly("전세 보증금 반환");
+        assertThat(result.toClassificationResult().matchedNodeIds()).containsExactly("law-001");
     }
 
     @Test

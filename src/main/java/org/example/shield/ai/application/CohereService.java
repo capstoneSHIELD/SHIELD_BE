@@ -7,6 +7,7 @@ import org.example.shield.ai.dto.BriefParsedResponse;
 import org.example.shield.ai.dto.ChatParsedResponse;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.CohereChatRequest;
+import org.example.shield.ai.dto.slot.SlotLedger;
 import org.example.shield.ai.infrastructure.CohereClient;
 import org.example.shield.ai.infrastructure.GuardrailFilter;
 import org.example.shield.ai.infrastructure.SanitizeService;
@@ -16,6 +17,7 @@ import org.example.shield.consultation.application.ClassificationResolver;
 import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.Message;
 import org.example.shield.consultation.domain.MessageReader;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -49,6 +51,11 @@ public class CohereService {
     private final CohereClient cohereClient;
     private final ChecklistCoverageService checklistCoverageService;
     private final ClassificationResolver classificationResolver;
+    private final SlotStatusBlockBuilder slotStatusBlockBuilder;
+    private final OutputComplianceShadowJudge outputComplianceShadowJudge;
+
+    @Value("${app.ai.slot-ledger.enabled:true}")
+    private boolean slotLedgerEnabled;
 
     /**
      * Phase 1 대화 — 사용자 메시지 처리 후 AI 응답 반환.
@@ -68,6 +75,11 @@ public class CohereService {
 
         // Layer 2 가드레일: 금칙어 필터
         ChatParsedResponse filtered = guardrailFilter.filterChatResponse(result.data());
+        if (outputComplianceShadowJudge != null
+                && filtered != null
+                && filtered.getNextQuestion() != null) {
+            outputComplianceShadowJudge.evaluate(filtered.getNextQuestion());
+        }
         return new AiCallResult<>(
                 result.responseId(),
                 filtered,
@@ -132,6 +144,14 @@ public class CohereService {
         // 1. 시스템 프롬프트. P1 state hints must stay at the very top.
         List<String> topBlocks = new ArrayList<>();
         String systemPrompt = promptService.loadRouterChatPrompt();
+
+        SlotLedger slotLedger = consultation.getSlotState();
+        if (slotLedgerEnabled && slotStatusBlockBuilder != null && slotLedger != null) {
+            String slotStatusBlock = slotStatusBlockBuilder.build(slotLedger);
+            if (!slotStatusBlock.isEmpty()) {
+                topBlocks.add(slotStatusBlock);
+            }
+        }
 
         // 분류 완료 시 체크리스트 YAML 동적 주입
         ClassificationCandidate collectionCandidate = classificationResolver.candidateForCollection(consultation);

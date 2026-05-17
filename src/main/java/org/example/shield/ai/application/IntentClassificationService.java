@@ -7,10 +7,14 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.AiCallResult;
+import org.example.shield.ai.dto.CaseTypeResult;
 import org.example.shield.ai.dto.CohereChatRequest;
+import org.example.shield.ai.dto.DialogueIntent;
+import org.example.shield.ai.dto.ExtractedSlot;
 import org.example.shield.ai.dto.IntentClassificationResult;
 import org.example.shield.ai.dto.IntentClassificationResult.Keywords;
 import org.example.shield.ai.dto.IntentClassificationResult.MatchedNode;
+import org.example.shield.ai.dto.IntentRouterResponse;
 import org.example.shield.ai.infrastructure.OpenAiClassifyClient;
 import org.example.shield.ai.infrastructure.RagMetrics;
 import org.example.shield.consultation.domain.Message;
@@ -94,6 +98,10 @@ public class IntentClassificationService {
     }
 
     public IntentClassificationResult classify(List<Message> recentMessages, String domain) {
+        return route(recentMessages, domain).toClassificationResult();
+    }
+
+    public IntentRouterResponse route(List<Message> recentMessages, String domain) {
         try {
             String conversationHistory = buildConversationHistory(recentMessages);
             String systemPrompt = buildSystemPrompt(domain);
@@ -105,11 +113,11 @@ public class IntentClassificationService {
 
             AiCallResult<String> result = ragMetrics.timeClassify(
                     () -> callConfiguredClassifier(messages));
-            return parseClassificationResult(result.data());
+            return parseIntentRouterResponse(result.data());
 
         } catch (Exception e) {
             log.warn("Intent classification failed, using fallback: domain={}, error={}", domain, e.getMessage());
-            return createFallbackResult(domain);
+            return IntentRouterResponse.fromLegacy(createFallbackResult(domain));
         }
     }
 
@@ -227,8 +235,12 @@ public class IntentClassificationService {
     }
 
     IntentClassificationResult parseClassificationResult(String json) {
+        JsonNode versionRoot = readJson(json);
+        if ("2.0".equals(versionRoot.path("schema_version").asText())) {
+            return parseIntentRouterResponse(versionRoot).toClassificationResult();
+        }
         try {
-            JsonNode root = objectMapper.readTree(json);
+            JsonNode root = versionRoot;
 
             String schemaVersion = root.path("schema_version").asText("1.0");
             String intentSummary = root.path("intent_summary").asText("");
@@ -256,6 +268,60 @@ public class IntentClassificationService {
             log.error("Intent classification JSON parsing failed: {}", e.getMessage());
             throw new RuntimeException("Intent classification JSON parsing failed", e);
         }
+    }
+
+    IntentRouterResponse parseIntentRouterResponse(String json) {
+        return parseIntentRouterResponse(readJson(json));
+    }
+
+    private IntentRouterResponse parseIntentRouterResponse(JsonNode root) {
+        if (!"2.0".equals(root.path("schema_version").asText())) {
+            return IntentRouterResponse.fromLegacy(parseClassificationResultV1(root));
+        }
+
+        IntentClassificationResult legacy = parseClassificationResultV1(root);
+        return new IntentRouterResponse(
+                root.path("schema_version").asText("2.0"),
+                DialogueIntent.from(root.path("dialogueIntent").asText(
+                        root.path("dialogue_intent").asText("PROVIDE_INFO"))),
+                root.path("intentConfidence").asDouble(
+                        root.path("intent_confidence").asDouble(0.0)),
+                parseExtractedSlots(root.path("extractedSlots").isArray()
+                        ? root.path("extractedSlots")
+                        : root.path("extracted_slots")),
+                parseCaseType(root.path("caseType").isObject()
+                        ? root.path("caseType")
+                        : root.path("case_type")),
+                parseRouterRetrievalQueries(root),
+                parseStringArray(root.path("correctedSlotIds").isArray()
+                        ? root.path("correctedSlotIds")
+                        : root.path("corrected_slot_ids")),
+                root.path("topicChanged").asBoolean(root.path("topic_changed").asBoolean(false)),
+                legacy
+        );
+    }
+
+    private IntentClassificationResult parseClassificationResultV1(JsonNode root) {
+        String schemaVersion = root.path("schema_version").asText("1.0");
+        String intentSummary = root.path("intent_summary").asText(
+                root.path("dialogueIntent").asText(root.path("dialogue_intent").asText("")));
+        List<MatchedNode> matchedNodes = parseMatchedNodes(root);
+        List<String> coreKeywords = parseStringArray(
+                root.path("core_keywords").isArray()
+                        ? root.path("core_keywords")
+                        : root.path("keywords").path("core"));
+        List<String> expandedKeywords = parseStringArray(
+                root.path("expanded_keywords").isArray()
+                        ? root.path("expanded_keywords")
+                        : root.path("keywords").path("expanded"));
+        List<String> retrievalQueries = parseRouterRetrievalQueries(root);
+        return new IntentClassificationResult(
+                schemaVersion,
+                intentSummary,
+                matchedNodes,
+                new Keywords(coreKeywords, expandedKeywords),
+                retrievalQueries
+        );
     }
 
     private List<MatchedNode> parseMatchedNodes(JsonNode root) {
@@ -293,6 +359,49 @@ public class IntentClassificationService {
         matchedNodes.add(new MatchedNode(id, name == null ? "" : name, confidence));
     }
 
+    private List<ExtractedSlot> parseExtractedSlots(JsonNode node) {
+        List<ExtractedSlot> slots = new ArrayList<>();
+        if (!node.isArray()) {
+            return slots;
+        }
+        for (JsonNode slot : node) {
+            String slotId = slot.path("slotId").asText(slot.path("slot_id").asText(""));
+            if (slotId == null || slotId.isBlank()) {
+                continue;
+            }
+            slots.add(new ExtractedSlot(
+                    slotId,
+                    slot.path("value").asText(null),
+                    slot.path("rawText").asText(slot.path("raw_text").asText(null)),
+                    slot.path("confidence").asDouble(0.0),
+                    slot.path("valueType").asText(slot.path("value_type").asText("text")),
+                    slot.path("needsConfirmation").asBoolean(
+                            slot.path("needs_confirmation").asBoolean(false))
+            ));
+        }
+        return slots;
+    }
+
+    private CaseTypeResult parseCaseType(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return CaseTypeResult.empty();
+        }
+        return new CaseTypeResult(
+                textOrNull(node.path("l1")),
+                textOrNull(node.path("l2")),
+                textOrNull(node.path("l3")),
+                node.path("confidence").asDouble(0.0)
+        );
+    }
+
+    private String textOrNull(JsonNode node) {
+        if (node == null || node.isNull() || node.isMissingNode()) {
+            return null;
+        }
+        String value = node.asText(null);
+        return value == null || value.isBlank() ? null : value;
+    }
+
     private List<String> parseStringArray(JsonNode node) {
         List<String> values = new ArrayList<>();
         if (node.isArray()) {
@@ -324,6 +433,29 @@ public class IntentClassificationService {
             });
         }
         return retrievalQueries;
+    }
+
+    private List<String> parseRouterRetrievalQueries(JsonNode root) {
+        List<String> values = parseRetrievalQueries(root);
+        JsonNode camel = root.path("retrievalQueries");
+        if (camel.isArray()) {
+            camel.forEach(n -> {
+                String value = n.asText();
+                if (value != null && !value.isBlank() && !values.contains(value)) {
+                    values.add(value);
+                }
+            });
+        }
+        return values;
+    }
+
+    private JsonNode readJson(String json) {
+        try {
+            return objectMapper.readTree(json);
+        } catch (Exception e) {
+            log.error("Intent classification JSON parsing failed: {}", e.getMessage());
+            throw new RuntimeException("Intent classification JSON parsing failed", e);
+        }
     }
 
     private IntentClassificationResult createFallbackResult(String domain) {

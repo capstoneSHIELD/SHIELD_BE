@@ -174,15 +174,52 @@ public class CohereChatRequest {
     }
 
     private static Map<String, Object> classifyResponseFormat() {
-        return responseFormat(objectSchema(
-                List.of("schema_version", "intent_summary", "matched_node_ids", "core_keywords", "retrieval_query"),
+        Map<String, Object> slotSchema = objectSchema(
+                List.of("slotId", "value", "rawText", "confidence", "valueType", "needsConfirmation"),
                 Map.of(
-                        "schema_version", stringEnumSchema("1.0"),
-                        "intent_summary", Map.of("type", "string"),
-                        "matched_node_ids", stringArraySchema(),
-                        "core_keywords", stringArraySchema(),
-                        "retrieval_query", Map.of("type", "string")
+                        "slotId", Map.of("type", "string"),
+                        "value", Map.of("type", "string"),
+                        "rawText", Map.of("type", "string"),
+                        "confidence", Map.of("type", "number"),
+                        "valueType", Map.of("type", "string"),
+                        "needsConfirmation", Map.of("type", "boolean")
                 )
+        );
+        Map<String, Object> caseTypeSchema = objectSchema(
+                List.of("l1", "l2", "l3", "confidence"),
+                Map.of(
+                        "l1", Map.of("type", "string"),
+                        "l2", Map.of("type", "string"),
+                        "l3", Map.of("type", "string"),
+                        "confidence", Map.of("type", "number")
+                )
+        );
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("schema_version", stringEnumSchema("2.0"));
+        properties.put("dialogueIntent", stringEnumSchema(
+                "PROVIDE_INFO",
+                "CORRECT_INFO",
+                "CONFIRM",
+                "CHANGE_TOPIC",
+                "ASK_LEGAL_ADVICE",
+                "IRRELEVANT",
+                "GREETING",
+                "END_CONSULTATION"));
+        properties.put("intentConfidence", Map.of("type", "number"));
+        properties.put("extractedSlots", Map.of("type", "array", "items", slotSchema));
+        properties.put("caseType", caseTypeSchema);
+        properties.put("intent_summary", Map.of("type", "string"));
+        properties.put("matched_node_ids", stringArraySchema());
+        properties.put("core_keywords", stringArraySchema());
+        properties.put("retrieval_query", Map.of("type", "string"));
+        properties.put("retrievalQueries", stringArraySchema());
+        properties.put("correctedSlotIds", stringArraySchema());
+        properties.put("topicChanged", Map.of("type", "boolean"));
+        return responseFormat(objectSchema(
+                List.of("schema_version", "dialogueIntent", "intentConfidence", "extractedSlots",
+                        "caseType", "intent_summary", "matched_node_ids", "core_keywords",
+                        "retrieval_query", "retrievalQueries", "correctedSlotIds", "topicChanged"),
+                properties
         ));
     }
 
@@ -209,9 +246,20 @@ public class CohereChatRequest {
     }
 
     private static Map<String, Object> stringEnumSchema(String value) {
+        return stringEnumSchema(List.of(value));
+    }
+
+    private static Map<String, Object> stringEnumSchema(String first, String... rest) {
+        List<String> values = new java.util.ArrayList<>();
+        values.add(first);
+        values.addAll(List.of(rest));
+        return stringEnumSchema(values);
+    }
+
+    private static Map<String, Object> stringEnumSchema(List<String> values) {
         return Map.of(
                 "type", "string",
-                "enum", List.of(value)
+                "enum", values
         );
     }
 }

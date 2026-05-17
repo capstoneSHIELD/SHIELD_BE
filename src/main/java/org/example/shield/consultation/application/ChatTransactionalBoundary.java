@@ -2,6 +2,7 @@ package org.example.shield.consultation.application;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.shield.ai.dto.slot.SlotLedger;
 import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.ConsultationReader;
 import org.example.shield.consultation.domain.ConsultationWriter;
@@ -107,6 +108,11 @@ public class ChatTransactionalBoundary {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Message finalizeAiResponse(UUID consultationId, AiFinalizePayload payload) {
+        return finalizeAiResponse(consultationId, payload, null);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Message finalizeAiResponse(UUID consultationId, AiFinalizePayload payload, SlotLedger slotState) {
         Consultation consultation = consultationReader.findById(consultationId);
 
         // 1. lastResponseId (감사 로깅)
@@ -116,6 +122,10 @@ public class ChatTransactionalBoundary {
         if (payload.hasAnyClassification()) {
             consultation.updateAiClassification(
                     payload.aiDomains(), payload.aiSubDomains(), payload.aiTags());
+        }
+
+        if (slotState != null) {
+            consultation.updateSlotState(slotState);
         }
 
         // 3. AI 메시지 영속화

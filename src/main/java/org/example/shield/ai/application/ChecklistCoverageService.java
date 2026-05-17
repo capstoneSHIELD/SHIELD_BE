@@ -106,6 +106,26 @@ public class ChecklistCoverageService {
         return COVERAGE_THRESHOLD;
     }
 
+    public List<CoverageItem> buildCoverageItems(
+            String l1Name, String l2Name, String l3Name, List<Message> chatHistory) {
+        if (l1Name == null || l1Name.isBlank()) return List.of();
+        JsonNode root = checklistLoader.loadAsTree(l1Name);
+        if (root == null) return List.of();
+
+        List<String> items = collectItems(root, l2Name, l3Name);
+        if (items.isEmpty()) return List.of();
+
+        String haystack = buildHaystackFromHistory(chatHistory);
+        List<CoverageItem> coverage = new ArrayList<>();
+        for (String item : items) {
+            coverage.add(new CoverageItem(item, matchesItem(item, haystack)));
+        }
+        return coverage;
+    }
+
+    public record CoverageItem(String label, boolean collected) {
+    }
+
     /**
      * 이미 수집된 체크리스트 항목을 마크다운 체크박스 요약으로 반환.
      *

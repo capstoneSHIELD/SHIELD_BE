@@ -76,6 +76,10 @@ class CohereChatRequestTest {
         assertThat(json).contains("\"schema\"");
         assertThat(json).contains("\"matched_node_ids\"");
         assertThat(json).contains("\"schema_version\"");
+        assertThat(json).contains("\"dialogueIntent\"");
+        assertThat(json).contains("\"ASK_LEGAL_ADVICE\"");
+        assertThat(json).contains("\"extractedSlots\"");
+        assertThat(json).contains("\"caseType\"");
         // forClassify should NOT include p (top-p)
         assertThat(json).doesNotContain("\"p\":");
 

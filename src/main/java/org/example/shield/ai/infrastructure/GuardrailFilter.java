@@ -144,6 +144,11 @@ public class GuardrailFilter {
         return Normalizer.normalize(text, Normalizer.Form.NFC).contains("미확인");
     }
 
+    public boolean containsForbiddenText(String text) {
+        if (text == null) return false;
+        return containsForbiddenPattern(Normalizer.normalize(text, Normalizer.Form.NFC));
+    }
+
     private boolean containsForbiddenPattern(String text) {
         for (Pattern p : FORBIDDEN_PATTERNS) {
             if (p.matcher(text).find()) {

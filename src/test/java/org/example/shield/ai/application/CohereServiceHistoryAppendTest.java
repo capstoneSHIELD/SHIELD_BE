@@ -2,6 +2,9 @@ package org.example.shield.ai.application;
 
 import org.example.shield.ai.dto.CohereChatRequest;
 import org.example.shield.ai.config.CohereApiConfig;
+import org.example.shield.ai.dto.slot.SlotLedger;
+import org.example.shield.ai.dto.slot.SlotStateItem;
+import org.example.shield.ai.dto.slot.SlotValueType;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
 import org.example.shield.consultation.application.ClassificationCandidate;
@@ -234,6 +237,48 @@ class CohereServiceHistoryAppendTest {
     }
 
     // ── helpers ──────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("buildChatMessages prepends Slot Status Block before checklist coverage when slot_state exists")
+    void buildChatMessages_slotStatusBlockFirst() throws Exception {
+        CohereApiConfig config = mock(CohereApiConfig.class);
+        when(config.getMaxHistoryMessages()).thenReturn(20);
+
+        PromptService promptService = mock(PromptService.class);
+        when(promptService.loadRouterChatPrompt()).thenReturn("BASE RULES");
+
+        ClassificationResolver classificationResolver = mock(ClassificationResolver.class);
+        when(classificationResolver.candidateForCollection(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(ClassificationCandidate.empty());
+
+        CohereService chatService = createServiceWithSanitize(sanitizeService);
+        setField(chatService, "config", config);
+        setField(chatService, "promptService", promptService);
+        setField(chatService, "classificationResolver", classificationResolver);
+        setField(chatService, "slotStatusBlockBuilder", new SlotStatusBlockBuilder());
+        setField(chatService, "slotLedgerEnabled", true);
+
+        Consultation consultation = Consultation.create(UUID.randomUUID(), null, null, null);
+        SlotLedger ledger = SlotLedger.empty();
+        SlotStateItem collected = SlotStateItem.staticChecklist(
+                "static_001", "deposit amount", true, 1, true, SlotValueType.MONEY);
+        collected.setCollectedValue("30000000");
+        ledger.setSlots(List.of(collected));
+        consultation.updateSlotState(ledger);
+
+        Method buildChatMessages = CohereService.class.getDeclaredMethod(
+                "buildChatMessages", Consultation.class, String.class, String.class, List.class);
+        buildChatMessages.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<CohereChatRequest.Message> messages = (List<CohereChatRequest.Message>) buildChatMessages.invoke(
+                chatService, consultation, "latest", "", List.of());
+
+        String system = messages.get(0).getContent();
+        assertThat(system).startsWith("=== COLLECTED INFORMATION (DO NOT ASK AGAIN) ===");
+        assertThat(system).contains("deposit amount: 30000000");
+        assertThat(system).contains("BASE RULES");
+    }
 
     /** Message 는 @GeneratedValue 로 id 가 null 이므로, 로그에 쓰일 id 를 리플렉션으로 주입. */
     private Message messageWithId(MessageRole role, String content) throws Exception {

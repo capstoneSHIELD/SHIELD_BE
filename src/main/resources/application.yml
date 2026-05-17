@@ -169,13 +169,49 @@ cohere:
 #   Before enabling OpenAI in production, verify OPENAI_CLASSIFY_MODEL and
 #   OPENAI_CLASSIFY_REASONING_EFFORT against the currently available models
 #   for the production OpenAI account.
+app:
+  ai:
+    slot-ledger:
+      enabled: ${AI_SLOT_LEDGER_ENABLED:true}
+    cohere:
+      structured-output-enabled: ${AI_COHERE_STRUCTURED_OUTPUT_ENABLED:true}
+    openai:
+      structured-output-enabled: ${AI_OPENAI_STRUCTURED_OUTPUT_ENABLED:true}
+    intent-router:
+      shadow-mode: ${AI_INTENT_ROUTER_SHADOW_MODE:true}
+      enable-ask-legal-advice-skip: ${AI_INTENT_ROUTER_ENABLE_ASK_LEGAL_ADVICE_SKIP:false}
+      enable-greeting-skip: ${AI_INTENT_ROUTER_ENABLE_GREETING_SKIP:false}
+      enable-irrelevant-skip: ${AI_INTENT_ROUTER_ENABLE_IRRELEVANT_SKIP:false}
+      enable-confirm: ${AI_INTENT_ROUTER_ENABLE_CONFIRM:false}
+      enable-slot-auto-update: ${AI_INTENT_ROUTER_ENABLE_SLOT_AUTO_UPDATE:false}
+      thresholds:
+        default:
+          auto-collect: ${AI_INTENT_ROUTER_THRESHOLD_AUTO_COLLECT:0.85}
+          pending-lower-bound: ${AI_INTENT_ROUTER_THRESHOLD_PENDING_LOWER_BOUND:0.65}
+    dynamic-plan:
+      enabled: ${AI_DYNAMIC_PLAN_ENABLED:false}
+      regenerate-confidence-threshold: ${AI_DYNAMIC_PLAN_REGENERATE_CONFIDENCE_THRESHOLD:0.65}
+      regenerate-invalidated-slot-count: ${AI_DYNAMIC_PLAN_REGENERATE_INVALIDATED_SLOT_COUNT:3}
+      regenerate-repeated-correction-count: ${AI_DYNAMIC_PLAN_REGENERATE_REPEATED_CORRECTION_COUNT:2}
+    rag:
+      fusion-mode: ${AI_RAG_FUSION_MODE:weighted}
+      rrf-k: ${AI_RAG_RRF_K:60}
+      retrieval-gate:
+        enabled: ${AI_RAG_RETRIEVAL_GATE_ENABLED:false}
+        weighted-threshold: ${AI_RAG_RETRIEVAL_GATE_WEIGHTED_THRESHOLD:}
+        rrf-threshold: ${AI_RAG_RETRIEVAL_GATE_RRF_THRESHOLD:}
+        rerank-threshold: ${AI_RAG_RETRIEVAL_GATE_RERANK_THRESHOLD:}
+      intent-aware:
+        enabled: ${AI_RAG_INTENT_AWARE_ENABLED:false}
+    output-judge:
+      shadow-enabled: ${AI_OUTPUT_JUDGE_SHADOW_ENABLED:false}
+      sampling-rate: ${AI_OUTPUT_JUDGE_SAMPLING_RATE:0.0}
+      max-p95-latency-increase-ms: ${AI_OUTPUT_JUDGE_MAX_P95_LATENCY_INCREASE_MS:200}
+      max-cost-ratio: ${AI_OUTPUT_JUDGE_MAX_COST_RATIO:0.10}
+
 ai:
   classify:
     provider: ${AI_CLASSIFY_PROVIDER:cohere}
-  cohere:
-    structured-output-enabled: ${AI_COHERE_STRUCTURED_OUTPUT_ENABLED:true}
-  openai:
-    structured-output-enabled: ${AI_OPENAI_STRUCTURED_OUTPUT_ENABLED:true}
 
 openai:
   api-key: ${OPENAI_API_KEY:}

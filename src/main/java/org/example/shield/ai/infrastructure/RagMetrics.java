@@ -42,6 +42,8 @@ public class RagMetrics {
     public static final String METRIC_PIPELINE_FALLBACK = "shield.rag.pipeline.fallback";
     public static final String METRIC_CLASSIFY = "shield.rag.classify";
     public static final String METRIC_PIPELINE_TOTAL = "shield.rag.pipeline.total";
+    public static final String METRIC_RETRIEVAL_GATE = "shield.rag.retrieval_gate";
+    public static final String METRIC_OUTPUT_JUDGE_SHADOW = "shield.ai.output_judge.shadow";
 
     private final MeterRegistry registry;
 
@@ -105,6 +107,19 @@ public class RagMetrics {
      */
     public void recordPipelineFallback() {
         counter(METRIC_PIPELINE_FALLBACK, Tags.empty()).increment();
+    }
+
+    public void recordRetrievalGate(String method, String outcome) {
+        counter(METRIC_RETRIEVAL_GATE, Tags.of(
+                "method", method == null ? "unknown" : method,
+                "outcome", outcome == null ? "unknown" : outcome
+        )).increment();
+    }
+
+    public void recordOutputJudgeShadow(String outcome) {
+        counter(METRIC_OUTPUT_JUDGE_SHADOW, Tags.of(
+                "outcome", outcome == null ? "unknown" : outcome
+        )).increment();
     }
 
     // === Classify (Layer 1 LLM) ===

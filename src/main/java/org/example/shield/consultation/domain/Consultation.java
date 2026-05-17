@@ -9,6 +9,7 @@ import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.example.shield.ai.dto.slot.SlotLedger;
 import org.example.shield.common.domain.BaseEntity;
 import org.example.shield.common.enums.ConsultationStatus;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -58,6 +59,10 @@ public class Consultation extends BaseEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private List<String> aiTags;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "slot_state", columnDefinition = "jsonb")
+    private SlotLedger slotState;
 
     // ── 공통 필드 ──
 
@@ -144,6 +149,10 @@ public class Consultation extends BaseEntity {
     public void updateLastMessage(String content, LocalDateTime timestamp) {
         this.lastMessage = content;
         this.lastMessageAt = timestamp;
+    }
+
+    public void updateSlotState(SlotLedger slotState) {
+        this.slotState = slotState;
     }
 
     /**
