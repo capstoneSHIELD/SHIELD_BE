@@ -1,6 +1,6 @@
 ﻿# SHIELD AI/RAG v2.2 Phase 1~4 개발 완료 및 운영 검증 대기 보고서
 
-작성일: 2026-05-17  
+작성일: 2026-05-18  
 대상: AI/RAG 구조개편 v2.2 Phase 1, P1.5, P2, P3, P4 개발 결과  
 작성 목적: 팀장 보고 및 staging/운영 적용 판단을 위한 개발 범위, 검증 결과, 미측정 지표, 잔여 리스크 정리
 
@@ -14,12 +14,14 @@ AI/RAG 구조개편 v2.2 계획에 따라 Phase 1부터 Phase 4까지의 백엔�
 
 단, 본 보고서에서 말하는 "완료"는 **코드 작성과 자동화 테스트 통과**를 의미합니다. 운영 효과가 이미 확인됐다는 뜻은 아닙니다. 반복 질문률, intent 정확도, slot auto-update precision, RAG baseline 지표는 아직 staging 또는 eval set 기반 측정 전입니다.
 
+P1/P1.5 staging 배포 목표일은 **2026-05-22**로 두고, 실제 배포 티켓에서 담당자, dashboard URL, 알림 채널을 최종 확정합니다.
+
 최종 자동화 테스트 결과는 다음과 같습니다.
 
 | 항목 | 결과 |
 |---|---:|
-| 테스트 suite 수 | 62 |
-| 테스트 case 수 | 296 |
+| 테스트 suite 수 | 69 |
+| 테스트 case 수 | 310 |
 | 실패 | 0 |
 | 에러 | 0 |
 | 스킵 | 2 |
@@ -33,7 +35,7 @@ AI/RAG 구조개편 v2.2 계획에 따라 Phase 1부터 Phase 4까지의 백엔�
 | `LegalChunkRepositoryIT` | Docker/Testcontainers 기반 PostgreSQL + pgvector 통합 테스트이며, 현재 실행 환경에서 Docker 조건이 충족되지 않아 skip | 운영 전 CI 또는 Docker 가능 환경에서 별도 실행 필요 |
 | `BaselineMetricsRealIT` | 실제 외부 인프라, Cohere, DB를 사용하는 baseline 측정 테스트이며, `BASELINE_REAL=true`가 설정되지 않아 skip | P4 baseline 측정 단계에서 별도 실행 필요 |
 
-커버리지는 현재 미측정 상태입니다. `build.gradle`에 JaCoCo 또는 별도 coverage 설정이 없어 line/branch coverage 수치를 산출하지 못했습니다. 운영 승인 전 coverage 측정 task를 추가하거나 CI coverage 도구와 연동해야 합니다.
+커버리지는 JaCoCo 기준으로 산출 가능해졌습니다. 현재 full test 기준 전체 line coverage는 56.49%, branch coverage는 49.37%입니다. 다만 전체 수치에는 AI/RAG 외 레거시 영역이 함께 포함됩니다. `org.example.shield.ai.*` 패키지만 보면 line coverage는 68.93%, 이번 v2.2 하드닝 신규 서비스 8개는 75.88%입니다. 이번 단계에서는 gate를 blocking하지 않고 리포트 생성만 수행합니다.
 
 ---
 
@@ -75,6 +77,12 @@ AI/RAG 구조개편 v2.2 계획에 따라 Phase 1부터 Phase 4까지의 백엔�
 | rollback 시간/표본 조건 불일치 | 기능별 duration, sample count, high-risk count 조건을 정책 객체로 통일 | `AiRagRollbackPolicyTest` |
 | 스킵 2건 사유 불명확 | real infra/Docker 조건부 테스트임을 코드 annotation/tag와 보고서에 명시 | 전체 테스트 결과 스킵 2건 유지 |
 | ASK_LEGAL_ADVICE leak 판단 주체 불명확 | Go 기준에 개발팀 1차 라벨링, 법무/정책 담당자 최종 판정으로 명시 | 문서 기준 반영 |
+| coverage 미측정 | JaCoCo 리포트 생성 task 추가 | `.\gradlew.bat test`, `jacocoTestReport` |
+| P1/P1.5 Go 지표 수집 기반 부재 | structured output, AI API error, guardrail, repeated question, slot pollution metric 추가 | `AiRagOperationalMetricsTest` |
+| P2 shadow eval 산출물 부재 | JSONL/CSV exporter와 summary aggregator 추가 | `IntentShadowEvalExporterTest`, `IntentShadowEvalAggregatorTest` |
+| P3 drift/backfill 미구현 | drift detector와 dry-run/execute backfill service 추가 | `DynamicPlanDriftDetectorTest`, `DynamicPlanBackfillServiceTest` |
+| P4 baseline 산출 기반 부재 | v2.2 eval set/schema, baseline evaluator, Markdown/JSON report writer 추가 | `RagBaselineEvaluatorTest` |
+| rollout 판단 리포트 부재 | `AiRagRollbackPolicy`를 사용하는 rollout summary generator 추가 | `AiRagRolloutSummaryGeneratorTest` |
 
 추가된 주요 파일:
 
@@ -226,11 +234,11 @@ AI/RAG 구조개편 v2.2 계획에 따라 Phase 1부터 Phase 4까지의 백엔�
 |---|---|---|
 | source of truth | P3 활성화 시 `dynamic_plan_slot` 우선 정책 | 운영 문서와 service write path에서 강제 필요 |
 | `slot_state` 역할 | `DynamicPlanService.buildSlotStateCache()`로 plan table에서 요약 캐시 재생성 가능 | 매 턴 또는 plan 변경 직후 sync 호출 위치 확정 필요 |
-| 불일치 감지 | 별도 drift detector 없음 | `dynamic_plan_slot`과 `slot_state` checksum/updatedAt 비교 metric 또는 배치 필요 |
-| CORRECT_INFO 갱신 타이밍 | 현재 P2 slot ledger 경로는 `slot_state`를 즉시 갱신. P3 plan table write 경로는 운영 비활성 | P3 활성화 시 plan table 먼저 갱신 후 같은 transaction에서 `slot_state` 재생성 필요 |
-| 기존 상담 migration | 자동 backfill 미구현 | P3 활성화 전 lazy migration 또는 one-time backfill job 필요 |
+| 불일치 감지 | `DynamicPlanDriftDetector` 구현 완료 | 운영 배치 또는 metric 연결 필요 |
+| CORRECT_INFO 갱신 타이밍 | `saveValidatedPlanAndSync`로 plan 저장 직후 같은 transaction에서 `slot_state` 재생성 가능 | CORRECT_INFO P3 write path 연결은 P3 활성화 시 적용 |
+| 기존 상담 migration | `DynamicPlanBackfillService` dry-run/execute 기반 구현 | execute는 `AI_DYNAMIC_PLAN_BACKFILL_EXECUTE_ENABLED=true` 명시 시에만 사용 |
 
-현재 결론은 P3 schema와 service 기반은 준비됐지만, `dynamic_plan_slot`을 운영 source of truth로 쓰기 전에는 drift 감지와 전환 migration 절차를 추가해야 한다는 것입니다. 따라서 `app.ai.dynamic-plan.enabled=false` 기본값을 유지합니다.
+현재 결론은 P3 schema, drift detector, backfill 기반은 준비됐지만, `dynamic_plan_slot`을 운영 source of truth로 쓰기 전에는 staging dry-run 결과와 운영 배치 연결을 확인해야 한다는 것입니다. 따라서 `app.ai.dynamic-plan.enabled=false` 기본값을 유지합니다.
 
 ### 준비된 구조
 
@@ -274,15 +282,15 @@ AI/RAG 구조개편 v2.2 계획에 따라 Phase 1부터 Phase 4까지의 백엔�
 
 ### P4 baseline 측정 현황
 
-아직 운영 로그 기반 eval set을 구성하지 않았으므로 weighted hybrid retrieval의 정량 baseline은 미측정입니다. P4 코드 개발은 완료됐지만 RRF/rerank/gate 운영 적용 승인은 아래 baseline 측정 이후에만 판단할 수 있습니다.
+v2.2 UTF-8 seed eval set, schema, baseline evaluator, Markdown/JSON report writer는 추가했습니다. 다만 운영 로그 기반 150건 eval set은 아직 구성하지 않았으므로 weighted hybrid retrieval의 운영 정량 baseline은 미측정입니다. RRF/rerank/gate 운영 적용 승인은 아래 baseline 측정 이후에만 판단할 수 있습니다.
 
 | 지표 | 현재 baseline 값 | 상태 | 측정 계획 |
 |---|---:|---|---|
-| Recall@5 | N/A | 미측정 | 최근 3개월 상담 로그 기반 eval set 150건 구성 후 산출 |
-| MRR | N/A | 미측정 | 동일 eval set에서 weighted/RRF/rerank 비교 |
-| nDCG@5 | N/A | 미측정 | 동일 eval set에서 산출 |
-| Retrieval latency p50 | N/A | 미측정 | staging query replay로 측정 |
-| Retrieval latency p95 | N/A | 미측정 | staging query replay로 측정 |
+| Recall@5 | N/A | runner 구현, real baseline 미측정 | 최근 3개월 상담 로그 기반 eval set 150건 구성 후 산출 |
+| MRR | N/A | runner 구현, real baseline 미측정 | 동일 eval set에서 weighted/RRF/rerank 비교 |
+| nDCG@5 | N/A | runner 구현, real baseline 미측정 | 동일 eval set에서 산출 |
+| Retrieval latency p50 | N/A | runner 구현, real baseline 미측정 | staging query replay로 측정 |
+| Retrieval latency p95 | N/A | runner 구현, real baseline 미측정 | staging query replay로 측정 |
 | Rerank API cost | N/A | 미측정 | rerank shadow benchmark 후 산출 |
 | Retrieval false drop rate | N/A | 미측정 | calibrated threshold 후보별 수동 relevance label 기준 산출 |
 
@@ -300,8 +308,8 @@ AI/RAG 구조개편 v2.2 계획에 따라 Phase 1부터 Phase 4까지의 백엔�
 
 | 항목 | 결과 |
 |---|---:|
-| 테스트 suite 수 | 62 |
-| 테스트 case 수 | 296 |
+| 테스트 suite 수 | 69 |
+| 테스트 case 수 | 310 |
 | 실패 | 0 |
 | 에러 | 0 |
 | 스킵 | 2 |
@@ -317,12 +325,13 @@ AI/RAG 구조개편 v2.2 계획에 따라 Phase 1부터 Phase 4까지의 백엔�
 
 ### 커버리지
 
-| 항목 | 상태 |
-|---|---|
-| Line coverage | 미측정 |
-| Branch coverage | 미측정 |
-| 사유 | `build.gradle`에 JaCoCo/coverage plugin 미구성 |
-| 조치 필요 | 운영 승인 전 coverage 측정 task 추가 또는 CI coverage 연동 |
+| 범위 | Line coverage | Branch coverage | 해석 |
+|---|---:|---:|---|
+| 전체 프로젝트 | 56.49% | 49.37% | AI/RAG 외 기존 코드까지 포함한 전체 기준 |
+| `org.example.shield.ai.*` | 68.93% | 53.11% | 이번 개편 영향권인 AI/RAG 패키지 기준 |
+| v2.2 하드닝 신규 서비스 8개 | 75.88% | 56.25% | metric, shadow eval, drift/backfill, baseline, rollout summary 신규 구현 기준 |
+
+산출물은 `build/reports/jacoco/test/html/index.html`, `build/reports/jacoco/test/jacocoTestReport.xml`입니다. 현재 coverage gate는 blocking 비활성 상태입니다. 다음 단계에서는 전체 프로젝트가 아니라 AI/RAG 신규 패키지 기준 line coverage 70% 이상을 우선 목표로 검토합니다.
 
 ### 핵심 edge case 테스트 결과
 
@@ -386,18 +395,18 @@ AI/RAG 구조개편 v2.2 계획에 따라 Phase 1부터 Phase 4까지의 백엔�
 
 | Phase/기능 | Go 기준 | 측정 방법 | 라벨링/판단 주체 | 현재 상태 |
 |---|---|---|---|---|
-| P1 structured output | JSON parse failure < 1%, AI API 4xx/5xx < 5% | staging 1주 로그 | 백엔드 담당자 | 미측정 |
-| P1 guardrail | false positive rate < 2% | 수동 라벨링 200건 이상 | 개발팀 1차, 법무/정책 담당자 검토 | 미측정 |
-| P1.5 slot ledger | 반복 질문률 기존 대비 감소, slot 오염률 < 1%, p95 latency +300ms 이하 | staging 상담 100건 이상 | 백엔드 담당자, 상담 UX 담당자 | 미측정 |
-| P2 ASK_LEGAL_ADVICE skip | high-risk leak 0건, skip false positive <= 0.5% | 2주 shadow 로그 + 수동 라벨링 | 개발팀 1차 라벨링, 법무/정책 담당자 최종 판정 | 미측정 |
-| P2 GREETING skip | intent accuracy >= 98%, skip false positive <= 0.5% | shadow 로그 | 개발팀 | 미측정 |
-| P2 IRRELEVANT skip | intent accuracy >= 95%, skip false positive <= 0.5% | shadow 로그 | 개발팀, 서비스 기획 담당자 | 미측정 |
-| P2 CONFIRM skip | confirm precision >= 95%, ambiguous confirm skip 0건 | pending confirmation 샘플 라벨링 | 개발팀, 상담 UX 담당자 | 미측정 |
-| P2 slot auto-update | slot auto-update precision >= 95% | extracted slot 라벨링 | 개발팀, 도메인 리뷰어 | 미측정 |
+| P1 structured output | JSON parse failure < 1%, AI API 4xx/5xx < 5% | staging 1주 로그 | 백엔드 담당자 | metric 수집 기반 구현, staging 미측정 |
+| P1 guardrail | false positive rate < 2% | 수동 라벨링 200건 이상 | 개발팀 1차, 법무/정책 담당자 검토 | block metric 구현, false positive 라벨링 미측정 |
+| P1.5 slot ledger | 반복 질문률 기존 대비 감소, slot 오염률 < 1%, p95 latency +300ms 이하 | staging 상담 100건 이상 | 백엔드 담당자, 상담 UX 담당자 | 후보 metric 구현, staging 미측정 |
+| P2 ASK_LEGAL_ADVICE skip | high-risk leak 0건, skip false positive <= 0.5% | 2주 shadow 로그 + 수동 라벨링 | 개발팀 1차 라벨링, 법무/정책 담당자 최종 판정 | exporter/aggregator 구현, 라벨링 미측정 |
+| P2 GREETING skip | intent accuracy >= 98%, skip false positive <= 0.5% | shadow 로그 | 개발팀 | exporter/aggregator 구현, 라벨링 미측정 |
+| P2 IRRELEVANT skip | intent accuracy >= 95%, skip false positive <= 0.5% | shadow 로그 | 개발팀, 서비스 기획 담당자 | exporter/aggregator 구현, 라벨링 미측정 |
+| P2 CONFIRM skip | confirm precision >= 95%, ambiguous confirm skip 0건 | pending confirmation 샘플 라벨링 | 개발팀, 상담 UX 담당자 | exporter/aggregator 구현, 라벨링 미측정 |
+| P2 slot auto-update | slot auto-update precision >= 95% | extracted slot 라벨링 | 개발팀, 도메인 리뷰어 | exporter/aggregator 구현, 라벨링 미측정 |
 | P3 dynamic plan | validator false positive <= 5%, plan regeneration rate <= 30% | 일부 도메인 staging | 개발팀, 도메인 리뷰어 | 미측정 |
-| P3 plan cache sync | `dynamic_plan_slot` ↔ `slot_state` drift 0건 | drift detector 또는 sync audit | 백엔드 담당자 | 감지 로직 미구현 |
-| P4 RRF/rerank | Recall@5 baseline 대비 -2%p 이상 하락 없음 | eval set 150건 이상 | AI/RAG 담당자 | 미측정 |
-| P4 retrieval gate | false drop rate <= 2% | calibrated threshold eval | AI/RAG 담당자, 도메인 리뷰어 | 미측정 |
+| P3 plan cache sync | `dynamic_plan_slot` ↔ `slot_state` drift 0건 | drift detector 또는 sync audit | 백엔드 담당자 | drift detector/backfill 구현, 운영 미실행 |
+| P4 RRF/rerank | Recall@5 baseline 대비 -2%p 이상 하락 없음 | eval set 150건 이상 | AI/RAG 담당자 | baseline runner 구현, real baseline 미측정 |
+| P4 retrieval gate | false drop rate <= 2% | calibrated threshold eval | AI/RAG 담당자, 도메인 리뷰어 | baseline runner 구현, calibration 미측정 |
 | P4 output judge | p95 latency +200ms 이하, 비용 +10% 이하, PII masking 통과 | shadow judge 2주 | AI/RAG 담당자, 개인정보/보안 담당자 | 미측정 |
 
 현 시점 운영 적용 판단은 **P1/P1.5 staging 검증 전에는 보류**가 맞습니다. P2 이후 기능은 shadow eval 결과를 별도 보고하고 intent/기능별로 승인받아야 합니다.
@@ -407,6 +416,8 @@ AI/RAG 구조개편 v2.2 계획에 따라 Phase 1부터 Phase 4까지의 백엔�
 ---
 
 ## 9. 배포 및 Rollback 실행 절차
+
+본 보고서의 일정 기준점은 **2026-05-22 P1/P1.5 staging 배포 후보일**입니다. 실제 날짜가 바뀌면 섹션 11 액션 아이템의 목표 일정도 배포 티켓에서 함께 재산정합니다.
 
 ### 배포 절차
 
@@ -474,33 +485,33 @@ AI/RAG 구조개편 v2.2 계획에 따라 Phase 1부터 Phase 4까지의 백엔�
 
 | 리스크 | 현재 대응 |
 |---|---|
-| OpenAI 모델명 또는 reasoning effort 운영 계정 미지원 | 배포 전 공식 API 기준으로 모델명과 파라미터 확인 필요 |
-| Intent 오분류로 Cohere skip 오작동 | shadow mode 기본값 유지, intent별 단계적 활성화 |
-| Slot auto-update 오탐으로 상담 상태 오염 | 기본 비활성화, precision 95% 이상일 때만 활성화 권장 |
-| Dynamic plan validator 과차단 | dynamic plan 기본 비활성화, false positive 측정 후 일부 도메인부터 적용 |
-| `slot_state`와 `dynamic_plan_slot` 불일치 | P3 운영 전 drift detector와 migration/backfill 절차 추가 필요 |
-| Retrieval gate가 관련 문서를 drop | gate 기본 비활성화, calibration 결과 없이는 threshold 미적용 |
-| Output judge 비용/지연 증가 | shadow judge 기본 비활성화, p95 +200ms 및 비용 +10% 이내 기준 적용 |
-| Guardrail false positive | false positive rate 2% 초과 시 pattern 완화 또는 rollback |
+| OpenAI/Cohere 모델명, 파라미터, 응답 스키마 변경 | staging 배포 전 운영 계정에서 모델명과 샘플 요청을 확인하고, 실패 시 기존 모델/기존 parser 경로를 유지 |
+| Flyway migration 충돌 또는 DB 권한 문제 | staging에서 `V14`, `V15` migration dry-run을 먼저 수행하고, 배포 전 DB snapshot/rollback 절차를 배포 티켓에 첨부 |
+| metric은 코드에 있으나 dashboard/알림이 없어 관측 누락 | staging 티켓에 Actuator/Prometheus 확인 위치, dashboard URL, Slack 채널, on-call 담당자를 필수 항목으로 지정 |
+| shadow export 또는 baseline 실행으로 로그/아티팩트가 과도하게 증가 | shadow export 기본값 off 유지, staging에서는 기간과 retention을 티켓에 명시하고 일 단위 산출물 크기를 확인 |
+| PII가 shadow/eval artifact에 포함될 위험 | 기본 record는 `user_text_hash`만 저장하고 원문 저장은 local-only debug flag에서만 허용 |
+| backfill execute 오사용으로 plan table이 오염될 위험 | `AI_DYNAMIC_PLAN_BACKFILL_EXECUTE_ENABLED=false` 기본값 유지, dry-run 결과 승인 후에만 execute 허용 |
+| 법무/정책 리뷰 병목으로 ASK_LEGAL_ADVICE 승인 지연 | P2 shadow 시작 전 최종 판정자를 배포 티켓에 명시하고, 판정 완료 전 skip 활성화 금지 |
+| eval set이 오래되어 실제 운영 질의를 반영하지 못함 | 최초 150건 구성 후 분기별 갱신, 신규 도메인 추가 또는 retrieval 실패 유형 변화 시 수시 갱신 |
 
 ---
 
 ## 11. 다음 액션 아이템
 
-섹션 8의 Go 기준을 실행 가능한 작업으로 변환한 목록입니다. 실제 담당자 이름과 날짜는 배포 티켓에서 확정해야 합니다.
+섹션 8의 Go 기준을 실행 가능한 작업으로 변환한 목록입니다. 목표 일정은 **2026-05-22 P1/P1.5 staging 배포 후보일**을 기준으로 잡았습니다. 실제 담당자 이름과 최종 날짜는 배포 티켓에서 확정해야 합니다.
 
 | 우선순위 | 액션 | 담당 역할 | 목표 일정 | 산출물 |
 |---:|---|---|---|---|
-| 1 | 스킵된 `LegalChunkRepositoryIT`를 Docker 가능 환경에서 별도 실행 | 백엔드 담당자 | P1/P1.5 staging 전 | 실행 로그와 통과 여부 |
-| 2 | `BASELINE_REAL=true` 기반 `BaselineMetricsRealIT` 실행 계획 수립 | AI/RAG 담당자 | P4 eval 착수 전 | baseline 실행 절차와 비용 확인 |
-| 3 | P1/P1.5 staging 배포 티켓 작성 | 백엔드 담당자 | 다음 배포 후보일 전 | feature flag 기본값, rollback key, 모니터링 담당 포함 티켓 |
-| 4 | Guardrail false positive 라벨링 샘플 200건 준비 | 개발팀 1차, 법무/정책 담당자 검토 | P1 staging 1주 후 | false positive rate 보고서 |
-| 5 | P2 shadow eval 라벨링 가이드 작성 | AI/RAG 담당자, 법무/정책 담당자 | P2 shadow 시작 전 | intent/slot/ASK_LEGAL_ADVICE 라벨링 기준서 |
-| 6 | ASK_LEGAL_ADVICE high-risk leak 최종 판정자 지정 | 서비스 책임자 | P2 shadow 시작 전 | 법무 또는 정책 책임자 명시 |
-| 7 | `slot_state` ↔ `dynamic_plan_slot` drift detector 설계 | 백엔드 담당자 | P3 활성화 전 | drift metric 또는 sync audit 설계안 |
-| 8 | 기존 `slot_state`를 `dynamic_plan_slot`으로 옮기는 migration/backfill 계획 작성 | 백엔드 담당자 | P3 활성화 전 | lazy migration 또는 one-time backfill 절차 |
-| 9 | RAG eval set 150건 구성 | AI/RAG 담당자, 도메인 리뷰어 | P4 실험 전 | query, expected chunk/case id, domain, failure_type 포함 eval set |
-| 10 | 배포 모니터링 dashboard/channel 확정 | 배포 담당자 | staging 배포 전 | dashboard URL, Slack 채널, on-call 담당자 |
+| 1 | P1/P1.5 staging 배포 티켓 작성 | 백엔드 담당자 | 2026-05-20 | feature flag 기본값, rollback key, 모니터링 담당 포함 티켓 |
+| 2 | 배포 모니터링 dashboard/channel 확정 | 배포 담당자 | 2026-05-20 | dashboard URL, Slack 채널, on-call 담당자 |
+| 3 | 스킵된 `LegalChunkRepositoryIT`를 Docker 가능 환경에서 별도 실행 | 백엔드 담당자 | 2026-05-21 | 실행 로그와 통과 여부 |
+| 4 | Guardrail false positive 라벨링 샘플 200건 준비 | 개발팀 1차, 법무/정책 담당자 검토 | 2026-05-29 | false positive rate 보고서 |
+| 5 | P2 shadow eval 라벨링 가이드 작성 | AI/RAG 담당자, 법무/정책 담당자 | 2026-06-03 | intent/slot/ASK_LEGAL_ADVICE 라벨링 기준서 |
+| 6 | ASK_LEGAL_ADVICE high-risk leak 최종 판정자 지정 | 서비스 책임자 | 2026-06-03 | 법무 또는 정책 책임자 명시 |
+| 7 | `BASELINE_REAL=true` 기반 `BaselineMetricsRealIT` 실행 계획 수립 | AI/RAG 담당자 | 2026-06-05 | baseline 실행 절차와 비용 확인 |
+| 8 | `slot_state` ↔ `dynamic_plan_slot` drift detector 운영 배치 설계 | 백엔드 담당자 | 2026-06-12 | drift metric 또는 sync audit 설계안 |
+| 9 | 기존 `slot_state`를 `dynamic_plan_slot`으로 옮기는 migration/backfill 계획 작성 | 백엔드 담당자 | 2026-06-12 | lazy migration 또는 one-time backfill 절차 |
+| 10 | RAG eval set 150건 구성 | AI/RAG 담당자, 도메인 리뷰어 | 2026-06-19 | query, expected chunk/case id, domain, failure_type 포함 eval set |
 
 ---
 

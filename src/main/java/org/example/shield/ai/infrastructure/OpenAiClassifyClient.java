@@ -6,6 +6,7 @@ import org.example.shield.ai.config.OpenAiApiConfig;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.CohereChatRequest;
 import org.example.shield.consultation.exception.AnalysisFailedException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -26,11 +27,20 @@ public class OpenAiClassifyClient {
 
     private final WebClient openAiWebClient;
     private final OpenAiApiConfig config;
+    private final AiRagOperationalMetrics operationalMetrics;
 
     public OpenAiClassifyClient(@Qualifier("openAiWebClient") WebClient openAiWebClient,
                                 OpenAiApiConfig config) {
+        this(openAiWebClient, config, null);
+    }
+
+    @Autowired
+    public OpenAiClassifyClient(@Qualifier("openAiWebClient") WebClient openAiWebClient,
+                                OpenAiApiConfig config,
+                                AiRagOperationalMetrics operationalMetrics) {
         this.openAiWebClient = openAiWebClient;
         this.config = config;
+        this.operationalMetrics = operationalMetrics;
     }
 
     public AiCallResult<String> callRawJson(List<CohereChatRequest.Message> messages) {
@@ -78,6 +88,7 @@ public class OpenAiClassifyClient {
             throw e;
         } catch (Exception e) {
             int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000);
+            recordAiApiError(e);
             log.error("OpenAI classify API call failed: model={}, latency={}ms, error={}",
                     config.getClassifyModel(), latencyMs, e.getMessage(), e);
             throw new AnalysisFailedException("OpenAI classify API call failed: " + e.getMessage(), e);
@@ -209,5 +220,18 @@ public class OpenAiClassifyClient {
             return status == 429 || status >= 500;
         }
         return false;
+    }
+
+    private String statusOf(Throwable e) {
+        if (e instanceof WebClientResponseException wce) {
+            return String.valueOf(wce.getStatusCode().value());
+        }
+        return e == null ? "unknown" : e.getClass().getSimpleName();
+    }
+
+    private void recordAiApiError(Throwable e) {
+        if (operationalMetrics != null) {
+            operationalMetrics.recordAiApiError("openai", "classify", statusOf(e));
+        }
     }
 }

@@ -179,6 +179,9 @@ app:
       structured-output-enabled: ${AI_OPENAI_STRUCTURED_OUTPUT_ENABLED:true}
     intent-router:
       shadow-mode: ${AI_INTENT_ROUTER_SHADOW_MODE:true}
+      shadow-export:
+        enabled: ${AI_INTENT_ROUTER_SHADOW_EXPORT_ENABLED:false}
+        include-raw-text: ${AI_INTENT_ROUTER_SHADOW_EXPORT_INCLUDE_RAW_TEXT:false}
       enable-ask-legal-advice-skip: ${AI_INTENT_ROUTER_ENABLE_ASK_LEGAL_ADVICE_SKIP:false}
       enable-greeting-skip: ${AI_INTENT_ROUTER_ENABLE_GREETING_SKIP:false}
       enable-irrelevant-skip: ${AI_INTENT_ROUTER_ENABLE_IRRELEVANT_SKIP:false}
@@ -190,6 +193,8 @@ app:
           pending-lower-bound: ${AI_INTENT_ROUTER_THRESHOLD_PENDING_LOWER_BOUND:0.65}
     dynamic-plan:
       enabled: ${AI_DYNAMIC_PLAN_ENABLED:false}
+      backfill:
+        execute-enabled: ${AI_DYNAMIC_PLAN_BACKFILL_EXECUTE_ENABLED:false}
       regenerate-confidence-threshold: ${AI_DYNAMIC_PLAN_REGENERATE_CONFIDENCE_THRESHOLD:0.65}
       regenerate-invalidated-slot-count: ${AI_DYNAMIC_PLAN_REGENERATE_INVALIDATED_SLOT_COUNT:3}
       regenerate-repeated-correction-count: ${AI_DYNAMIC_PLAN_REGENERATE_REPEATED_CORRECTION_COUNT:2}

@@ -3,6 +3,7 @@ package org.example.shield.ai.infrastructure;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.BriefParsedResponse;
 import org.example.shield.ai.dto.ChatParsedResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.text.Normalizer;
@@ -20,6 +21,17 @@ import java.util.regex.Pattern;
 @Component
 @Slf4j
 public class GuardrailFilter {
+
+    private final AiRagOperationalMetrics metrics;
+
+    public GuardrailFilter() {
+        this(null);
+    }
+
+    @Autowired
+    public GuardrailFilter(AiRagOperationalMetrics metrics) {
+        this.metrics = metrics;
+    }
 
     /**
      * 금칙어 패턴 목록 (NFC 정규화 후 매칭).
@@ -73,6 +85,7 @@ public class GuardrailFilter {
         if (containsForbiddenPattern(normalized)) {
             log.warn("가드레일 금칙어 검출 — nextQuestion 대체. 원문: {}",
                     normalized.substring(0, Math.min(200, normalized.length())));
+            recordGuardrailBlock("chat_next_question");
             response.setNextQuestion(FALLBACK_MESSAGE);
         }
 
@@ -101,6 +114,7 @@ public class GuardrailFilter {
             normalized = Normalizer.normalize(normalized, Normalizer.Form.NFC);
             if (containsForbiddenPattern(normalized)) {
                 log.warn("의뢰서 strategy 금칙어 검출 — 제거");
+                recordGuardrailBlock("brief_strategy");
                 response.setStrategy("구체적인 법률 전략은 변호사와 상담 후 결정하시기 바랍니다.");
             }
         }
@@ -122,6 +136,7 @@ public class GuardrailFilter {
                     normalized = Normalizer.normalize(normalized, Normalizer.Form.NFC);
                     if (containsForbiddenPattern(normalized)) {
                         log.warn("의뢰서 keyIssue description 금칙어 검출 — 대체");
+                        recordGuardrailBlock("brief_key_issue");
                         issue.setDescription("상세 법률 분석은 변호사 검토가 필요합니다.");
                     }
                 }
@@ -147,6 +162,18 @@ public class GuardrailFilter {
     public boolean containsForbiddenText(String text) {
         if (text == null) return false;
         return containsForbiddenPattern(Normalizer.normalize(text, Normalizer.Form.NFC));
+    }
+
+    public void recordFalsePositiveCandidate(String surface) {
+        if (metrics != null) {
+            metrics.recordGuardrailFalsePositiveCandidate(surface);
+        }
+    }
+
+    private void recordGuardrailBlock(String surface) {
+        if (metrics != null) {
+            metrics.recordGuardrailBlock(surface);
+        }
     }
 
     private boolean containsForbiddenPattern(String text) {

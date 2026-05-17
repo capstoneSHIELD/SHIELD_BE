@@ -8,9 +8,11 @@ import org.example.shield.ai.dto.slot.SlotLedger;
 import org.example.shield.ai.dto.slot.SlotStateItem;
 import org.example.shield.ai.dto.slot.SlotStatus;
 import org.example.shield.ai.dto.slot.SlotValueType;
+import org.example.shield.ai.infrastructure.AiRagOperationalMetrics;
 import org.example.shield.consultation.application.ClassificationCandidate;
 import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.Message;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +27,9 @@ public class SlotLedgerService {
     private final ChecklistCoverageService checklistCoverageService;
     private final StaticQuestionSelector staticQuestionSelector;
     private final SlotValueValidator slotValueValidator;
+
+    @Autowired(required = false)
+    private AiRagOperationalMetrics operationalMetrics;
 
     @Value("${app.ai.slot-ledger.enabled:true}")
     private boolean enabled;
@@ -93,6 +98,9 @@ public class SlotLedgerService {
         if (next == null) {
             return false;
         }
+        if (hasAskedQuestion(next, question)) {
+            recordRepeatedQuestion(next.getSlotId());
+        }
         next.appendAskedQuestion(question);
         ledger.touch();
         return true;
@@ -123,6 +131,7 @@ public class SlotLedgerService {
                     SlotValueType.from(extracted.valueType()),
                     extracted.value());
             if (validation.ignored()) {
+                recordSlotPollutionCandidate("value_validation_ignored");
                 continue;
             }
 
@@ -222,5 +231,25 @@ public class SlotLedgerService {
             return SlotValueType.DATE;
         }
         return SlotValueType.TEXT;
+    }
+
+    private boolean hasAskedQuestion(SlotStateItem slot, String question) {
+        if (slot == null || slot.getAskedQuestions() == null || question == null) {
+            return false;
+        }
+        String normalized = question.trim().replaceAll("\\s+", " ");
+        return slot.getAskedQuestions().contains(normalized);
+    }
+
+    private void recordRepeatedQuestion(String slotId) {
+        if (operationalMetrics != null) {
+            operationalMetrics.recordRepeatedSlotQuestionCandidate(slotId);
+        }
+    }
+
+    private void recordSlotPollutionCandidate(String reason) {
+        if (operationalMetrics != null) {
+            operationalMetrics.recordSlotLedgerPollutionCandidate(reason);
+        }
     }
 }

@@ -17,12 +17,15 @@ class AiRagFeatureFlagDefaultsTest {
         MockEnvironment env = loadApplicationYamlWithoutExternalOverrides();
 
         assertThat(env.getProperty("app.ai.intent-router.shadow-mode", Boolean.class)).isTrue();
+        assertThat(env.getProperty("app.ai.intent-router.shadow-export.enabled", Boolean.class)).isFalse();
+        assertThat(env.getProperty("app.ai.intent-router.shadow-export.include-raw-text", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.intent-router.enable-ask-legal-advice-skip", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.intent-router.enable-greeting-skip", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.intent-router.enable-irrelevant-skip", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.intent-router.enable-confirm", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.intent-router.enable-slot-auto-update", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.dynamic-plan.enabled", Boolean.class)).isFalse();
+        assertThat(env.getProperty("app.ai.dynamic-plan.backfill.execute-enabled", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.rag.fusion-mode")).isEqualTo("weighted");
         assertThat(env.getProperty("app.ai.rag.retrieval-gate.enabled", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.rag.intent-aware.enabled", Boolean.class)).isFalse();

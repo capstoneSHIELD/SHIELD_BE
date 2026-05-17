@@ -65,6 +65,19 @@ public class DynamicPlanService {
         return plan;
     }
 
+    @Transactional
+    public ConsultationDynamicPlan saveValidatedPlanAndSync(Consultation consultation, DynamicPlanProposal proposal) {
+        if (consultation == null || consultation.getId() == null) {
+            return null;
+        }
+        ConsultationDynamicPlan plan = saveValidatedPlan(consultation.getId(), proposal);
+        SlotLedger cache = buildSlotStateCache(consultation.getId());
+        if (cache != null) {
+            consultation.updateSlotState(cache);
+        }
+        return plan;
+    }
+
     @Transactional(readOnly = true)
     public SlotLedger buildSlotStateCache(UUID consultationId) {
         ConsultationDynamicPlan plan = planRepository

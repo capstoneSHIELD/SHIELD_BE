@@ -16,6 +16,7 @@ import org.example.shield.ai.dto.IntentClassificationResult.Keywords;
 import org.example.shield.ai.dto.IntentClassificationResult.MatchedNode;
 import org.example.shield.ai.dto.IntentRouterResponse;
 import org.example.shield.ai.infrastructure.OpenAiClassifyClient;
+import org.example.shield.ai.infrastructure.AiRagOperationalMetrics;
 import org.example.shield.ai.infrastructure.RagMetrics;
 import org.example.shield.consultation.domain.Message;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +45,7 @@ public class IntentClassificationService {
     private final RagMetrics ragMetrics;
     private final OpenAiClassifyClient openAiClassifyClient;
     private final String classifyProvider;
+    private final AiRagOperationalMetrics operationalMetrics;
 
     private String intentClassifierPromptTemplate;
     private JsonNode slimOntologyRoot;
@@ -61,7 +63,7 @@ public class IntentClassificationService {
             @Value("${cohere.classify.context-window-messages:4}") int contextWindowMessages,
             RagMetrics ragMetrics) {
         this(cohereService, objectMapper, slimOntologyJson, resourceLoader,
-                contextWindowMessages, ragMetrics, null, "cohere");
+                contextWindowMessages, ragMetrics, null, "cohere", null);
     }
 
     @Autowired
@@ -73,7 +75,8 @@ public class IntentClassificationService {
             @Value("${cohere.classify.context-window-messages:4}") int contextWindowMessages,
             RagMetrics ragMetrics,
             OpenAiClassifyClient openAiClassifyClient,
-            @Value("${ai.classify.provider:cohere}") String classifyProvider) {
+            @Value("${ai.classify.provider:cohere}") String classifyProvider,
+            AiRagOperationalMetrics operationalMetrics) {
         this.cohereService = cohereService;
         this.objectMapper = objectMapper;
         this.slimOntologyJson = slimOntologyJson;
@@ -82,6 +85,7 @@ public class IntentClassificationService {
         this.ragMetrics = ragMetrics;
         this.openAiClassifyClient = openAiClassifyClient;
         this.classifyProvider = classifyProvider == null ? "cohere" : classifyProvider.trim().toLowerCase();
+        this.operationalMetrics = operationalMetrics;
     }
 
     @PostConstruct
@@ -116,6 +120,7 @@ public class IntentClassificationService {
             return parseIntentRouterResponse(result.data());
 
         } catch (Exception e) {
+            recordParseFailure("intent_router", "fallback");
             log.warn("Intent classification failed, using fallback: domain={}, error={}", domain, e.getMessage());
             return IntentRouterResponse.fromLegacy(createFallbackResult(domain));
         }
@@ -454,7 +459,14 @@ public class IntentClassificationService {
             return objectMapper.readTree(json);
         } catch (Exception e) {
             log.error("Intent classification JSON parsing failed: {}", e.getMessage());
+            recordParseFailure("intent_router", "failure");
             throw new RuntimeException("Intent classification JSON parsing failed", e);
+        }
+    }
+
+    private void recordParseFailure(String schema, String outcome) {
+        if (operationalMetrics != null) {
+            operationalMetrics.recordStructuredOutputParse(classifyProvider, schema, outcome);
         }
     }
 

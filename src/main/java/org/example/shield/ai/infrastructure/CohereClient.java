@@ -12,6 +12,7 @@ import org.example.shield.ai.dto.CohereChatResponse;
 import org.example.shield.ai.dto.CohereEmbedRequest;
 import org.example.shield.ai.dto.CohereEmbedResponse;
 import org.example.shield.consultation.exception.AnalysisFailedException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -38,13 +39,23 @@ public class CohereClient implements AiClient {
     private final WebClient cohereWebClient;
     private final ObjectMapper objectMapper;
     private final CohereApiConfig config;
+    private final AiRagOperationalMetrics operationalMetrics;
 
     public CohereClient(@Qualifier("cohereWebClient") WebClient cohereWebClient,
                         ObjectMapper objectMapper,
                         CohereApiConfig config) {
+        this(cohereWebClient, objectMapper, config, null);
+    }
+
+    @Autowired
+    public CohereClient(@Qualifier("cohereWebClient") WebClient cohereWebClient,
+                        ObjectMapper objectMapper,
+                        CohereApiConfig config,
+                        AiRagOperationalMetrics operationalMetrics) {
         this.cohereWebClient = cohereWebClient;
         this.objectMapper = objectMapper;
         this.config = config;
+        this.operationalMetrics = operationalMetrics;
     }
 
     @Override
@@ -120,6 +131,7 @@ public class CohereClient implements AiClient {
             throw e;
         } catch (Exception e) {
             int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000);
+            recordAiApiError("embed", e);
             log.error("Cohere Embed API 호출 실패: latency={}ms, error={}", latencyMs, e.getMessage(), e);
             throw new AnalysisFailedException("Cohere Embed API 호출 실패: " + e.getMessage(), e);
         }
@@ -162,6 +174,7 @@ public class CohereClient implements AiClient {
             throw e;
         } catch (Exception e) {
             int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000);
+            recordAiApiError("raw_chat", e);
             log.error("Cohere API 호출 실패 (raw): latency={}ms, error={}", latencyMs, e.getMessage(), e);
             throw new AnalysisFailedException("Cohere API 호출 실패: " + e.getMessage(), e);
         }
@@ -216,6 +229,7 @@ public class CohereClient implements AiClient {
             throw e;
         } catch (Exception e) {
             int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000);
+            recordAiApiError("chat", e);
             log.error("Cohere API 호출 실패: latency={}ms, error={}", latencyMs, e.getMessage(), e);
             throw new AnalysisFailedException("Cohere API 호출 실패: " + e.getMessage(), e);
         }
@@ -246,8 +260,11 @@ public class CohereClient implements AiClient {
     private <T> T parseResponse(String contentJson, Class<T> type) {
         // 1차: 원문 그대로 파싱
         try {
-            return objectMapper.readValue(contentJson, type);
+            T parsed = objectMapper.readValue(contentJson, type);
+            recordStructuredOutputParse(type, "success");
+            return parsed;
         } catch (Exception primary) {
+            recordStructuredOutputParse(type, "fallback");
             log.warn("JSON 파싱 실패 (1차), 원문: {}",
                     contentJson.substring(0, Math.min(500, contentJson.length())));
 
@@ -255,7 +272,9 @@ public class CohereClient implements AiClient {
             String cleaned = extractJsonFromMarkdown(contentJson);
             if (!cleaned.equals(contentJson)) {
                 try {
-                    return objectMapper.readValue(cleaned, type);
+                    T parsed = objectMapper.readValue(cleaned, type);
+                    recordStructuredOutputParse(type, "markdown_success");
+                    return parsed;
                 } catch (Exception ignored) {
                     log.warn("마크다운 추출 후에도 JSON 파싱 실패 — 괄호 복구 fallback 진입");
                 }
@@ -266,6 +285,7 @@ public class CohereClient implements AiClient {
             if (recovered != null) {
                 try {
                     T parsed = objectMapper.readValue(recovered, type);
+                    recordStructuredOutputParse(type, "recovered_success");
                     log.warn("평문에서 JSON 구간 복구 성공 (길이={})", recovered.length());
                     return parsed;
                 } catch (Exception ignored) {
@@ -273,6 +293,7 @@ public class CohereClient implements AiClient {
                 }
             }
 
+            recordStructuredOutputParse(type, "failure");
             throw new AnalysisFailedException(
                     "Cohere 응답 JSON 파싱 실패: " + primary.getMessage(), primary);
         }
@@ -338,5 +359,24 @@ public class CohereClient implements AiClient {
             return status == 429 || status >= 500;
         }
         return false;
+    }
+
+    private String statusOf(Throwable e) {
+        if (e instanceof WebClientResponseException wce) {
+            return String.valueOf(wce.getStatusCode().value());
+        }
+        return e == null ? "unknown" : e.getClass().getSimpleName();
+    }
+
+    private void recordAiApiError(String operation, Throwable e) {
+        if (operationalMetrics != null) {
+            operationalMetrics.recordAiApiError("cohere", operation, statusOf(e));
+        }
+    }
+
+    private <T> void recordStructuredOutputParse(Class<T> type, String outcome) {
+        if (operationalMetrics != null) {
+            operationalMetrics.recordStructuredOutputParse("cohere", type.getSimpleName(), outcome);
+        }
     }
 }
