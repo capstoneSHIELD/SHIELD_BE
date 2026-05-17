@@ -45,6 +45,9 @@ public class CohereApiConfig {
     @Value("${cohere.chat.max-history-messages:20}")
     private int maxHistoryMessages;
 
+    @Value("${app.ai.cohere.structured-output-enabled:true}")
+    private boolean structuredOutputEnabled;
+
     @Value("${cohere.classify.model:command-r7b-12-2024}")
     private String classifyModel;
 

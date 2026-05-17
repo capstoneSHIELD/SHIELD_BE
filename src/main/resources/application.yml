@@ -165,10 +165,17 @@ cohere:
 
 # LLM provider selection for lightweight intent classification.
 # - cohere: existing Cohere /v2/chat classifier path
-# - openai: OpenAI Chat Completions classifier path, e.g. gpt-5-nano
+# - openai: OpenAI Chat Completions classifier path.
+#   Before enabling OpenAI in production, verify OPENAI_CLASSIFY_MODEL and
+#   OPENAI_CLASSIFY_REASONING_EFFORT against the currently available models
+#   for the production OpenAI account.
 ai:
   classify:
     provider: ${AI_CLASSIFY_PROVIDER:cohere}
+  cohere:
+    structured-output-enabled: ${AI_COHERE_STRUCTURED_OUTPUT_ENABLED:true}
+  openai:
+    structured-output-enabled: ${AI_OPENAI_STRUCTURED_OUTPUT_ENABLED:true}
 
 openai:
   api-key: ${OPENAI_API_KEY:}

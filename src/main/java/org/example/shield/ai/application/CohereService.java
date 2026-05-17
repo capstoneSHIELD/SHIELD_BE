@@ -35,6 +35,11 @@ import java.util.List;
 @Slf4j
 public class CohereService {
 
+    private static final int CHECKLIST_COVERAGE_TOKEN_BUDGET = 160;
+    private static final int RECENT_QUESTIONS_TOKEN_BUDGET = 80;
+    private static final int RAG_CONTEXT_TOKEN_BUDGET = 800;
+    private static final int APPROX_CHARS_PER_TOKEN = 4;
+
     private final AiClient aiClient;
     private final CohereApiConfig config;
     private final PromptService promptService;
@@ -106,7 +111,8 @@ public class CohereService {
                 config.getClassifyModel(),
                 messages,
                 config.getClassifyTemperature(),
-                config.getClassifyMaxTokens());
+                config.getClassifyMaxTokens(),
+                config.isStructuredOutputEnabled());
         return cohereClient.callRawJson(request, Duration.ofMillis(config.getClassifyReadTimeout()));
     }
 
@@ -123,12 +129,40 @@ public class CohereService {
 
         List<CohereChatRequest.Message> msgs = new ArrayList<>();
 
-        // 1. 시스템 프롬프트
+        // 1. 시스템 프롬프트. P1 state hints must stay at the very top.
+        List<String> topBlocks = new ArrayList<>();
         String systemPrompt = promptService.loadRouterChatPrompt();
 
         // 분류 완료 시 체크리스트 YAML 동적 주입
         ClassificationCandidate collectionCandidate = classificationResolver.candidateForCollection(consultation);
         String domain = collectionCandidate.firstDomain();
+        if (domain != null) {
+            String collectedSummary = checklistCoverageService.buildCollectedSummary(
+                    domain,
+                    collectionCandidate.firstSubDomain(),
+                    collectionCandidate.firstTag(),
+                    chatHistory);
+            if (!collectedSummary.isEmpty()) {
+                topBlocks.add(budgetBlock(
+                        "=== CURRENT CHECKLIST COVERAGE ===",
+                        collectedSummary,
+                        CHECKLIST_COVERAGE_TOKEN_BUDGET));
+            }
+        }
+
+        String recentQuestionsBlock = buildRecentQuestionsBlock(chatHistory);
+        if (!recentQuestionsBlock.isEmpty()) {
+            topBlocks.add(budgetBlock(
+                    "=== DO NOT REPEAT EXACT QUESTIONS ===",
+                    recentQuestionsBlock,
+                    RECENT_QUESTIONS_TOKEN_BUDGET));
+        }
+
+        if (!topBlocks.isEmpty()) {
+            topBlocks.add("RULE: Do not ask an identical question again. Prefer the highest-priority unchecked item.");
+            systemPrompt = String.join("\n\n", topBlocks) + "\n\n" + systemPrompt;
+        }
+
         if (domain != null) {
             String checklist = promptService.loadChecklist(domain);
             if (checklist != null) {
@@ -142,21 +176,11 @@ public class CohereService {
             systemPrompt = systemPrompt + "\n\n" + classificationContext;
         }
 
-        // 이미 수집된 체크리스트 항목을 체크박스로 명시 — LLM 이 답변된 질문을 재생성하지 않도록 가이드
-        if (domain != null) {
-            String collectedSummary = checklistCoverageService.buildCollectedSummary(
-                    domain,
-                    collectionCandidate.firstSubDomain(),
-                    collectionCandidate.firstTag(),
-                    chatHistory);
-            if (!collectedSummary.isEmpty()) {
-                systemPrompt = systemPrompt + "\n\n" + collectedSummary;
-            }
-        }
-
         // RAG Layer 3: 법률 조문 컨텍스트 주입
         if (ragContext != null && !ragContext.isEmpty()) {
-            systemPrompt = systemPrompt + "\n\n" + ragContext;
+            systemPrompt = systemPrompt + "\n\n" + truncateForTokenBudget(
+                    ragContext,
+                    RAG_CONTEXT_TOKEN_BUDGET);
         }
 
         msgs.add(CohereChatRequest.Message.system(systemPrompt));
@@ -311,6 +335,59 @@ public class CohereService {
         sb.append("- 단, 사용자 선택과 실제 사건이 일치하면 같은 온톨로지 노드명을 반환하세요.\n");
         sb.append("- 사용자 선택과 중복되는 질문은 하지 마세요.");
         return sb.toString();
+    }
+
+    private String buildRecentQuestionsBlock(List<Message> chatHistory) {
+        if (chatHistory == null || chatHistory.isEmpty()) {
+            return "";
+        }
+
+        List<String> questions = new ArrayList<>();
+        for (int i = chatHistory.size() - 1; i >= 0 && questions.size() < 5; i--) {
+            Message msg = chatHistory.get(i);
+            if (msg.getRole() != MessageRole.CHATBOT) {
+                continue;
+            }
+
+            String content = msg.getContent();
+            if (content == null || content.isBlank()) {
+                continue;
+            }
+
+            String question = content.trim().replaceAll("\\s+", " ");
+            if (!question.isBlank() && !questions.contains(question)) {
+                questions.add(question);
+            }
+        }
+
+        if (questions.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (String question : questions) {
+            sb.append("- ").append(question).append('\n');
+        }
+        return sb.toString().trim();
+    }
+
+    private String budgetBlock(String title, String content, int tokenBudget) {
+        if (content == null || content.isBlank()) {
+            return "";
+        }
+        return title + "\n" + truncateForTokenBudget(content.trim(), tokenBudget);
+    }
+
+    private String truncateForTokenBudget(String text, int tokenBudget) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        int charBudget = Math.max(0, tokenBudget) * APPROX_CHARS_PER_TOKEN;
+        if (charBudget == 0 || text.length() <= charBudget) {
+            return text;
+        }
+        int cut = Math.max(0, charBudget - 3);
+        return text.substring(0, cut).stripTrailing() + "...";
     }
 
     private static boolean isNonEmpty(List<String> list) {

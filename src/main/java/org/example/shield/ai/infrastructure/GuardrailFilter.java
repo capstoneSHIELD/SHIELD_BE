@@ -38,6 +38,12 @@ public class GuardrailFilter {
             // 승패 예측
             Pattern.compile("승소\\s*(가능성|확률|할 수)"),
             Pattern.compile("이길\\s*(수|가능성|확률)"),
+            Pattern.compile("(승소|패소|인용|기각)\\s*(될|됩니다|가능성|확률|예상)"),
+
+            // 법적 결론/배상 가능성 단정
+            Pattern.compile("(위법|불법|적법|합법)\\s*(입니다|합니다|으로\\s*볼\\s*수)"),
+            Pattern.compile("(손해배상|위자료|보증금|임금).{0,12}(받을\\s*수\\s*있|인정됩니다|청구\\s*가능)"),
+            Pattern.compile("(고소|고발).{0,8}(하면|하시면).{0,8}(가능|됩니다|처벌)"),
 
             // 변호사 추천
             Pattern.compile("(추천|소개).*?변호사"),

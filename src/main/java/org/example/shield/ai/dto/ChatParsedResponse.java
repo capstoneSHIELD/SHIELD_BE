@@ -1,6 +1,7 @@
 package org.example.shield.ai.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import com.fasterxml.jackson.core.JsonParser;
@@ -26,6 +27,9 @@ import java.util.List;
 @NoArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ChatParsedResponse {
+
+    @JsonProperty("schema_version")
+    private String schemaVersion = "1.0";
 
     private String nextQuestion;
 

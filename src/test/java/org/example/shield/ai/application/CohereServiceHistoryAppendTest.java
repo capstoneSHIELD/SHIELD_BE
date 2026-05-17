@@ -175,6 +175,64 @@ class CohereServiceHistoryAppendTest {
                 .hasSize(1);
     }
 
+    @Test
+    @DisplayName("buildChatMessages — coverage 와 최근 질문 blacklist 를 system prompt 최상단에 둔다")
+    void buildChatMessages_stateBlocksPrepended() throws Exception {
+        CohereApiConfig config = mock(CohereApiConfig.class);
+        when(config.getMaxHistoryMessages()).thenReturn(20);
+
+        PromptService promptService = mock(PromptService.class);
+        when(promptService.loadRouterChatPrompt()).thenReturn("BASE RULES");
+        when(promptService.loadChecklist("부동산 거래")).thenReturn("CHECKLIST YAML");
+
+        ChecklistCoverageService checklistCoverageService = mock(ChecklistCoverageService.class);
+        when(checklistCoverageService.buildCollectedSummary(
+                org.mockito.ArgumentMatchers.eq("부동산 거래"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn("- [x] 보증금\n- [ ] 계약 종료일");
+
+        ClassificationResolver classificationResolver = mock(ClassificationResolver.class);
+        when(classificationResolver.candidateForCollection(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new ClassificationCandidate(
+                        List.of("부동산 거래"),
+                        List.of(),
+                        List.of()
+                ));
+
+        CohereService chatService = createServiceWithSanitize(sanitizeService);
+        setField(chatService, "config", config);
+        setField(chatService, "promptService", promptService);
+        setField(chatService, "checklistCoverageService", checklistCoverageService);
+        setField(chatService, "classificationResolver", classificationResolver);
+
+        Consultation consultation = mock(Consultation.class);
+        when(consultation.getUserDomains()).thenReturn(null);
+
+        List<Message> history = List.of(
+                messageWithId(MessageRole.CHATBOT, "보증금은 얼마인가요?"),
+                messageWithId(MessageRole.USER, "3000만원입니다")
+        );
+
+        Method buildChatMessages = CohereService.class.getDeclaredMethod(
+                "buildChatMessages", Consultation.class, String.class, String.class, List.class);
+        buildChatMessages.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<CohereChatRequest.Message> messages = (List<CohereChatRequest.Message>) buildChatMessages.invoke(
+                chatService, consultation, "계약은 끝났어요", "RAG CONTEXT", history);
+
+        String system = messages.get(0).getContent();
+        assertThat(system).startsWith("=== CURRENT CHECKLIST COVERAGE ===");
+        assertThat(system).contains("=== DO NOT REPEAT EXACT QUESTIONS ===");
+        assertThat(system).contains("보증금은 얼마인가요?");
+        assertThat(system).contains("RULE: Do not ask an identical question again");
+        assertThat(system).contains("BASE RULES");
+        assertThat(system).contains("CHECKLIST YAML");
+        assertThat(system).contains("RAG CONTEXT");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     /** Message 는 @GeneratedValue 로 id 가 null 이므로, 로그에 쓰일 id 를 리플렉션으로 주입. */

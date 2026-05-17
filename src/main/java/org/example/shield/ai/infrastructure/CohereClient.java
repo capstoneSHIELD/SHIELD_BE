@@ -51,7 +51,8 @@ public class CohereClient implements AiClient {
     public AiCallResult<ChatParsedResponse> callChat(
             String model, List<CohereChatRequest.Message> messages) {
 
-        CohereChatRequest request = CohereChatRequest.forChat(model, messages);
+        CohereChatRequest request = CohereChatRequest.forChat(
+                model, messages, config.isStructuredOutputEnabled());
         return callAndParse(request, ChatParsedResponse.class,
                 Duration.ofMillis(config.getChatReadTimeout()));
     }
@@ -60,7 +61,8 @@ public class CohereClient implements AiClient {
     public AiCallResult<BriefParsedResponse> callBrief(
             String model, List<CohereChatRequest.Message> messages) {
 
-        CohereChatRequest request = CohereChatRequest.forBrief(model, messages);
+        CohereChatRequest request = CohereChatRequest.forBrief(
+                model, messages, config.isStructuredOutputEnabled());
         return callAndParse(request, BriefParsedResponse.class,
                 Duration.ofMillis(config.getBriefReadTimeout()));
     }

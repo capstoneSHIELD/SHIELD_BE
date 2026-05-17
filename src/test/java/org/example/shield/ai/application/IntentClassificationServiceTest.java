@@ -42,6 +42,7 @@ class IntentClassificationServiceTest {
 
         IntentClassificationResult result = service.parseClassificationResult(json);
 
+        assertThat(result.schemaVersion()).isEqualTo("1.0");
         assertThat(result.intentSummary()).isEqualTo("lease deposit return");
         assertThat(result.matchedNodes()).hasSize(2);
         assertThat(result.matchedNodes().get(0).id()).isEqualTo("law-007-01-03");
@@ -58,6 +59,7 @@ class IntentClassificationServiceTest {
         String json = """
                 {
                   "intent_summary": "wage issue",
+                  "schema_version": "1.0",
                   "matched_node_ids": ["law-004-02", "law-004-04"],
                   "core_keywords": ["wage", "dismissal"],
                   "retrieval_query": "unpaid wage dismissal legal remedy"
@@ -66,6 +68,7 @@ class IntentClassificationServiceTest {
 
         IntentClassificationResult result = service.parseClassificationResult(json);
 
+        assertThat(result.schemaVersion()).isEqualTo("1.0");
         assertThat(result.intentSummary()).isEqualTo("wage issue");
         assertThat(result.matchedNodeIds()).containsExactly("law-004-02", "law-004-04");
         assertThat(result.keywords().core()).containsExactly("wage", "dismissal");

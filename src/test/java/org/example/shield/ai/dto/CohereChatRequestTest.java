@@ -13,7 +13,7 @@ class CohereChatRequestTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    @DisplayName("forChat() 직렬화 — messages, model, temperature, max_tokens, p, response_format 포함 (Issue #56)")
+    @DisplayName("forChat() 직렬화 — schema response_format 포함")
     void forChat_serialization() throws Exception {
         List<CohereChatRequest.Message> messages = List.of(
                 CohereChatRequest.Message.system("You are a helpful assistant."),
@@ -28,16 +28,18 @@ class CohereChatRequestTest {
         assertThat(json).contains("\"temperature\"");
         assertThat(json).contains("\"max_tokens\":1024");
         assertThat(json).contains("\"p\"");
-        // Issue #56: forChat 에도 response_format=json_object 강제
         assertThat(json).contains("\"response_format\"");
         assertThat(json).contains("\"json_object\"");
+        assertThat(json).contains("\"schema\"");
+        assertThat(json).contains("\"schema_version\"");
+        assertThat(json).contains("\"nextQuestion\"");
         // v2에서는 max_completion_tokens / top_p 대신 max_tokens / p 사용
         assertThat(json).doesNotContain("max_completion_tokens");
         assertThat(json).doesNotContain("top_p");
     }
 
     @Test
-    @DisplayName("forBrief() 직렬화 — response_format: json_object 포함")
+    @DisplayName("forBrief() 직렬화 — schema response_format 포함")
     void forBrief_serialization() throws Exception {
         List<CohereChatRequest.Message> messages = List.of(
                 CohereChatRequest.Message.system("Generate a brief in JSON."),
@@ -50,6 +52,9 @@ class CohereChatRequestTest {
         assertThat(json).contains("\"max_tokens\":4096");
         assertThat(json).contains("\"response_format\"");
         assertThat(json).contains("\"type\":\"json_object\"");
+        assertThat(json).contains("\"schema\"");
+        assertThat(json).contains("\"keyIssues\"");
+        assertThat(json).contains("\"schema_version\"");
     }
 
     @Test
@@ -68,11 +73,29 @@ class CohereChatRequestTest {
         assertThat(json).contains("\"max_tokens\":512");
         assertThat(json).contains("\"response_format\"");
         assertThat(json).contains("\"type\":\"json_object\"");
+        assertThat(json).contains("\"schema\"");
+        assertThat(json).contains("\"matched_node_ids\"");
+        assertThat(json).contains("\"schema_version\"");
         // forClassify should NOT include p (top-p)
         assertThat(json).doesNotContain("\"p\":");
 
         // Verify temperature is 0.1
         assertThat(request.getTemperature()).isEqualTo(0.1);
+    }
+
+    @Test
+    @DisplayName("structured output disabled — response_format 은 json_object 만 포함")
+    void structuredOutputDisabled_jsonObjectOnly() throws Exception {
+        List<CohereChatRequest.Message> messages = List.of(
+                CohereChatRequest.Message.system("You are a helpful assistant."),
+                CohereChatRequest.Message.user("Hello")
+        );
+
+        CohereChatRequest request = CohereChatRequest.forChat("command-a-03-2025", messages, false);
+        String json = objectMapper.writeValueAsString(request);
+
+        assertThat(json).contains("\"response_format\":{\"type\":\"json_object\"}");
+        assertThat(json).doesNotContain("\"schema\"");
     }
 
     @Test

@@ -230,6 +230,7 @@ public class IntentClassificationService {
         try {
             JsonNode root = objectMapper.readTree(json);
 
+            String schemaVersion = root.path("schema_version").asText("1.0");
             String intentSummary = root.path("intent_summary").asText("");
 
             List<MatchedNode> matchedNodes = parseMatchedNodes(root);
@@ -244,6 +245,7 @@ public class IntentClassificationService {
             List<String> retrievalQueries = parseRetrievalQueries(root);
 
             return new IntentClassificationResult(
+                    schemaVersion,
                     intentSummary,
                     matchedNodes,
                     new Keywords(coreKeywords, expandedKeywords),
@@ -326,6 +328,7 @@ public class IntentClassificationService {
 
     private IntentClassificationResult createFallbackResult(String domain) {
         return new IntentClassificationResult(
+                "1.0",
                 "Intent classification fallback",
                 List.of(),
                 new Keywords(List.of(), List.of()),

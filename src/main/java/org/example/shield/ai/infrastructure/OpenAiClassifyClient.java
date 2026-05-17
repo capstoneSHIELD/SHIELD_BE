@@ -90,13 +90,56 @@ public class OpenAiClassifyClient {
         request.put("messages", messages.stream()
                 .map(this::toOpenAiMessage)
                 .toList());
-        request.put("response_format", Map.of("type", "json_object"));
+        request.put("response_format", config.isStructuredOutputEnabled()
+                ? strictJsonSchemaResponseFormat()
+                : Map.of("type", "json_object"));
         request.put("max_completion_tokens", config.getClassifyMaxTokens());
         if (config.getClassifyReasoningEffort() != null
                 && !config.getClassifyReasoningEffort().isBlank()) {
             request.put("reasoning_effort", config.getClassifyReasoningEffort());
         }
         return request;
+    }
+
+    private Map<String, Object> strictJsonSchemaResponseFormat() {
+        return Map.of(
+                "type", "json_schema",
+                "json_schema", Map.of(
+                        "name", "shield_intent_classification_v1",
+                        "strict", true,
+                        "schema", classifierSchema()
+                )
+        );
+    }
+
+    private Map<String, Object> classifierSchema() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("additionalProperties", false);
+        schema.put("required", List.of(
+                "schema_version",
+                "intent_summary",
+                "matched_node_ids",
+                "core_keywords",
+                "retrieval_query"
+        ));
+        schema.put("properties", Map.of(
+                "schema_version", Map.of(
+                        "type", "string",
+                        "enum", List.of("1.0")
+                ),
+                "intent_summary", Map.of("type", "string"),
+                "matched_node_ids", Map.of(
+                        "type", "array",
+                        "items", Map.of("type", "string")
+                ),
+                "core_keywords", Map.of(
+                        "type", "array",
+                        "items", Map.of("type", "string")
+                ),
+                "retrieval_query", Map.of("type", "string")
+        ));
+        return schema;
     }
 
     private Map<String, String> toOpenAiMessage(CohereChatRequest.Message message) {

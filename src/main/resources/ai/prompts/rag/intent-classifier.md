@@ -14,6 +14,7 @@ Rules:
 
 JSON shape:
 {
+  "schema_version": "1.0",
   "intent_summary": "short Korean summary",
   "matched_node_ids": ["law-000-00"],
   "core_keywords": ["keyword"],
