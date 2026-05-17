@@ -1,6 +1,6 @@
-# Phase 1A Rollout — classify LLM 라이트 모델 교체
+﻿# Phase 1A Rollout — classify LLM 라이트 모델 교체
 
-> 사전 자료: `docs/latency-baseline-2026-05-12.md` (Phase 0 baseline + Phase 1A 결정 근거).
+> 사전 자료: `./latency-baseline-2026-05-12.md` (Phase 0 baseline + Phase 1A 결정 근거).
 > 본 문서는 **운영에 적용하는 절차** 만 다룬다. 모델 default 변경은 코드/yml 무변경,
 > 환경변수 override 만으로 진행 가능.
 
@@ -93,10 +93,10 @@ classify 모델이 바뀌면 retrieval 의 입력(`vectorQuery`, `bm25Keywords`,
 COHERE_API_KEY=... DB_PASSWORD=... \
   python3 scripts/eval_rag.py \
     --eval eval/eval-set.v1.jsonl \
-    --output docs/phase-1a-canary-{날짜}.md
+    --output docs/phase-history/phase-1a-canary-{날짜}.md
 ```
 
-기존 baseline (`docs/phase-c1-baseline.json` 의 운영 default `command-a` 측정치) 과 비교하여 Recall@5/nDCG@5 가 의미 있는 회귀(>5%) 가 아닌지 확인.
+기존 baseline (`./phase-c/phase-c1-baseline.json` 의 운영 default `command-a` 측정치) 과 비교하여 Recall@5/nDCG@5 가 의미 있는 회귀(>5%) 가 아닌지 확인.
 
 ## 결정 분기
 
@@ -117,7 +117,7 @@ sudo systemctl restart shield-backend
 
 ## 보류된 후속 — Phase 0 의 다른 관찰
 
-`docs/latency-baseline-2026-05-12.md` 의 결과 보면 **`chat.cohere.call` 가 16–25s** 로 측정됐다.
+`./latency-baseline-2026-05-12.md` 의 결과 보면 **`chat.cohere.call` 가 16–25s** 로 측정됐다.
 classify 교체로 인한 단축은 30s timeout 회피분(학교 환경 한정) 외에는 1–2s 수준일 가능성. 진짜 큰 효과는:
 
 - **Phase 3 (speculative 병렬)** — `chat` 을 RAG 와 병렬 시작. 학교 환경 기준 16s 절감.

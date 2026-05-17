@@ -1,6 +1,6 @@
-# AI/RAG Phase P4 Implementation: RAG Quality Loop
+﻿# AI/RAG Phase P4 Implementation: RAG Quality Loop
 
-상위 문서: `docs/ai-rag-upgrade-plan-v2.2.md`  
+상위 문서: `../ai-rag-upgrade-plan-v2.2.md`  
 Phase: P4  
 목표 기간: 4~6주  
 코드 변경 범위: weighted hybrid baseline 유지, RRF/rerank 비교, calibrated retrieval gate, output compliance shadow judge
@@ -35,7 +35,7 @@ Phase: P4
 - `LegalChunkJpaRepository`: pgvector, BM25, trigram retrieval SQL이 있다.
 - `RagContextBuilder`: retrieval result를 Cohere context로 만든다.
 - `RagMetrics`: retrieval score/usage metric 관련 코드다.
-- `eval/`과 `docs/phase-c5-rerank.md`: 기존 RAG benchmark 기준선이다.
+- `eval/`과 `../../phase-history/phase-c/phase-c5-rerank.md`: 기존 RAG benchmark 기준선이다.
 - P2 `IntentRouterResponse`: intent-aware retrieval 입력으로 사용한다.
 
 먼저 읽을 테스트:
@@ -43,7 +43,7 @@ Phase: P4
 - `PgLegalRetrievalServiceTest`
 - `RagContextBuilderTest`
 - `RagMetricsTest`
-- 기존 eval script와 `docs/phase-c5-rerank.md`
+- 기존 eval script와 `../../phase-history/phase-c/phase-c5-rerank.md`
 
 ---
 
@@ -53,7 +53,7 @@ Phase: P4
 
 1. 현재 weighted hybrid retrieval 결과를 baseline으로 기록한다.
 2. 동일 eval set에서 Recall@5, MRR, nDCG@5, latency, cost를 산출한다.
-3. baseline 문서는 `docs/ai-rag-phase-p4-baseline.md`로 저장한다.
+3. baseline 문서는 `ai-rag-phase-p4-baseline.md`로 저장한다.
 4. baseline 생성은 코드 변경과 분리해 재현 가능한 command를 문서화한다.
 
 Eval set 구성:
@@ -145,7 +145,7 @@ slot confidence가 낮거나 `topicChanged=true`이면 topK 축소를 금지한�
 
 - JSONL 기본, CSV summary 추가
 - 저장 위치: `eval/reports/ai-rag-quality-YYYY-MM-DD.jsonl`
-- summary 문서: `docs/ai-rag-quality-report-YYYY-MM-DD.md`
+- summary 문서: `../reports/ai-rag-quality-report-YYYY-MM-DD.md`
 
 JSONL 필수 필드:
 
