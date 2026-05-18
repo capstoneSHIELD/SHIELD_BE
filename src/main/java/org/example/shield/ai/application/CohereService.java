@@ -50,6 +50,7 @@ public class CohereService {
     private final MessageReader messageReader;
     private final CohereClient cohereClient;
     private final ChecklistCoverageService checklistCoverageService;
+    private final ChecklistPromptBuilder checklistPromptBuilder;
     private final ClassificationResolver classificationResolver;
     private final SlotStatusBlockBuilder slotStatusBlockBuilder;
     private final OutputComplianceShadowJudge outputComplianceShadowJudge;
@@ -184,8 +185,13 @@ public class CohereService {
         }
 
         if (domain != null) {
-            String checklist = promptService.loadChecklist(domain);
-            if (checklist != null) {
+            String checklist = checklistPromptBuilder == null
+                    ? promptService.loadChecklist(domain)
+                    : checklistPromptBuilder.build(
+                            domain,
+                            collectionCandidate.firstSubDomain(),
+                            collectionCandidate.firstTag());
+            if (checklist != null && !checklist.isBlank()) {
                 systemPrompt = systemPrompt + "\n\n" + checklist;
             }
         }

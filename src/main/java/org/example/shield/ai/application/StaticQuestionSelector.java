@@ -21,6 +21,7 @@ public class StaticQuestionSelector {
         }
 
         return slots.stream()
+                .filter(s -> !s.isOutOfScope())
                 .filter(s -> s.getStatus() == SlotStatus.MISSING
                         || s.getStatus() == SlotStatus.PENDING_CONFIRMATION)
                 .sorted(Comparator

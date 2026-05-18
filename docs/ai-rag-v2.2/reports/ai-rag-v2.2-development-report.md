@@ -20,8 +20,8 @@ P1/P1.5 staging 배포 목표일은 **2026-05-22**로 두고, 실제 배포 티�
 
 | 항목 | 결과 |
 |---|---:|
-| 테스트 suite 수 | 69 |
-| 테스트 case 수 | 310 |
+| 테스트 suite 수 | 71 |
+| 테스트 case 수 | 329 |
 | 실패 | 0 |
 | 에러 | 0 |
 | 스킵 | 2 |
@@ -83,6 +83,8 @@ P1/P1.5 staging 배포 목표일은 **2026-05-22**로 두고, 실제 배포 티�
 | P3 drift/backfill 미구현 | drift detector와 dry-run/execute backfill service 추가 | `DynamicPlanDriftDetectorTest`, `DynamicPlanBackfillServiceTest` |
 | P4 baseline 산출 기반 부재 | v2.2 eval set/schema, baseline evaluator, Markdown/JSON report writer 추가 | `RagBaselineEvaluatorTest` |
 | rollout 판단 리포트 부재 | `AiRagRollbackPolicy`를 사용하는 rollout summary generator 추가 | `AiRagRolloutSummaryGeneratorTest` |
+| L1 체크리스트 전체 주입으로 관련 없는 L2/L3 항목이 프롬프트에 노출 | 확정된 L1/L2/L3 범위만 잘라 주입하는 scoped checklist builder 추가 | `ChecklistPromptBuilderTest`, `CohereServiceHistoryAppendTest` |
+| 새 YAML 구조에서 prompt/coverage/slot ledger 해석 경로 불일치 위험 | `ChecklistScopeResolver`를 공통 해석기로 추가하고 prompt, coverage, slot ledger, alias index를 같은 item model로 통합 | `ChecklistScopeResolverTest`, `SlotLedgerServiceTest`, `ChecklistAliasIndexTest` |
 
 추가된 주요 파일:
 
@@ -94,8 +96,102 @@ P1/P1.5 staging 배포 목표일은 **2026-05-22**로 두고, 실제 배포 티�
 | `src/main/java/org/example/shield/ai/dto/AiRagRollbackDecision.java` | rollback/keep 판단 결과 |
 | `src/test/java/org/example/shield/ai/application/AiRagRollbackPolicyTest.java` | rollback 기준 테스트 |
 | `src/test/java/org/example/shield/ai/application/AiRagFeatureFlagDefaultsTest.java` | 실제 YAML property 기반 feature flag 기본값 테스트 |
+| `src/main/java/org/example/shield/ai/application/ChecklistPromptBuilder.java` | L1 YAML에서 확정된 L1/L2/L3 범위만 프롬프트용 체크리스트로 조립 |
+| `src/test/java/org/example/shield/ai/application/ChecklistPromptBuilderTest.java` | scoped checklist, fallback, node-id override 검증 |
+| `src/main/java/org/example/shield/ai/application/ChecklistScopeResolver.java` | L1/L2/L3 YAML scope, node override, stable slot id를 단일 item model로 해석 |
+| `src/main/java/org/example/shield/ai/dto/checklist/ChecklistScope*.java` | prompt/coverage/ledger/alias가 공유하는 scoped checklist DTO |
 
 `AiRagRollbackPolicy`는 자동 rollback 실행기가 아니라, 운영/모니터링 레이어가 동일 기준을 재사용할 수 있게 만든 판단 정책 컴포넌트입니다. 실제 config를 자동 변경하는 배선은 별도 운영 자동화 범위입니다.
+
+### 4.1 체크리스트 Scoped 주입 개선
+
+추가 검토 결과, 백엔드에는 이미 L1 YAML 내부에 L2/L3 체크리스트가 포함되어 있었습니다. 따라서 중분류/소분류별 YAML 파일을 전면 생성하는 대신, 기존 L1 YAML을 canonical source로 유지하고 런타임 프롬프트 주입 범위만 축소하는 방식으로 수정했습니다.
+
+#### 문제
+
+기존 `CohereService`는 L1 도메인이 확정되면 `PromptService.loadChecklist(domain)`으로 해당 L1 YAML 전체를 system prompt에 붙였습니다. 예를 들어 `부동산 거래 > 부동산 임대차 > 보증금 및 차임` 상담에서도 `부동산 매매`, `부동산 담보`, `부동산 권리관계`의 L2/L3 체크리스트가 함께 노출될 수 있었습니다.
+
+이 구조는 다음 리스크가 있었습니다.
+
+| 리스크 | 영향 |
+|---|---|
+| 관련 없는 L2/L3 항목 노출 | LLM이 현재 사건과 무관한 질문을 생성할 가능성 증가 |
+| 프롬프트 토큰 낭비 | 같은 L1 안의 모든 하위 체크리스트가 매 턴 포함됨 |
+| premature narrowing 또는 topic drift | L2/L3가 확정된 뒤에도 형제 카테고리 힌트가 남아 질문 방향이 흔들릴 수 있음 |
+
+#### 수정 내용
+
+- `ChecklistPromptBuilder`를 추가했습니다.
+  - 입력: `l1Name`, `l2Name`, `l3Name`
+  - 출력: 프롬프트에 주입할 축소 체크리스트 문자열
+  - L1만 확정된 경우: `l1_checklist.required`, `l1_checklist.domain_specific`만 포함
+  - L2까지 확정된 경우: L1 공통 + 해당 L2 `focus`만 포함
+  - L3까지 확정된 경우: L1 공통 + 해당 L2 `focus` + 해당 L3 항목만 포함
+- `CohereService`의 체크리스트 주입 경로를 교체했습니다.
+  - 기존: `promptService.loadChecklist(domain)`으로 L1 YAML 전체 주입
+  - 변경: `checklistPromptBuilder.build(l1, l2, l3)`로 scoped checklist 주입
+- `OntologyService`에 node id 조회 기능을 추가했습니다.
+  - `idOf(nodeName)`
+  - `childIdOf(parentName, childName)`
+- `ai/checklists/nodes/<node-id>.yaml` 경로를 optional override 경로로 예약했습니다.
+  - 예: `ai/checklists/nodes/law-001-02.yaml`
+  - 예: `ai/checklists/nodes/law-001-02-02.yaml`
+  - 파일이 있으면 해당 L2/L3 항목을 override하고, 없으면 기존 L1 YAML 내부 항목을 사용합니다.
+  - 현재는 35개 L2 + 136개 L3 파일을 전면 생성하지 않았습니다.
+
+#### 동작 예시
+
+| 확정 분류 | 프롬프트 주입 범위 |
+|---|---|
+| `부동산 거래` | L1 공통 항목만 |
+| `부동산 거래 > 부동산 임대차` | L1 공통 + `부동산 임대차.focus` |
+| `부동산 거래 > 부동산 임대차 > 보증금 및 차임` | L1 공통 + `부동산 임대차.focus` + `보증금 및 차임` 항목 |
+
+이제 `보증금 및 차임` 상담 프롬프트에는 `부동산 매매`, `부동산 담보` 같은 형제 L2 체크리스트가 포함되지 않습니다.
+
+#### 검증
+
+| 테스트 | 검증 내용 |
+|---|---|
+| `ChecklistPromptBuilderTest` | L1-only, L1+L2, L1+L2+L3 scope 동작 검증 |
+| `ChecklistPromptBuilderTest` | 존재하지 않는 L2/L3 입력 시 L1 공통 항목으로 fallback |
+| `ChecklistPromptBuilderTest` | node-id 기반 L2/L3 YAML override 동작 검증 |
+| `CohereServiceHistoryAppendTest` | `CohereService`가 전체 L1 YAML 대신 scoped checklist를 주입하는지 검증 |
+
+최종 검증 명령은 `.\gradlew.bat test`이며, 전체 테스트 결과는 71 suites / 329 cases / failures 0 / errors 0 / skipped 2입니다.
+
+### 4.2 YAML Scope Resolver 정합화
+
+새 YAML 구조(`L1 > L2 > L3`, optional `nodes/<node-id>.yaml`)에 맞춰 체크리스트 해석 경로를 추가로 정합화했습니다.
+
+#### 문제
+
+`ChecklistPromptBuilder`는 scoped checklist를 사용하지만, coverage/allCompleted와 slot ledger 초기화는 별도 YAML 해석 경로를 갖고 있었습니다. 이 상태에서 node override가 추가되거나 상담 중 L1에서 L3로 분류가 좁혀지면, Cohere prompt가 보는 체크리스트와 백엔드 상태/완료 판정 기준이 달라질 수 있었습니다.
+
+#### 수정 내용
+
+- `ChecklistScopeResolver`를 공통 해석기로 추가했습니다.
+  - L1/L2/L3 scope item 생성
+  - node override fallback
+  - stable slot id 생성
+  - value type 추론
+- `ChecklistPromptBuilder`와 `ChecklistCoverageService`가 같은 resolver item set을 사용하도록 변경했습니다.
+- `SlotLedgerService.ensureInitialized()`가 기존 `slot_state`를 그대로 반환하지 않고 현재 scope와 reconcile하도록 변경했습니다.
+  - 같은 stable slot id는 기존 상태 보존
+  - legacy `static_001`류 id는 `legacySlotId`로 보존 후 stable id로 승격
+  - 새 scope slot은 `MISSING`으로 추가
+  - 이전 scope에만 남은 slot은 `outOfScope=true`로 보존하고 질문 후보에서 제외
+- `ChecklistAliasIndex`가 수동 alias YAML뿐 아니라 전체 scoped YAML item을 generated alias로 등록하도록 확장했습니다.
+
+#### 검증
+
+| 테스트 | 검증 내용 |
+|---|---|
+| `ChecklistScopeResolverTest` | L1/L2/L3 scope, stable id, fallback warning, node override |
+| `ChecklistScopeResolverTest` | prompt와 coverage가 같은 resolved item을 사용함 |
+| `SlotLedgerServiceTest` | L1 → L3 narrowing 시 기존 상태 보존 + 새 slot 추가 |
+| `SlotLedgerServiceTest` | legacy `static_001` id 승격 및 correctedSlots fallback |
+| `ChecklistAliasIndexTest` | manual alias 유지 + generated scope alias 확장 |
 
 ---
 
@@ -109,6 +205,7 @@ P1/P1.5 staging 배포 목표일은 **2026-05-22**로 두고, 실제 배포 티�
 - OpenAI classifier 응답도 strict schema 방식으로 확장할 수 있도록 정리했습니다.
 - `schema_version` 기반 응답 버전 정책을 DTO/parser 레이어에 반영했습니다.
 - 기존 checklist coverage와 최근 질문 blacklist를 system prompt 상단에 주입하도록 개선했습니다.
+- 확정된 L1/L2/L3 범위만 체크리스트 프롬프트에 주입하도록 scoped checklist builder를 추가했습니다.
 - `GuardrailFilter`를 확장해 법적 판단, 승패 예측, 손해배상 가능성 단정 등 위험 표현을 차단하도록 강화했습니다.
 
 ### 준비된 구조
@@ -308,8 +405,8 @@ v2.2 UTF-8 seed eval set, schema, baseline evaluator, Markdown/JSON report write
 
 | 항목 | 결과 |
 |---|---:|
-| 테스트 suite 수 | 69 |
-| 테스트 case 수 | 310 |
+| 테스트 suite 수 | 71 |
+| 테스트 case 수 | 329 |
 | 실패 | 0 |
 | 에러 | 0 |
 | 스킵 | 2 |
@@ -339,16 +436,21 @@ v2.2 UTF-8 seed eval set, schema, baseline evaluator, Markdown/JSON report write
 |---|---|---|---|
 | P1 prompt | Slot Status Block이 checklist coverage보다 먼저 주입됨 | `CohereServiceHistoryAppendTest` | 통과 |
 | P1 prompt | 최근 질문 blacklist가 system prompt 상단에 주입됨 | `CohereServiceHistoryAppendTest` | 통과 |
+| P1.6 YAML scope | L1/L2/L3 resolver item, stable slot id, node override | `ChecklistScopeResolverTest` | 통과 |
+| P1.6 YAML scope | prompt와 coverage가 동일 resolver item 사용 | `ChecklistScopeResolverTest` | 통과 |
 | P1 guardrail | 법적 판단/승패/손해배상 가능성 표현 차단 | `GuardrailFilterTest` | 통과 |
 | P1 guardrail | 정상 절차 안내 문장 과차단 방지 | `GuardrailFilterTest` | 통과 |
 | P1.5 slot | money/date/text value type validation | `SlotValueValidatorTest` | 통과 |
 | P1.5 slot | pending confirmation 확정/거절 heuristic | `PendingConfirmationHeuristicTest` | 통과 |
 | P1.5 selector | static required 우선 질문 선택 | `StaticQuestionSelectorTest` | 통과 |
+| P1.6 slot reconcile | L1 → L3 narrowing 시 상태 보존 및 새 slot 추가 | `SlotLedgerServiceTest` | 통과 |
+| P1.6 slot reconcile | legacy `static_001` id 승격 및 correctedSlots fallback | `SlotLedgerServiceTest` | 통과 |
 | P2 mixed utterance | 법적 판단 요청 + high-confidence slot 동시 처리 | `BackendIntentRouterTest` | 통과 |
 | P2 confirm | 모호하거나 안전하지 않은 CONFIRM은 Cohere skip하지 않음 | `BackendIntentRouterTest` | 통과 |
 | P2 regression | intent fixed response가 RAG/Cohere를 skip하고 template 사용 | `MessageServiceTest` | 통과 |
 | P2 regression | 기존 상담 메시지 저장, blank response, turn limit 흐름 유지 | `MessageServiceTest` | 통과 |
 | P3 validator | dynamic slot alias mapping과 legal judgment 검증 | `BackendValidatorTest` | 통과 |
+| P3 alias | 수동 alias 유지 및 전체 YAML generated alias 확장 | `ChecklistAliasIndexTest` | 통과 |
 | P3 plan | plan regeneration 조건 | `DynamicPlanIncrementalUpdateTest` | 통과 |
 | P4 RAG | RRF duplicate chunk merge와 rank score 계산 | `RrfFusionServiceTest` | 통과 |
 | P4 gate | threshold 미설정 시 통과, 설정 시 drop metric 기록 | `RetrievalScoreGateTest` | 통과 |

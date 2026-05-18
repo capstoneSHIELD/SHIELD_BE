@@ -47,6 +47,13 @@ public class ChatParsedResponse {
 
     private boolean allCompleted;
 
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
+    private List<CorrectedSlot> correctedSlots = new ArrayList<>();
+
+    public boolean hasCorrectedSlots() {
+        return correctedSlots != null && !correctedSlots.isEmpty();
+    }
+
     /**
      * 문자열("VALUE") 또는 배열(["VALUE"])을 모두 List&lt;String&gt;으로 변환.
      */

@@ -86,6 +86,12 @@ public class MessageService {
     @Value("${shield.consultation.max-user-turns:10}")
     private int maxUserTurns;
 
+    @Value("${app.ai.cohere.corrected-slots.enabled:false}")
+    private boolean correctedSlotsEnabled;
+
+    @Value("${app.ai.cohere.corrected-slots.confidence-threshold:0.85}")
+    private double correctedSlotsConfidenceThreshold;
+
     /**
      * 사용자 메시지 처리 및 AI 응답 생성.
      *
@@ -210,6 +216,7 @@ public class MessageService {
                     parsed.getAiSubDomains(),
                     parsed.getAiTags());
             boolean hasAnyAi = aiCandidate.hasAny();
+            applyCorrectedSlotsIfEnabled(consultation, parsed);
             slotLedgerService.appendAskedQuestion(consultation, nextQuestion);
 
             // 6. AI 응답 최종 반영 (독립 트랜잭션)
@@ -274,6 +281,20 @@ public class MessageService {
         } catch (RuntimeException e) {
             chatMetrics.stopCohereCallFailure(sample);
             throw e;
+        }
+    }
+
+    private void applyCorrectedSlotsIfEnabled(Consultation consultation, ChatParsedResponse parsed) {
+        if (!correctedSlotsEnabled) {
+            return;
+        }
+        boolean changed = slotLedgerService.applyCorrectedSlots(
+                consultation,
+                parsed,
+                correctedSlotsConfidenceThreshold);
+        if (changed) {
+            log.info("Cohere correctedSlots staged as pending confirmation: consultationId={}",
+                    consultation.getId());
         }
     }
 

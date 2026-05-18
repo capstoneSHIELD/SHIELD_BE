@@ -14,6 +14,7 @@ import org.example.shield.ai.application.SlotLedgerService;
 import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.ChatParsedResponse;
+import org.example.shield.ai.dto.CorrectedSlot;
 import org.example.shield.ai.dto.IntentRouterResponse;
 import org.example.shield.ai.dto.RagPipelineResult;
 import org.example.shield.ai.infrastructure.SanitizeService;
@@ -119,6 +120,8 @@ class MessageServiceTest {
 
         // @Value 필드는 @InjectMocks 로 주입되지 않으므로 수동 세팅
         ReflectionTestUtils.setField(messageService, "maxUserTurns", 10);
+        ReflectionTestUtils.setField(messageService, "correctedSlotsEnabled", false);
+        ReflectionTestUtils.setField(messageService, "correctedSlotsConfidenceThreshold", 0.85);
 
         given(consultationReader.findById(consultationId)).willReturn(consultation);
         given(consultation.getFirstDomain()).willReturn(null); // RAG skip
@@ -214,6 +217,25 @@ class MessageServiceTest {
                 .isEqualTo(1L);
         assertThat(meterRegistry.timer(ChatMetrics.METRIC_COHERE_CALL, "outcome", "success").count())
                 .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("correctedSlots flag enabled -> stages slot correction before finalizing slot_state")
+    void sendMessage_correctedSlotsEnabled_appliesPendingCorrection() {
+        ReflectionTestUtils.setField(messageService, "correctedSlotsEnabled", true);
+        ChatParsedResponse parsed = new ChatParsedResponse();
+        parsed.setNextQuestion("보증금 금액이 5천만 원으로 정정된 것이 맞나요?");
+        parsed.setCorrectedSlots(List.of(
+                new CorrectedSlot("static_001", "30000000", "50000000", 0.91)));
+        given(cohereService.chat(any(), anyString(), anyString(), any()))
+                .willReturn(new AiCallResult<>("resp-correction-1", parsed, 100, 42, 250));
+        given(consultation.getId()).willReturn(consultationId);
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "아까 보증금 3천이라고 했는데 5천이에요");
+
+        assertThat(response).isNotNull();
+        verify(slotLedgerService).applyCorrectedSlots(consultation, parsed, 0.85);
+        verify(chatTxBoundary).finalizeAiResponse(eq(consultationId), any(AiFinalizePayload.class), any());
     }
 
     @Test

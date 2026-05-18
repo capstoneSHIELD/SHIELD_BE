@@ -3,9 +3,13 @@ package org.example.shield.ai.application;
 import org.example.shield.ai.dto.slot.SlotLedger;
 import org.example.shield.ai.dto.slot.SlotStatus;
 import org.example.shield.ai.dto.CaseTypeResult;
+import org.example.shield.ai.dto.ChatParsedResponse;
+import org.example.shield.ai.dto.CorrectedSlot;
 import org.example.shield.ai.dto.DialogueIntent;
 import org.example.shield.ai.dto.ExtractedSlot;
 import org.example.shield.ai.dto.IntentRouterResponse;
+import org.example.shield.ai.dto.slot.SlotStateItem;
+import org.example.shield.ai.dto.slot.SlotValueType;
 import org.example.shield.consultation.application.ClassificationCandidate;
 import org.example.shield.consultation.domain.Consultation;
 import org.example.shield.consultation.domain.Message;
@@ -61,6 +65,65 @@ class SlotLedgerServiceTest {
     }
 
     @Test
+    @DisplayName("reconciles slot ledger when classification narrows from L1 to L3")
+    void ensureInitialized_reconcilesNarrowedScope() {
+        Consultation consultation = Consultation.create(UUID.randomUUID(), List.of("real estate"), null, null);
+        ClassificationCandidate l1Candidate = new ClassificationCandidate(
+                List.of("real estate"), List.of(), List.of());
+        ClassificationCandidate l3Candidate = new ClassificationCandidate(
+                List.of("real estate"), List.of("lease"), List.of("deposit"));
+        given(checklistCoverageService.buildCoverageItems("real estate", null, null, List.of()))
+                .willReturn(List.of(coverage("static:real-estate:root:root:a1", "party info", true)));
+        given(checklistCoverageService.buildCoverageItems("real estate", "lease", "deposit", List.of()))
+                .willReturn(List.of(
+                        coverage("static:real-estate:root:root:a1", "party info", true),
+                        coverage("static:real-estate:lease:deposit:b2", "deposit amount", false)));
+
+        SlotLedger l1Ledger = service.ensureInitialized(consultation, l1Candidate, List.of());
+        l1Ledger.getSlots().get(0).setCollectedValue("tenant");
+        l1Ledger.getSlots().get(0).setAnsweredAt("2026-05-18T10:00:00");
+
+        SlotLedger l3Ledger = service.ensureInitialized(consultation, l3Candidate, List.of());
+
+        assertThat(l3Ledger.getCaseType().getL2()).isEqualTo("lease");
+        assertThat(l3Ledger.getCaseType().getL3()).isEqualTo("deposit");
+        assertThat(l3Ledger.getSlots()).hasSize(2);
+        assertThat(l3Ledger.getSlots().get(0).getCollectedValue()).isEqualTo("tenant");
+        assertThat(l3Ledger.getSlots().get(0).getAnsweredAt()).isEqualTo("2026-05-18T10:00:00");
+        assertThat(l3Ledger.getSlots().get(1).getSlotId()).isEqualTo("static:real-estate:lease:deposit:b2");
+        assertThat(l3Ledger.getSlots().get(1).getStatus()).isEqualTo(SlotStatus.MISSING);
+    }
+
+    @Test
+    @DisplayName("legacy static_NNN slot id is upgraded but remains usable for correction fallback")
+    void ensureInitialized_migratesLegacyIdAndCorrectsByLegacyId() {
+        Consultation consultation = Consultation.create(UUID.randomUUID(), List.of("real estate"), null, null);
+        SlotStateItem legacy = SlotStateItem.staticChecklist(
+                "static_001", "deposit amount", true, 1, true, SlotValueType.MONEY);
+        legacy.setCollectedValue("30000000");
+        SlotLedger ledger = SlotLedger.empty();
+        ledger.setSlots(List.of(legacy));
+        consultation.updateSlotState(ledger);
+        ClassificationCandidate candidate = new ClassificationCandidate(
+                List.of("real estate"), List.of("lease"), List.of("deposit"));
+        given(checklistCoverageService.buildCoverageItems("real estate", "lease", "deposit", List.of()))
+                .willReturn(List.of(coverage("static:real-estate:lease:deposit:b2", "deposit amount", true)));
+
+        service.ensureInitialized(consultation, candidate, List.of());
+        ChatParsedResponse response = new ChatParsedResponse();
+        response.setCorrectedSlots(List.of(
+                new CorrectedSlot("static_001", "30000000", "50000000", 0.91)));
+
+        boolean changed = service.applyCorrectedSlots(consultation, response, 0.85);
+
+        assertThat(changed).isTrue();
+        assertThat(legacy.getSlotId()).isEqualTo("static:real-estate:lease:deposit:b2");
+        assertThat(legacy.getLegacySlotId()).isEqualTo("static_001");
+        assertThat(legacy.getStatus()).isEqualTo(SlotStatus.PENDING_CONFIRMATION);
+        assertThat(legacy.getPendingValue()).isEqualTo("50000000");
+    }
+
+    @Test
     @DisplayName("appendAskedQuestion stores the generated question on the next missing slot")
     void appendAskedQuestion_recordsQuestion() {
         Consultation consultation = Consultation.create(UUID.randomUUID(), List.of("real estate"), null, null);
@@ -79,6 +142,26 @@ class SlotLedgerServiceTest {
         assertThat(changed).isTrue();
         assertThat(ledger.getSlots().get(1).getAskedQuestions())
                 .containsExactly("When did the lease end?");
+    }
+
+    @Test
+    @DisplayName("appendAskedQuestion skips out-of-scope missing slots")
+    void appendAskedQuestion_skipsOutOfScopeSlot() {
+        Consultation consultation = Consultation.create(UUID.randomUUID(), List.of("real estate"), null, null);
+        SlotStateItem oldSlot = SlotStateItem.staticChecklist(
+                "static:old", "old question", true, 1, false, SlotValueType.TEXT);
+        oldSlot.setOutOfScope(true);
+        SlotStateItem currentSlot = SlotStateItem.staticChecklist(
+                "static:current", "current question", true, 2, false, SlotValueType.TEXT);
+        SlotLedger ledger = SlotLedger.empty();
+        ledger.setSlots(List.of(oldSlot, currentSlot));
+        consultation.updateSlotState(ledger);
+
+        boolean changed = service.appendAskedQuestion(consultation, "Current?");
+
+        assertThat(changed).isTrue();
+        assertThat(oldSlot.getAskedQuestions()).isEmpty();
+        assertThat(currentSlot.getAskedQuestions()).containsExactly("Current?");
     }
 
     @Test
@@ -120,5 +203,65 @@ class SlotLedgerServiceTest {
         assertThat(ledger.getSlots().get(1).getStatus()).isEqualTo(SlotStatus.PENDING_CONFIRMATION);
         assertThat(ledger.getSlots().get(1).getPendingValue()).isEqualTo("작년 12월");
         assertThat(ledger.getSlots().get(2).getStatus()).isEqualTo(SlotStatus.MISSING);
+    }
+
+    @Test
+    @DisplayName("applyCorrectedSlots stages collected slot corrections as pending confirmation")
+    void applyCorrectedSlots_stagesPendingCorrection() {
+        Consultation consultation = Consultation.create(UUID.randomUUID(), List.of("real estate"), null, null);
+        SlotStateItem deposit = SlotStateItem.staticChecklist(
+                "static_001", "deposit amount", true, 1, true, SlotValueType.MONEY);
+        deposit.setCollectedValue("30000000");
+        SlotStateItem leaseEnd = SlotStateItem.staticChecklist(
+                "static_002", "lease end date", true, 2, false, SlotValueType.DATE);
+        SlotLedger ledger = SlotLedger.empty();
+        ledger.setSlots(List.of(deposit, leaseEnd));
+        consultation.updateSlotState(ledger);
+
+        ChatParsedResponse response = new ChatParsedResponse();
+        response.setCorrectedSlots(List.of(
+                new CorrectedSlot("static_001", "30000000", "50,000,000원", 0.91),
+                new CorrectedSlot("static_002", null, "2026-05-01", 0.99),
+                new CorrectedSlot("static_001", "30000000", "70000000", 0.5)));
+
+        boolean changed = service.applyCorrectedSlots(consultation, response, 0.85);
+
+        assertThat(changed).isTrue();
+        assertThat(deposit.getStatus()).isEqualTo(SlotStatus.PENDING_CONFIRMATION);
+        assertThat(deposit.getCollectedValue()).isEqualTo("30000000");
+        assertThat(deposit.getPendingValue()).isEqualTo("50000000");
+        assertThat(leaseEnd.getStatus()).isEqualTo(SlotStatus.MISSING);
+    }
+
+    @Test
+    @DisplayName("denyPending restores collected status when pending value is a correction")
+    void denyPending_restoresCollectedCorrection() {
+        Consultation consultation = Consultation.create(UUID.randomUUID(), List.of("real estate"), null, null);
+        SlotStateItem deposit = SlotStateItem.staticChecklist(
+                "static_001", "deposit amount", true, 1, true, SlotValueType.MONEY);
+        deposit.setCollectedValue("30000000");
+        deposit.setPendingValue("50000000");
+        deposit.setStatus(SlotStatus.PENDING_CONFIRMATION);
+        SlotLedger ledger = SlotLedger.empty();
+        ledger.setSlots(List.of(deposit));
+        consultation.updateSlotState(ledger);
+
+        boolean changed = service.denyPending(consultation);
+
+        assertThat(changed).isTrue();
+        assertThat(deposit.getStatus()).isEqualTo(SlotStatus.COLLECTED);
+        assertThat(deposit.getCollectedValue()).isEqualTo("30000000");
+        assertThat(deposit.getPendingValue()).isNull();
+    }
+
+    private ChecklistCoverageService.CoverageItem coverage(String slotId, String label, boolean collected) {
+        return new ChecklistCoverageService.CoverageItem(
+                slotId,
+                label,
+                true,
+                SlotValueType.TEXT,
+                "test.path",
+                "test-node",
+                collected);
     }
 }

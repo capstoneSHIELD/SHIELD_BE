@@ -24,7 +24,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -234,6 +236,61 @@ class CohereServiceHistoryAppendTest {
         assertThat(system).contains("BASE RULES");
         assertThat(system).contains("CHECKLIST YAML");
         assertThat(system).contains("RAG CONTEXT");
+    }
+
+    @Test
+    @DisplayName("buildChatMessages — 확정된 L1/L2/L3 범위의 scoped checklist 를 주입한다")
+    void buildChatMessages_usesScopedChecklistPromptBuilder() throws Exception {
+        CohereApiConfig config = mock(CohereApiConfig.class);
+        when(config.getMaxHistoryMessages()).thenReturn(20);
+
+        PromptService promptService = mock(PromptService.class);
+        when(promptService.loadRouterChatPrompt()).thenReturn("BASE RULES");
+
+        ChecklistCoverageService checklistCoverageService = mock(ChecklistCoverageService.class);
+        when(checklistCoverageService.buildCollectedSummary(
+                org.mockito.ArgumentMatchers.eq("부동산 거래"),
+                org.mockito.ArgumentMatchers.eq("부동산 임대차"),
+                org.mockito.ArgumentMatchers.eq("보증금 및 차임"),
+                org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn("");
+
+        ChecklistPromptBuilder checklistPromptBuilder = mock(ChecklistPromptBuilder.class);
+        when(checklistPromptBuilder.build("부동산 거래", "부동산 임대차", "보증금 및 차임"))
+                .thenReturn("SCOPED CHECKLIST\nl3_checklist:\n  name: \"보증금 및 차임\"");
+
+        ClassificationResolver classificationResolver = mock(ClassificationResolver.class);
+        when(classificationResolver.candidateForCollection(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new ClassificationCandidate(
+                        List.of("부동산 거래"),
+                        List.of("부동산 임대차"),
+                        List.of("보증금 및 차임")
+                ));
+
+        CohereService chatService = createServiceWithSanitize(sanitizeService);
+        setField(chatService, "config", config);
+        setField(chatService, "promptService", promptService);
+        setField(chatService, "checklistCoverageService", checklistCoverageService);
+        setField(chatService, "checklistPromptBuilder", checklistPromptBuilder);
+        setField(chatService, "classificationResolver", classificationResolver);
+
+        Consultation consultation = mock(Consultation.class);
+        Method buildChatMessages = CohereService.class.getDeclaredMethod(
+                "buildChatMessages", Consultation.class, String.class, String.class, List.class);
+        buildChatMessages.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<CohereChatRequest.Message> messages = (List<CohereChatRequest.Message>) buildChatMessages.invoke(
+                chatService, consultation, "보증금이 안 돌아왔어요", "", List.of());
+
+        String system = messages.get(0).getContent();
+        assertThat(system).contains("BASE RULES");
+        assertThat(system).contains("SCOPED CHECKLIST");
+        assertThat(system).contains("보증금 및 차임");
+        assertThat(system).doesNotContain("부동산 매매");
+        assertThat(system).doesNotContain("부동산 담보");
+        verify(checklistPromptBuilder).build("부동산 거래", "부동산 임대차", "보증금 및 차임");
+        verify(promptService, never()).loadChecklist("부동산 거래");
     }
 
     // ── helpers ──────────────────────────────────────────────────────────

@@ -35,7 +35,9 @@ class ChecklistCoverageServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ChecklistCoverageService(messageReader, new ChecklistLoader());
+        service = new ChecklistCoverageService(
+                messageReader,
+                new ChecklistScopeResolver(new ChecklistLoader(), null, null));
     }
 
     // ----- L1 기본 케이스 -----

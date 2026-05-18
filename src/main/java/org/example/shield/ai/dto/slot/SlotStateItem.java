@@ -26,6 +26,10 @@ public class SlotStateItem {
     private List<String> askedQuestions = new ArrayList<>();
     private String answeredAt;
     private String updatedAt;
+    private String sourcePath;
+    private String nodeId;
+    private boolean outOfScope;
+    private String legacySlotId;
 
     public static SlotStateItem staticChecklist(
             String slotId,
@@ -47,6 +51,22 @@ public class SlotStateItem {
         if (collected) {
             item.answeredAt = item.updatedAt;
         }
+        return item;
+    }
+
+    public static SlotStateItem staticChecklist(
+            String slotId,
+            String label,
+            boolean required,
+            int priority,
+            boolean collected,
+            SlotValueType valueType,
+            String sourcePath,
+            String nodeId
+    ) {
+        SlotStateItem item = staticChecklist(slotId, label, required, priority, collected, valueType);
+        item.sourcePath = sourcePath;
+        item.nodeId = nodeId;
         return item;
     }
 

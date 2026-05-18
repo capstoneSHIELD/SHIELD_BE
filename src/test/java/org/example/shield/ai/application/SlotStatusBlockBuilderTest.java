@@ -36,10 +36,13 @@ class SlotStatusBlockBuilderTest {
         String block = builder.build(ledger);
 
         assertThat(block).startsWith("=== COLLECTED INFORMATION (DO NOT ASK AGAIN) ===");
+        assertThat(block).contains("[static_001] deposit amount: 30000000");
         assertThat(block).contains("deposit amount: 30000000");
         assertThat(block).contains("=== PENDING CONFIRMATION ===");
+        assertThat(block).contains("[static_002] lease end date: last December");
         assertThat(block).contains("lease end date: last December");
         assertThat(block).contains("=== MISSING INFORMATION (TARGET ONLY THESE) ===");
+        assertThat(block).contains("[static_003] landlord response");
         assertThat(block).contains("landlord response");
         assertThat(block).contains("=== ALREADY ASKED QUESTIONS (DO NOT REPEAT) ===");
         assertThat(block).contains("Why has the landlord refused?");

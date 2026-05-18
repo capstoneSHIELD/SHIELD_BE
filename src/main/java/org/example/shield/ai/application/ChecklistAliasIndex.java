@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.example.shield.ai.dto.checklist.ChecklistScopeItem;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
@@ -24,8 +26,14 @@ public class ChecklistAliasIndex {
 
     private final YAMLMapper yamlMapper = new YAMLMapper();
     private final PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+    private ChecklistScopeResolver checklistScopeResolver;
     private Map<String, AliasEntry> byMappingId = Map.of();
     private List<AliasEntry> entries = List.of();
+
+    @Autowired(required = false)
+    void setChecklistScopeResolver(ChecklistScopeResolver checklistScopeResolver) {
+        this.checklistScopeResolver = checklistScopeResolver;
+    }
 
     @PostConstruct
     void load() {
@@ -37,6 +45,7 @@ public class ChecklistAliasIndex {
                     loadResource(yamlMapper.readTree(in), mapping, loaded);
                 }
             }
+            loadDefaultScopeEntries(mapping, loaded);
             this.byMappingId = Map.copyOf(mapping);
             this.entries = List.copyOf(loaded);
             log.info("Checklist alias index loaded: {} entries", entries.size());
@@ -71,6 +80,41 @@ public class ChecklistAliasIndex {
         return entries.size();
     }
 
+    public AliasCoverageReport coverageReport() {
+        long generated = entries.stream().filter(entry -> "generated_scope".equals(entry.source())).count();
+        long manual = entries.stream().filter(entry -> "manual_alias".equals(entry.source())).count();
+        long withoutKeywords = entries.stream().filter(entry -> entry.keywords().isEmpty()).count();
+        return new AliasCoverageReport(entries.size(), generated, manual, withoutKeywords);
+    }
+
+    private void loadDefaultScopeEntries(
+            Map<String, AliasEntry> mapping,
+            List<AliasEntry> loaded
+    ) {
+        if (checklistScopeResolver == null) {
+            return;
+        }
+        for (ChecklistScopeItem item : checklistScopeResolver.resolveAllStaticItems()) {
+            String staticMappingId = item.slotId();
+            if (staticMappingId == null || staticMappingId.isBlank()
+                    || mapping.containsKey(staticMappingId)) {
+                continue;
+            }
+            List<String> keywords = new ArrayList<>(ChecklistTokenizer.tokensOf(item.label()));
+            AliasEntry entry = new AliasEntry(
+                    staticMappingId,
+                    domainFromSlotId(staticMappingId),
+                    staticMappingId,
+                    item.label(),
+                    keywords,
+                    "generated_scope",
+                    item.level() == null ? null : item.level().name(),
+                    item.sourcePath());
+            mapping.put(staticMappingId, entry);
+            loaded.add(entry);
+        }
+    }
+
     private void loadResource(
             JsonNode root,
             Map<String, AliasEntry> mapping,
@@ -98,11 +142,27 @@ public class ChecklistAliasIndex {
                     });
                 }
                 String staticMappingId = domain + "." + slotId;
-                AliasEntry entry = new AliasEntry(staticMappingId, domain, slotId, label, keywords);
+                AliasEntry entry = new AliasEntry(
+                        staticMappingId,
+                        domain,
+                        slotId,
+                        label,
+                        keywords,
+                        "manual_alias",
+                        null,
+                        null);
                 mapping.put(staticMappingId, entry);
                 loaded.add(entry);
             });
         });
+    }
+
+    private String domainFromSlotId(String staticMappingId) {
+        if (staticMappingId == null || !staticMappingId.startsWith("static:")) {
+            return "";
+        }
+        String[] parts = staticMappingId.split(":");
+        return parts.length > 1 ? parts[1] : "";
     }
 
     static String normalize(String text) {
@@ -114,7 +174,10 @@ public class ChecklistAliasIndex {
             String domain,
             String slotId,
             String label,
-            List<String> keywords
+            List<String> keywords,
+            String source,
+            String level,
+            String sourcePath
     ) {
         boolean matches(String haystack) {
             if (haystack.contains(normalize(label))) {
@@ -128,5 +191,13 @@ public class ChecklistAliasIndex {
             }
             return false;
         }
+    }
+
+    public record AliasCoverageReport(
+            int totalEntries,
+            long generatedScopeEntries,
+            long manualAliasEntries,
+            long entriesWithoutKeywords
+    ) {
     }
 }

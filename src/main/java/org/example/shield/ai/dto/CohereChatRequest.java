@@ -138,6 +138,16 @@ public class CohereChatRequest {
     }
 
     private static Map<String, Object> chatResponseFormat() {
+        Map<String, Object> correctedSlotSchema = objectSchema(
+                List.of("slotId", "previousValue", "newValue", "confidence"),
+                Map.of(
+                        "slotId", Map.of("type", "string"),
+                        "previousValue", Map.of("type", "string"),
+                        "newValue", Map.of("type", "string"),
+                        "confidence", Map.of("type", "number")
+                )
+        );
+
         return responseFormat(objectSchema(
                 List.of("schema_version", "nextQuestion", "aiDomains", "aiSubDomains", "aiTags", "allCompleted"),
                 Map.of(
@@ -146,7 +156,8 @@ public class CohereChatRequest {
                         "aiDomains", stringArraySchema(),
                         "aiSubDomains", stringArraySchema(),
                         "aiTags", stringArraySchema(),
-                        "allCompleted", Map.of("type", "boolean")
+                        "allCompleted", Map.of("type", "boolean"),
+                        "correctedSlots", Map.of("type", "array", "items", correctedSlotSchema)
                 )
         ));
     }

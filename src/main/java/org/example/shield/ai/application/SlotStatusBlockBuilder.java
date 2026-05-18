@@ -56,6 +56,7 @@ public class SlotStatusBlockBuilder {
 
     private String collectedLines(List<SlotStateItem> slots) {
         List<SlotStateItem> collected = slots.stream()
+                .filter(s -> !s.isOutOfScope())
                 .filter(s -> s.getStatus() == SlotStatus.COLLECTED)
                 .sorted(Comparator
                         .comparing(SlotStateItem::getAnsweredAt,
@@ -70,7 +71,7 @@ public class SlotStatusBlockBuilder {
         int limit = Math.min(collected.size(), 8);
         for (int i = 0; i < limit; i++) {
             SlotStateItem item = collected.get(i);
-            sb.append("- ").append(item.getLabel())
+            sb.append("- ").append(slotRef(item))
                     .append(": ").append(item.displayCollectedValue())
                     .append('\n');
         }
@@ -83,11 +84,12 @@ public class SlotStatusBlockBuilder {
     private String pendingLines(List<SlotStateItem> slots) {
         StringBuilder sb = new StringBuilder();
         slots.stream()
+                .filter(s -> !s.isOutOfScope())
                 .filter(s -> s.getStatus() == SlotStatus.PENDING_CONFIRMATION)
                 .sorted(Comparator.comparingInt(SlotStateItem::getPriority))
                 .limit(5)
                 .forEach(s -> sb.append("- ")
-                        .append(s.getLabel())
+                        .append(slotRef(s))
                         .append(": ")
                         .append(s.getPendingValue() == null || s.getPendingValue().isBlank()
                                 ? "pending value not recorded"
@@ -98,6 +100,7 @@ public class SlotStatusBlockBuilder {
 
     private String missingLines(List<SlotStateItem> slots) {
         List<SlotStateItem> missing = slots.stream()
+                .filter(s -> !s.isOutOfScope())
                 .filter(s -> s.getStatus() == SlotStatus.MISSING)
                 .sorted(Comparator
                         .comparing((SlotStateItem s) -> !s.isRequired())
@@ -110,7 +113,7 @@ public class SlotStatusBlockBuilder {
 
         StringBuilder sb = new StringBuilder();
         for (SlotStateItem item : missing) {
-            sb.append("- ").append(item.getLabel())
+            sb.append("- ").append(slotRef(item))
                     .append(" (priority: ")
                     .append(item.getPriority())
                     .append(item.isRequired() ? ", required" : ", optional")
@@ -123,6 +126,9 @@ public class SlotStatusBlockBuilder {
         Set<String> questions = new LinkedHashSet<>();
         for (int i = slots.size() - 1; i >= 0 && questions.size() < 5; i--) {
             SlotStateItem slot = slots.get(i);
+            if (slot.isOutOfScope()) {
+                continue;
+            }
             List<String> asked = slot.getAskedQuestions();
             if (asked == null || asked.isEmpty()) {
                 continue;
@@ -149,6 +155,20 @@ public class SlotStatusBlockBuilder {
             return "";
         }
         return title + "\n" + truncate(body, tokenBudget);
+    }
+
+    private String slotRef(SlotStateItem item) {
+        if (item == null) {
+            return "(unknown slot)";
+        }
+        String label = item.getLabel() == null || item.getLabel().isBlank()
+                ? "(unnamed slot)"
+                : item.getLabel();
+        String slotId = item.getSlotId();
+        if (slotId == null || slotId.isBlank()) {
+            return label;
+        }
+        return "[" + slotId + "] " + label;
     }
 
     private String truncate(String text, int tokenBudget) {

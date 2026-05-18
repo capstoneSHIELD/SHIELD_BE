@@ -61,4 +61,19 @@ P1부터 P4까지 구현된 기능을 운영에 순차 적용하기 위한 최�
 .\gradlew.bat test
 ```
 
+## YAML Scope Regression 추가 확인
+
+새 체크리스트 YAML 구조는 `L1 > L2 > L3` 계층과 optional `ai/checklists/nodes/<node-id>.yaml` override를 지원한다. staging 배포 전 아래 시나리오를 확인한다.
+
+| 시나리오 | 확인 내용 |
+|---|---|
+| L1-only 상담 | prompt, coverage, slot ledger가 L1 공통 항목만 사용 |
+| L2 확정 상담 | L1 공통 + 해당 L2 focus만 사용하고 형제 L2는 제외 |
+| L3 확정 상담 | L1 공통 + 해당 L2 focus + 해당 L3 items만 사용 |
+| L1 → L3 narrowing | 기존 collected/pending/asked 상태 보존, 새 L3 slot 추가, 이전 missing slot은 out-of-scope 처리 |
+| node override | prompt와 coverage가 같은 override item set을 사용 |
+| correctedSlots | stable slot id 또는 legacy `static_001` fallback으로만 correction 처리 |
+
+관련 phase 문서: `docs/ai-rag-v2.2/phases/ai-rag-phase-p1_6-yaml-scope-hardening.md`
+
 마지막 통합 검증: 2026-05-17, `BUILD SUCCESSFUL`.

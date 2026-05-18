@@ -33,6 +33,7 @@ class CohereChatRequestTest {
         assertThat(json).contains("\"schema\"");
         assertThat(json).contains("\"schema_version\"");
         assertThat(json).contains("\"nextQuestion\"");
+        assertThat(json).contains("\"correctedSlots\"");
         // v2에서는 max_completion_tokens / top_p 대신 max_tokens / p 사용
         assertThat(json).doesNotContain("max_completion_tokens");
         assertThat(json).doesNotContain("top_p");

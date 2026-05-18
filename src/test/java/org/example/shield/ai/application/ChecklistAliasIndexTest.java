@@ -1,5 +1,6 @@
 package org.example.shield.ai.application;
 
+import org.example.shield.ai.dto.checklist.ChecklistScopeItem;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,23 +20,38 @@ class ChecklistAliasIndexTest {
     }
 
     @Test
-    @DisplayName("alias YAML is loaded and static mapping id can be resolved")
+    @DisplayName("manual alias YAML is loaded and legacy static mapping id can be resolved")
     void load_findByStaticMappingId() {
         assertThat(index.size()).isGreaterThan(0);
-        assertThat(index.findByStaticMappingId("real-estate.lease_end_date"))
-                .isPresent()
-                .get()
-                .extracting(ChecklistAliasIndex.AliasEntry::label)
-                .isEqualTo("계약 종료일");
+        assertThat(index.findByStaticMappingId("real-estate.lease_end_date")).isPresent();
     }
 
     @Test
-    @DisplayName("dynamic slot label and keywords can resolve to a static alias")
+    @DisplayName("manual dynamic slot keywords can resolve to a legacy static alias")
     void resolve_dynamicLabel() {
-        assertThat(index.resolve("임대차 종료 시점", List.of("전세 만료")))
+        assertThat(index.resolve("contract termination", List.of("lease_expiry")))
                 .isPresent()
                 .get()
                 .extracting(ChecklistAliasIndex.AliasEntry::staticMappingId)
                 .isEqualTo("real-estate.lease_end_date");
+    }
+
+    @Test
+    @DisplayName("generated scope aliases cover all checklist domains")
+    void load_generatedScopeAliases() {
+        ChecklistScopeResolver resolver = new ChecklistScopeResolver(new ChecklistLoader(), null, null);
+        ChecklistScopeItem firstGenerated = resolver.resolveAllStaticItems().get(0);
+        ChecklistAliasIndex generated = new ChecklistAliasIndex();
+        generated.setChecklistScopeResolver(resolver);
+        generated.load();
+
+        assertThat(generated.size()).isGreaterThan(index.size());
+        assertThat(generated.coverageReport().generatedScopeEntries()).isGreaterThan(100);
+        assertThat(generated.findByStaticMappingId(firstGenerated.slotId())).isPresent();
+        assertThat(generated.resolve(firstGenerated.label(), List.of()))
+                .isPresent()
+                .get()
+                .extracting(ChecklistAliasIndex.AliasEntry::staticMappingId)
+                .isEqualTo(firstGenerated.slotId());
     }
 }

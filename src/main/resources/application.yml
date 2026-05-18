@@ -175,6 +175,9 @@ app:
       enabled: ${AI_SLOT_LEDGER_ENABLED:true}
     cohere:
       structured-output-enabled: ${AI_COHERE_STRUCTURED_OUTPUT_ENABLED:true}
+      corrected-slots:
+        enabled: ${AI_COHERE_CORRECTED_SLOTS_ENABLED:false}
+        confidence-threshold: ${AI_COHERE_CORRECTED_SLOTS_CONFIDENCE_THRESHOLD:0.85}
     openai:
       structured-output-enabled: ${AI_OPENAI_STRUCTURED_OUTPUT_ENABLED:true}
     intent-router:

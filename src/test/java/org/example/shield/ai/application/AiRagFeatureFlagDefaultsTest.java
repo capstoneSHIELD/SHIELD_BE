@@ -24,6 +24,7 @@ class AiRagFeatureFlagDefaultsTest {
         assertThat(env.getProperty("app.ai.intent-router.enable-irrelevant-skip", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.intent-router.enable-confirm", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.intent-router.enable-slot-auto-update", Boolean.class)).isFalse();
+        assertThat(env.getProperty("app.ai.cohere.corrected-slots.enabled", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.dynamic-plan.enabled", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.dynamic-plan.backfill.execute-enabled", Boolean.class)).isFalse();
         assertThat(env.getProperty("app.ai.rag.fusion-mode")).isEqualTo("weighted");
