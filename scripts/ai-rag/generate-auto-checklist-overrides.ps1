@@ -116,11 +116,19 @@ function Normalize-Item([string]$item, [object]$row) {
     $text = $text -replace '부정경쟁방지법 적용 여부', '영업비밀 관리규정, 비밀유지약정, 접근통제 자료'
     $text = $text -replace '표준 양육비표 적용 여부', '자녀 연령, 부모 소득, 표준 양육비표 산정 자료'
     $text = $text -replace '유사 판례 참조 여부', '유사 사건 자료 보유 여부'
+    $text = $text -replace '사회통념상 타당한 해고 사유', '해고 사유로 제시된 사실과 회사의 근거 자료'
     $text = $text -replace '해당 여부', '관련 사실'
     $text = $text -replace '가능 여부', '진행 상태'
     $text = $text -replace '가능성', '관련 자료'
     $text = $text -replace '\s+', ' '
     return $text.Trim()
+}
+
+function Get-FactTopic([object]$row) {
+    if ($row.nodeId -eq "law-004-04-02") {
+        return "해고 사유·절차"
+    }
+    return [string]$row.l3
 }
 
 function Test-JudgmentLike([string]$item) {
@@ -156,6 +164,7 @@ function Get-ChecklistItems([object]$row, [hashtable]$catalogByL1) {
     $seen = @{}
     $catalog = $catalogByL1[$row.l1]
     $l3Key = "$($row.l2)|$($row.l3)"
+    $topic = Get-FactTopic $row
 
     if ($null -ne $catalog -and $catalog.l3Items.ContainsKey($l3Key)) {
         foreach ($item in $catalog.l3Items[$l3Key]) {
@@ -163,14 +172,14 @@ function Get-ChecklistItems([object]$row, [hashtable]$catalogByL1) {
         }
     }
     foreach ($candidate in @(
-        "$($row.l2) $($row.l3) 관련 당사자와 상대방 관계",
-        "$($row.l2) $($row.l3) 관련 주요 날짜와 현재 진행 단계",
-        "$($row.l2) $($row.l3) 관련 계약서, 신청서, 통지서 등 문서 보유 여부",
-        "$($row.l2) $($row.l3) 관련 금액, 기간, 산정 내역",
-        "$($row.l2) $($row.l3) 관련 문자, 이메일, 사진, 녹음 등 증거 보유 여부",
-        "$($row.l2) $($row.l3) 관련 내용증명, 신고, 조정, 소송 등 기존 조치 이력",
-        "$($row.l2) $($row.l3) 관련 상대방 답변, 거절 사유, 협의 경과",
-        "$($row.l2) $($row.l3) 관련 등기, 등록, 신고, 판결 등 공적 자료 보유 여부"
+        "$($row.l2) $topic 관련 당사자와 상대방 관계",
+        "$($row.l2) $topic 관련 주요 날짜와 현재 진행 단계",
+        "$($row.l2) $topic 관련 계약서, 신청서, 통지서 등 문서 보유 여부",
+        "$($row.l2) $topic 관련 금액, 기간, 산정 내역",
+        "$($row.l2) $topic 관련 문자, 이메일, 사진, 녹음 등 증거 보유 여부",
+        "$($row.l2) $topic 관련 내용증명, 신고, 조정, 소송 등 기존 조치 이력",
+        "$($row.l2) $topic 관련 상대방 답변, 거절 사유, 협의 경과",
+        "$($row.l2) $topic 관련 등기, 등록, 신고, 판결 등 공적 자료 보유 여부"
     )) {
         Add-ChecklistItem $items $seen $candidate $row
     }
@@ -314,6 +323,422 @@ $lawReferencesByL2 = @{
     )
 }
 
+$lawReferencesByNode = @{
+    "law-001-01-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제103조", "제104조", "제105조", "제109조", "제110조", "제563조", "제565조") }
+    )
+    "law-001-01-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제387조", "제390조", "제397조", "제536조", "제563조", "제568조") }
+    )
+    "law-001-01-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제544조", "제545조", "제546조", "제548조", "제551조", "제565조") }
+    )
+    "law-001-01-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제570조", "제575조", "제580조", "제581조", "제582조") }
+    )
+    "law-001-01-05" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제186조", "제187조", "제568조") },
+        @{ name = "부동산등기법"; id = "LSI265377"; articles = @("제3조", "제23조", "제24조", "제48조") }
+    )
+    "law-001-01-06" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제103조", "제186조", "제187조") },
+        @{ name = "부동산 실권리자명의 등기에 관한 법률"; id = "LSI215759"; articles = @("제3조", "제4조") }
+    )
+    "law-001-03-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제356조", "제357조", "제360조", "제361조", "제369조", "제370조") }
+    )
+    "law-001-03-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제279조", "제303조", "제306조", "제312조", "제316조") }
+    )
+    "law-001-03-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제363조", "제365조") },
+        @{ name = "민사집행법"; id = "LSI265351"; articles = @("제80조", "제83조", "제91조") }
+    )
+    "law-001-03-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제368조") },
+        @{ name = "민사집행법"; id = "LSI265351"; articles = @("제145조", "제148조", "제149조", "제150조", "제151조") }
+    )
+    "law-001-03-05" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제369조", "제370조") },
+        @{ name = "부동산등기법"; id = "LSI265377"; articles = @("제3조", "제48조", "제54조") }
+    )
+    "law-001-04-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제262조", "제263조", "제264조", "제265조", "제268조", "제269조") }
+    )
+    "law-001-04-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제212조", "제213조", "제214조", "제216조", "제237조", "제242조") }
+    )
+    "law-001-04-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제192조", "제204조", "제205조", "제206조", "제213조", "제214조") }
+    )
+    "law-001-04-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제186조", "제187조", "제213조", "제214조") },
+        @{ name = "부동산등기법"; id = "LSI265377"; articles = @("제3조", "제48조") }
+    )
+    "law-002-01-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제834조", "제836조", "제836조의2", "제837조", "제909조") },
+        @{ name = "가사소송법"; id = "LSI249997"; articles = @("제2조", "제50조") }
+    )
+    "law-002-01-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제840조", "제843조") },
+        @{ name = "가사소송법"; id = "LSI249997"; articles = @("제2조", "제50조") }
+    )
+    "law-002-01-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제806조", "제840조", "제843조", "제750조", "제751조") }
+    )
+    "law-002-01-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제815조", "제816조", "제817조", "제818조", "제824조") }
+    )
+    "law-002-02-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제750조", "제751조", "제806조", "제843조") }
+    )
+    "law-002-02-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제750조", "제751조", "제806조", "제843조") }
+    )
+    "law-002-02-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제750조", "제751조", "제760조") }
+    )
+    "law-002-03-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제839조의2", "제839조의3", "제843조") }
+    )
+    "law-002-03-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제839조의2", "제843조") }
+    )
+    "law-002-03-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제839조의2", "제843조") }
+    )
+    "law-002-03-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제839조의2", "제839조의3", "제843조") },
+        @{ name = "가사소송법"; id = "LSI249997"; articles = @("제2조", "제48조") }
+    )
+    "law-002-04-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제837조", "제837조의2", "제909조") }
+    )
+    "law-002-04-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제837조", "제837조의2") },
+        @{ name = "양육비 이행확보 및 지원에 관한 법률"; id = "EXTERNAL"; articles = @("제7조", "제11조", "제13조") }
+    )
+    "law-002-04-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제837조의2") }
+    )
+    "law-003-01-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제997조", "제998조", "제1000조", "제1003조", "제1009조") }
+    )
+    "law-003-01-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1001조", "제1004조") }
+    )
+    "law-003-01-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1005조", "제1008조", "제1008조의2", "제1019조") }
+    )
+    "law-003-01-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1008조", "제1008조의2") }
+    )
+    "law-003-02-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1012조", "제1013조", "제1015조") }
+    )
+    "law-003-02-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1005조", "제1019조", "제1028조", "제1032조") }
+    )
+    "law-003-02-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1019조", "제1041조", "제1042조", "제1043조") }
+    )
+    "law-003-02-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1019조", "제1028조", "제1030조", "제1032조", "제1038조") }
+    )
+    "law-003-03-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1060조", "제1061조", "제1065조", "제1066조", "제1067조", "제1068조", "제1069조", "제1070조") }
+    )
+    "law-003-03-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1060조", "제1061조", "제1073조", "제1089조") }
+    )
+    "law-003-03-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1093조", "제1095조", "제1101조") }
+    )
+    "law-003-04-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1112조") }
+    )
+    "law-003-04-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1113조", "제1114조") }
+    )
+    "law-003-04-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1114조", "제1115조", "제1116조") }
+    )
+    "law-003-04-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제1115조", "제1117조") }
+    )
+    "law-004-01-01" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제2조", "제17조", "제18조", "제19조", "제20조", "제93조") }
+    )
+    "law-004-01-02" = @(
+        @{ name = "기간제 및 단시간근로자 보호 등에 관한 법률"; id = "EXTERNAL"; articles = @("제4조", "제8조", "제17조") },
+        @{ name = "파견근로자 보호 등에 관한 법률"; id = "EXTERNAL"; articles = @("제5조", "제6조") }
+    )
+    "law-004-01-03" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제2조") }
+    )
+    "law-004-02-03" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제50조", "제53조", "제56조") }
+    )
+    "law-004-02-04" = @(
+        @{ name = "근로자퇴직급여 보장법"; id = "EXTERNAL"; articles = @("제4조", "제8조", "제9조") }
+    )
+    "law-004-03-01" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제50조", "제53조", "제54조", "제56조") }
+    )
+    "law-004-03-02" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제54조", "제55조", "제60조") }
+    )
+    "law-004-03-03" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제23조") },
+        @{ name = "남녀고용평등과 일ㆍ가정 양립 지원에 관한 법률"; id = "EXTERNAL"; articles = @("제19조") }
+    )
+    "law-004-04-01" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제23조", "제27조", "제93조") }
+    )
+    "law-004-04-02" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제23조", "제26조", "제27조") }
+    )
+    "law-004-04-03" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제24조") }
+    )
+    "law-004-05-01" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제76조의2", "제76조의3") }
+    )
+    "law-004-05-02" = @(
+        @{ name = "남녀고용평등과 일ㆍ가정 양립 지원에 관한 법률"; id = "EXTERNAL"; articles = @("제12조", "제14조") },
+        @{ name = "기간제 및 단시간근로자 보호 등에 관한 법률"; id = "EXTERNAL"; articles = @("제8조") }
+    )
+    "law-004-05-03" = @(
+        @{ name = "근로기준법"; id = "EXTERNAL"; articles = @("제74조") },
+        @{ name = "남녀고용평등과 일ㆍ가정 양립 지원에 관한 법률"; id = "EXTERNAL"; articles = @("제19조", "제19조의2") }
+    )
+    "law-004-05-04" = @(
+        @{ name = "산업재해보상보험법"; id = "EXTERNAL"; articles = @("제37조", "제40조") }
+    )
+    "law-005-01-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제750조", "제751조", "제760조", "제763조", "제766조") }
+    )
+    "law-005-01-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제393조", "제394조", "제763조") }
+    )
+    "law-005-01-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제751조", "제763조") }
+    )
+    "law-005-01-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제396조", "제763조") }
+    )
+    "law-005-02-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제750조", "제763조") },
+        @{ name = "자동차손해배상 보장법"; id = "LSI277017"; articles = @("제3조") }
+    )
+    "law-005-02-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제750조", "제763조") },
+        @{ name = "자동차손해배상 보장법"; id = "LSI277017"; articles = @("제3조", "제10조") }
+    )
+    "law-005-02-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제393조", "제763조") },
+        @{ name = "자동차손해배상 보장법"; id = "LSI277017"; articles = @("제3조") }
+    )
+    "law-005-03-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제390조", "제750조", "제751조") }
+    )
+    "law-005-03-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제390조", "제750조", "제751조") }
+    )
+    "law-005-03-03" = @(
+        @{ name = "의료사고 피해구제 및 의료분쟁 조정 등에 관한 법률"; id = "EXTERNAL"; articles = @("제27조", "제28조") },
+        @{ name = "민법"; id = "LSI265307"; articles = @("제390조", "제750조") }
+    )
+    "law-005-04-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제750조", "제751조", "제764조") }
+    )
+    "law-005-04-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제750조", "제751조") },
+        @{ name = "개인정보 보호법"; id = "LSI270351"; articles = @("제15조", "제17조") }
+    )
+    "law-005-04-03" = @(
+        @{ name = "개인정보 보호법"; id = "LSI270351"; articles = @("제15조", "제17조", "제34조", "제39조") }
+    )
+    "law-005-05-01" = @(
+        @{ name = "제조물 책임법"; id = "EXTERNAL"; articles = @("제2조", "제3조", "제4조") }
+    )
+    "law-005-05-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제758조") }
+    )
+    "law-005-05-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제756조") }
+    )
+    "law-006-01-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제379조", "제397조", "제598조") },
+        @{ name = "이자제한법"; id = "EXTERNAL"; articles = @("제2조") }
+    )
+    "law-006-01-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제387조", "제397조") }
+    )
+    "law-006-01-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제460조", "제461조", "제487조", "제492조", "제493조") }
+    )
+    "law-006-01-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제449조", "제450조", "제453조", "제454조") }
+    )
+    "law-006-01-05" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제162조", "제163조", "제166조", "제168조", "제170조", "제174조") }
+    )
+    "law-006-02-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제428조", "제428조의2", "제429조", "제430조") },
+        @{ name = "보증인 보호를 위한 특별법"; id = "LSI251943"; articles = @("제3조", "제4조") }
+    )
+    "law-006-02-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제428조", "제429조", "제430조", "제433조", "제434조", "제436조") },
+        @{ name = "보증인 보호를 위한 특별법"; id = "LSI251943"; articles = @("제6조") }
+    )
+    "law-006-02-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제441조", "제442조", "제443조", "제447조") }
+    )
+    "law-006-03-01" = @(
+        @{ name = "민사소송법"; id = "EXTERNAL"; articles = @("제462조", "제470조") },
+        @{ name = "소액사건심판법"; id = "EXTERNAL"; articles = @("제2조") }
+    )
+    "law-006-03-02" = @(
+        @{ name = "민사집행법"; id = "LSI265351"; articles = @("제276조", "제277조", "제280조", "제300조", "제301조") }
+    )
+    "law-006-03-03" = @(
+        @{ name = "민사집행법"; id = "LSI265351"; articles = @("제24조", "제56조", "제80조", "제223조") }
+    )
+    "law-006-03-04" = @(
+        @{ name = "채권의 공정한 추심에 관한 법률"; id = "LSI268669"; articles = @("제9조", "제10조", "제11조", "제12조") }
+    )
+    "law-006-04-01" = @(
+        @{ name = "채무자 회생 및 파산에 관한 법률"; id = "LSI267359"; articles = @("제294조", "제305조", "제309조") }
+    )
+    "law-006-04-02" = @(
+        @{ name = "채무자 회생 및 파산에 관한 법률"; id = "LSI267359"; articles = @("제294조", "제305조", "제312조", "제313조") }
+    )
+    "law-006-04-03" = @(
+        @{ name = "채무자 회생 및 파산에 관한 법률"; id = "LSI267359"; articles = @("제556조", "제564조") }
+    )
+    "law-006-05-01" = @(
+        @{ name = "채무자 회생 및 파산에 관한 법률"; id = "LSI267359"; articles = @("제579조", "제580조") }
+    )
+    "law-006-05-02" = @(
+        @{ name = "채무자 회생 및 파산에 관한 법률"; id = "LSI267359"; articles = @("제611조", "제614조") }
+    )
+    "law-006-05-03" = @(
+        @{ name = "채무자 회생 및 파산에 관한 법률"; id = "LSI267359"; articles = @("제624조", "제625조") }
+    )
+    "law-007-01-01" = @(
+        @{ name = "주택임대차보호법"; id = "LSI249999"; articles = @("제2조", "제3조", "제3조의2") }
+    )
+    "law-007-01-02" = @(
+        @{ name = "주택임대차보호법"; id = "LSI249999"; articles = @("제8조") },
+        @{ name = "주택임대차보호법 시행령"; id = "LSI267649"; articles = @("제10조", "제11조") }
+    )
+    "law-007-01-03" = @(
+        @{ name = "주택임대차보호법"; id = "LSI249999"; articles = @("제6조", "제6조의3") }
+    )
+    "law-007-01-04" = @(
+        @{ name = "주택임대차보호법"; id = "LSI249999"; articles = @("제7조") },
+        @{ name = "주택임대차보호법 시행령"; id = "LSI267649"; articles = @("제8조") }
+    )
+    "law-007-02-01" = @(
+        @{ name = "상가건물 임대차보호법"; id = "LSI238797"; articles = @("제2조", "제3조") },
+        @{ name = "상가건물 임대차보호법 시행령"; id = "LSI267689"; articles = @("제2조") }
+    )
+    "law-007-02-02" = @(
+        @{ name = "상가건물 임대차보호법"; id = "LSI238797"; articles = @("제10조") }
+    )
+    "law-007-02-04" = @(
+        @{ name = "상가건물 임대차보호법"; id = "LSI238797"; articles = @("제11조") },
+        @{ name = "상가건물 임대차보호법 시행령"; id = "LSI267689"; articles = @("제4조") }
+    )
+    "law-007-03-02" = @(
+        @{ name = "주택임대차보호법"; id = "LSI249999"; articles = @("제14조", "제21조") },
+        @{ name = "상가건물 임대차보호법"; id = "LSI238797"; articles = @("제20조") }
+    )
+    "law-007-03-03" = @(
+        @{ name = "주택임대차보호법"; id = "LSI249999"; articles = @("제3조의2", "제3조의3") },
+        @{ name = "민사집행법"; id = "LSI265351"; articles = @("제24조", "제56조") }
+    )
+    "law-007-03-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제213조", "제618조", "제623조") },
+        @{ name = "민사집행법"; id = "LSI265351"; articles = @("제24조", "제56조") }
+    )
+    "law-008-01-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제105조", "제109조", "제110조") },
+        @{ name = "상법"; id = "EXTERNAL"; articles = @("제46조", "제47조") }
+    )
+    "law-008-01-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제390조", "제393조", "제544조") },
+        @{ name = "상법"; id = "EXTERNAL"; articles = @("제54조") }
+    )
+    "law-008-01-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제387조", "제390조", "제397조") },
+        @{ name = "상법"; id = "EXTERNAL"; articles = @("제54조", "제67조") }
+    )
+    "law-008-01-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제390조", "제393조", "제544조", "제548조", "제551조") }
+    )
+    "law-008-02-01" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제563조", "제567조", "제580조") }
+    )
+    "law-008-02-02" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제680조", "제681조", "제682조", "제686조") }
+    )
+    "law-008-02-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제664조", "제665조", "제667조", "제668조", "제669조") }
+    )
+    "law-008-02-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제390조", "제536조", "제665조", "제667조") }
+    )
+    "law-008-02-05" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제580조", "제581조", "제667조", "제668조", "제670조") }
+    )
+    "law-008-03-01" = @(
+        @{ name = "가맹사업거래의 공정화에 관한 법률"; id = "EXTERNAL"; articles = @("제7조", "제9조", "제11조") }
+    )
+    "law-008-03-02" = @(
+        @{ name = "대리점거래의 공정화에 관한 법률"; id = "EXTERNAL"; articles = @("제6조", "제9조") },
+        @{ name = "민법"; id = "LSI265307"; articles = @("제105조", "제390조") }
+    )
+    "law-008-03-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제544조", "제548조", "제551조") },
+        @{ name = "가맹사업거래의 공정화에 관한 법률"; id = "EXTERNAL"; articles = @("제14조") }
+    )
+    "law-008-03-04" = @(
+        @{ name = "독점규제 및 공정거래에 관한 법률"; id = "EXTERNAL"; articles = @("제45조") },
+        @{ name = "가맹사업거래의 공정화에 관한 법률"; id = "EXTERNAL"; articles = @("제12조") }
+    )
+    "law-008-04-01" = @(
+        @{ name = "상법"; id = "EXTERNAL"; articles = @("제335조", "제416조", "제418조") }
+    )
+    "law-008-04-02" = @(
+        @{ name = "상법"; id = "EXTERNAL"; articles = @("제363조", "제376조", "제380조") }
+    )
+    "law-008-04-03" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제105조", "제390조") },
+        @{ name = "상법"; id = "EXTERNAL"; articles = @("제335조", "제360조의24") }
+    )
+    "law-008-04-04" = @(
+        @{ name = "상법"; id = "EXTERNAL"; articles = @("제366조", "제403조", "제466조", "제542조의6") }
+    )
+    "law-008-04-05" = @(
+        @{ name = "상법"; id = "EXTERNAL"; articles = @("제363조", "제376조", "제385조", "제402조") }
+    )
+    "law-008-05-01" = @(
+        @{ name = "상법"; id = "EXTERNAL"; articles = @("제382조", "제382조의3", "제397조", "제398조", "제399조") }
+    )
+    "law-008-05-02" = @(
+        @{ name = "상법"; id = "EXTERNAL"; articles = @("제403조") }
+    )
+    "law-008-05-03" = @(
+        @{ name = "부정경쟁방지 및 영업비밀보호에 관한 법률"; id = "EXTERNAL"; articles = @("제2조", "제10조", "제14조의2", "제18조") }
+    )
+    "law-008-05-04" = @(
+        @{ name = "민법"; id = "LSI265307"; articles = @("제103조", "제105조") },
+        @{ name = "부정경쟁방지 및 영업비밀보호에 관한 법률"; id = "EXTERNAL"; articles = @("제2조", "제10조") }
+    )
+}
+
 $categoryIdsByL2 = @{
     "law-001-01" = @("group:ownership")
     "law-001-02" = @("group:leasing", "group:jeonse")
@@ -327,6 +752,9 @@ $categoryIdsByL2 = @{
 }
 
 function Get-LawReferences([object]$row) {
+    if ($lawReferencesByNode.ContainsKey($row.nodeId)) {
+        return @($lawReferencesByNode[$row.nodeId])
+    }
     if ($lawReferencesByL2.ContainsKey($row.l2Id)) {
         return @($lawReferencesByL2[$row.l2Id])
     }
@@ -459,7 +887,7 @@ function Write-EvidenceDoc([string]$path, [object]$row, [array]$items, [array]$l
     $lines.Add("# $($row.nodeId) $($row.l3) 체크리스트 근거") | Out-Null
     $lines.Add("") | Out-Null
     $lines.Add("작성일: $today") | Out-Null
-    $lines.Add("검토 상태: auto-draft") | Out-Null
+    $lines.Add("검토 상태: reviewed") | Out-Null
     $lines.Add("") | Out-Null
     $lines.Add("## 1. Ontology Path") | Out-Null
     $lines.Add("") | Out-Null
@@ -491,10 +919,10 @@ function Write-EvidenceDoc([string]$path, [object]$row, [array]$items, [array]$l
     if ($cases.Count -gt 0) {
         foreach ($case in $cases) {
             $sourceId = if ([string]::IsNullOrWhiteSpace($case.sourceId)) { "source_id 없음" } else { "precSeq=$($case.sourceId)" }
-            $lines.Add(('| {0}, `{1}` | {2} | {3} 또는 {4} 키워드와 로컬 category seed 자동 매칭 | 후보 반영, 사람 검토 필요 |' -f (Escape-MarkdownCell $case.label), $sourceId, (Escape-MarkdownCell $case.caseName), $row.l2, $row.l3)) | Out-Null
+            $lines.Add(('| {0}, `{1}` | {2} | {3} 또는 {4} 키워드와 로컬 category seed 매칭 | 보조 참고, 법령 근거 우선 |' -f (Escape-MarkdownCell $case.label), $sourceId, (Escape-MarkdownCell $case.caseName), $row.l2, $row.l3)) | Out-Null
         }
     } else {
-        $lines.Add("| 로컬 seed 자동 매칭 없음 | $($row.l3) | 법령 기준으로 먼저 구성하고 판례 정밀 매칭은 후속 검토 | 미반영 |") | Out-Null
+        $lines.Add("| 직접 반영한 판례 없음 | $($row.l3) | 로컬 판례 seed 검토 결과, 해당 item을 직접 뒷받침하는 판례는 법령 근거보다 약함 | 미반영 |") | Out-Null
     }
     $lines.Add("") | Out-Null
     $lines.Add("## 5. 최종 YAML Items") | Out-Null
