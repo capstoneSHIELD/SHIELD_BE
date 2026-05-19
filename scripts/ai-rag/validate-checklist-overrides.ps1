@@ -74,9 +74,15 @@ function Add-Failure([System.Collections.Generic.List[string]]$failures, [string
 }
 
 function Get-CurrentStatus([string]$nodeId, [string]$nodeDir, [string]$evidenceDir) {
-    $hasYaml = Test-Path (Join-Path $nodeDir "$nodeId.yaml")
-    $hasEvidence = Test-Path (Join-Path $evidenceDir "$nodeId.md")
+    $yamlPath = Join-Path $nodeDir "$nodeId.yaml"
+    $evidencePath = Join-Path $evidenceDir "$nodeId.md"
+    $hasYaml = Test-Path $yamlPath
+    $hasEvidence = Test-Path $evidencePath
     if ($hasYaml -and $hasEvidence) {
+        $evidenceText = [System.IO.File]::ReadAllText($evidencePath, [System.Text.Encoding]::UTF8)
+        if ($evidenceText -match '검토 상태:\s*reviewed') {
+            return "reviewed"
+        }
         return "draft"
     }
     if ($hasYaml -or $hasEvidence) {
@@ -109,23 +115,23 @@ function Write-ProgressReport(
     $batchSummary = $statusRows |
         Group-Object batch |
         ForEach-Object {
-            $done = @($_.Group | Where-Object { $_.status -eq "draft" }).Count
+            $done = @($_.Group | Where-Object { $_.status -in @("draft", "reviewed") }).Count
             [pscustomobject]@{
                 batch = $_.Name
                 batchName = $_.Group[0].batchName
                 total = $_.Count
-                draft = $done
+                completed = $done
                 remaining = $_.Count - $done
             }
         } |
         Sort-Object batch
 
     $completed = $statusRows |
-        Where-Object { $_.status -eq "draft" } |
+        Where-Object { $_.status -in @("draft", "reviewed") } |
         Sort-Object priority, nodeId
 
     $next = $statusRows |
-        Where-Object { $_.status -ne "draft" } |
+        Where-Object { $_.status -notin @("draft", "reviewed") } |
         Sort-Object priority, nodeId |
         Select-Object -First 10
 
@@ -154,10 +160,10 @@ function Write-ProgressReport(
     $md.Add("") | Out-Null
     $md.Add("## 3. Batch 요약") | Out-Null
     $md.Add("") | Out-Null
-    $md.Add("| batch | L2 | total | draft | remaining |") | Out-Null
+    $md.Add("| batch | L2 | total | completed | remaining |") | Out-Null
     $md.Add("|---|---|---:|---:|---:|") | Out-Null
     foreach ($batch in $batchSummary) {
-        $md.Add(('| `{0}` | {1} | {2} | {3} | {4} |' -f $batch.batch, $batch.batchName, $batch.total, $batch.draft, $batch.remaining)) | Out-Null
+        $md.Add(('| `{0}` | {1} | {2} | {3} | {4} |' -f $batch.batch, $batch.batchName, $batch.total, $batch.completed, $batch.remaining)) | Out-Null
     }
     $md.Add("") | Out-Null
     $md.Add("## 4. 완료/진행 현황") | Out-Null

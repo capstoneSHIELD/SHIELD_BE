@@ -26,7 +26,7 @@ public class RagBaselineReportWriter {
         if (result == null) {
             return "# AI/RAG v2.2 Baseline\n\nNo result.\n";
         }
-        return """
+        StringBuilder sb = new StringBuilder("""
                 # AI/RAG v2.2 Baseline
 
                 | Metric | Value |
@@ -34,9 +34,13 @@ public class RagBaselineReportWriter {
                 | Evaluated At | %s |
                 | Method | %s |
                 | Query Count | %d |
-                | Recall@5 | %.4f |
+                | Mixed Recall@5 | %.4f |
+                | Statute Recall@5 | %.4f |
+                | Case Recall@5 | %.4f |
                 | MRR | %.4f |
                 | nDCG@5 | %.4f |
+                | Graded nDCG Query Count | %d |
+                | Empty Rate | %.4f |
                 | Latency p50 ms | %.1f |
                 | Latency p95 ms | %.1f |
                 | False Drop Candidates | %d |
@@ -44,11 +48,35 @@ public class RagBaselineReportWriter {
                 result.evaluatedAt(),
                 result.method(),
                 result.queryCount(),
-                result.recallAt5(),
+                result.mixedRecallAt5(),
+                result.statuteRecallAt5(),
+                result.caseRecallAt5(),
                 result.mrr(),
                 result.ndcgAt5(),
+                result.gradedNdcgQueryCount(),
+                result.emptyRate(),
                 result.latencyP50Ms(),
                 result.latencyP95Ms(),
-                result.falseDropCandidateCount());
+                result.falseDropCandidateCount()));
+        if (result.splitMetrics() != null && !result.splitMetrics().isEmpty()) {
+            sb.append("\n## Split Metrics\n\n");
+            sb.append("| Split | Queries | Statute Q | Case Q | Mixed R@5 | Statute R@5 | Case R@5 | MRR | nDCG@5 | Empty | p95 ms |\n");
+            sb.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n");
+            result.splitMetrics().values().forEach(metric -> sb.append(
+                    "| %s | %d | %d | %d | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.1f |\n"
+                            .formatted(
+                                    metric.split(),
+                                    metric.queryCount(),
+                                    metric.statuteQueryCount(),
+                                    metric.caseQueryCount(),
+                                    metric.mixedRecallAt5(),
+                                    metric.statuteRecallAt5(),
+                                    metric.caseRecallAt5(),
+                                    metric.mrr(),
+                                    metric.ndcgAt5(),
+                                    metric.emptyRate(),
+                                    metric.latencyP95Ms())));
+        }
+        return sb.toString();
     }
 }

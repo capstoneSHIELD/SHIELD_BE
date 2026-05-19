@@ -81,6 +81,8 @@ public class RagPipelineService {
 
             List<String> lawIds = categoryLawMappingService.resolveLawIds(
                     classification.matchedNodeIds());
+            List<String> categoryIds = categoryLawMappingService.resolveCategoryIds(
+                    classification.matchedNodeIds());
             String vectorQuery = classification.retrievalQueries().isEmpty()
                     ? fallbackQuery(domain)
                     : classification.retrievalQueries().get(0);
@@ -100,7 +102,7 @@ public class RagPipelineService {
                 MixedRetrievalResult rawMixed = legalRetrievalService.retrieveMixed(
                         vectorQuery,
                         classification.keywords().core(),
-                        classification.matchedNodeIds(),
+                        categoryIds,
                         lawIds,
                         topK);
                 List<LegalChunk> filteredLaws = retrievalScoreGate.filter(
@@ -122,7 +124,9 @@ public class RagPipelineService {
                 List<LegalChunk> rawChunks = legalRetrievalService.retrieve(
                         vectorQuery,
                         classification.keywords().core(),
-                        lawIds, topK);
+                        categoryIds,
+                        lawIds,
+                        topK);
                 List<LegalChunk> chunks = retrievalScoreGate.filter(
                         rawChunks, RetrievalScoreMethod.WEIGHTED);
                 ragContext = ragContextBuilder.build(chunks, classification.intentSummary());

@@ -16,11 +16,11 @@
 
 | 상태 | 개수 |
 |---|---:|
-| draft | 136 |
+| reviewed | 136 |
 
 ## 3. Batch 요약
 
-| batch | L2 | total | draft | remaining |
+| batch | L2 | total | completed | remaining |
 |---|---|---:|---:|---:|
 | `law-001-01` | 부동산 매매 | 6 | 6 | 0 |
 | `law-001-02` | 부동산 임대차 | 5 | 5 | 0 |
