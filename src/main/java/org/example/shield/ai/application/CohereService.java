@@ -8,6 +8,7 @@ import org.example.shield.ai.dto.ChatParsedResponse;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.CohereChatRequest;
 import org.example.shield.ai.dto.slot.SlotLedger;
+import org.example.shield.ai.dto.slot.SlotStateItem;
 import org.example.shield.ai.infrastructure.CohereClient;
 import org.example.shield.ai.infrastructure.GuardrailFilter;
 import org.example.shield.ai.infrastructure.SanitizeService;
@@ -38,9 +39,12 @@ import java.util.List;
 public class CohereService {
 
     private static final int CHECKLIST_COVERAGE_TOKEN_BUDGET = 160;
-    private static final int RECENT_QUESTIONS_TOKEN_BUDGET = 80;
+    private static final int RECENT_QA_MEMORY_TOKEN_BUDGET = 180;
+    private static final int CURRENT_TARGET_SLOT_TOKEN_BUDGET = 40;
     private static final int RAG_CONTEXT_TOKEN_BUDGET = 800;
     private static final int APPROX_CHARS_PER_TOKEN = 4;
+    private static final int QA_MEMORY_MAX_ITEMS = 6;
+    private static final int QA_ANSWER_MAX_CHARS = 160;
 
     private final AiClient aiClient;
     private final CohereApiConfig config;
@@ -53,6 +57,7 @@ public class CohereService {
     private final ChecklistPromptBuilder checklistPromptBuilder;
     private final ClassificationResolver classificationResolver;
     private final SlotStatusBlockBuilder slotStatusBlockBuilder;
+    private final StaticQuestionSelector staticQuestionSelector;
     private final OutputComplianceShadowJudge outputComplianceShadowJudge;
 
     @Value("${app.ai.slot-ledger.enabled:true}")
@@ -171,16 +176,28 @@ public class CohereService {
             }
         }
 
-        String recentQuestionsBlock = buildRecentQuestionsBlock(chatHistory);
-        if (!recentQuestionsBlock.isEmpty()) {
+        String recentQaMemoryBlock = buildRecentQaMemoryBlock(chatHistory);
+        if (!recentQaMemoryBlock.isEmpty()) {
             topBlocks.add(budgetBlock(
-                    "=== DO NOT REPEAT EXACT QUESTIONS ===",
-                    recentQuestionsBlock,
-                    RECENT_QUESTIONS_TOKEN_BUDGET));
+                    "=== RECENT Q/A MEMORY ===",
+                    recentQaMemoryBlock,
+                    RECENT_QA_MEMORY_TOKEN_BUDGET));
+        }
+
+        String currentTargetSlotBlock = buildCurrentTargetSlotBlock(slotLedger);
+        if (!currentTargetSlotBlock.isEmpty()) {
+            topBlocks.add(budgetBlock(
+                    "=== CURRENT TARGET SLOT ===",
+                    currentTargetSlotBlock,
+                    CURRENT_TARGET_SLOT_TOKEN_BUDGET));
         }
 
         if (!topBlocks.isEmpty()) {
-            topBlocks.add("RULE: Do not ask an identical question again. Prefer the highest-priority unchecked item.");
+            topBlocks.add("""
+                    RULE: 이미 답변을 받은 질문은 같은 문장이나 같은 의미로 다시 묻지 마세요.
+                    RULE: COLLECTED INFORMATION 항목은 재질문하지 마세요.
+                    RULE: PENDING CONFIRMATION은 새 질문처럼 다시 열지 말고 확인형으로만 처리하세요.
+                    RULE: 답변이 불충분하면 기존 답변을 짧게 인정하고 누락된 하위 사실만 좁혀서 물어보세요.""");
             systemPrompt = String.join("\n\n", topBlocks) + "\n\n" + systemPrompt;
         }
 
@@ -363,38 +380,119 @@ public class CohereService {
         return sb.toString();
     }
 
-    private String buildRecentQuestionsBlock(List<Message> chatHistory) {
+    private String buildRecentQaMemoryBlock(List<Message> chatHistory) {
         if (chatHistory == null || chatHistory.isEmpty()) {
             return "";
         }
 
-        List<String> questions = new ArrayList<>();
-        for (int i = chatHistory.size() - 1; i >= 0 && questions.size() < 5; i--) {
+        List<QaMemoryItem> items = new ArrayList<>();
+        List<String> seenQuestions = new ArrayList<>();
+        for (int i = chatHistory.size() - 1; i >= 0 && items.size() < QA_MEMORY_MAX_ITEMS; i--) {
             Message msg = chatHistory.get(i);
             if (msg.getRole() != MessageRole.CHATBOT) {
                 continue;
             }
 
-            String content = msg.getContent();
-            if (content == null || content.isBlank()) {
+            String question = normalizeForPrompt(msg.getContent());
+            if (question.isBlank() || seenQuestions.contains(question)) {
                 continue;
             }
 
-            String question = content.trim().replaceAll("\\s+", " ");
-            if (!question.isBlank() && !questions.contains(question)) {
-                questions.add(question);
-            }
+            seenQuestions.add(question);
+            List<String> answers = collectUserAnswersAfter(chatHistory, i);
+            items.add(new QaMemoryItem(question, answers));
         }
 
-        if (questions.isEmpty()) {
+        if (items.isEmpty()) {
             return "";
         }
 
         StringBuilder sb = new StringBuilder();
-        for (String question : questions) {
-            sb.append("- ").append(question).append('\n');
+        for (QaMemoryItem item : items) {
+            boolean answered = !item.answers().isEmpty();
+            sb.append("- [")
+                    .append(answered ? "ANSWERED" : "UNANSWERED")
+                    .append("] Q: ")
+                    .append(item.question());
+            if (answered) {
+                sb.append(" / A: ")
+                        .append(truncateForPrompt(String.join(" / ", item.answers()), QA_ANSWER_MAX_CHARS));
+            }
+            sb.append('\n');
         }
+        sb.append("\nANSWERED 항목은 동일하거나 의미상 같은 질문으로 다시 묻지 마세요.");
+        sb.append(" UNANSWERED 항목도 같은 문장을 반복하지 말고 더 좁은 후속 질문으로 이어가세요.");
         return sb.toString().trim();
+    }
+
+    private List<String> collectUserAnswersAfter(List<Message> chatHistory, int chatbotIndex) {
+        List<String> answers = new ArrayList<>();
+        for (int i = chatbotIndex + 1; i < chatHistory.size(); i++) {
+            Message msg = chatHistory.get(i);
+            if (msg.getRole() == MessageRole.CHATBOT) {
+                break;
+            }
+            if (msg.getRole() != MessageRole.USER) {
+                continue;
+            }
+            String answer = sanitizedUserContent(msg);
+            if (!answer.isBlank()) {
+                answers.add(answer);
+            }
+        }
+        return answers;
+    }
+
+    private String buildCurrentTargetSlotBlock(SlotLedger slotLedger) {
+        if (!slotLedgerEnabled
+                || staticQuestionSelector == null
+                || slotLedger == null
+                || slotLedger.getSlots() == null
+                || slotLedger.getSlots().isEmpty()) {
+            return "";
+        }
+
+        SlotStateItem target = staticQuestionSelector.selectNext(slotLedger.getSlots());
+        if (target == null) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("- slotId: ").append(blankToFallback(target.getSlotId(), "(unknown)")).append('\n');
+        sb.append("- label: ").append(blankToFallback(target.getLabel(), "(unnamed slot)")).append('\n');
+        sb.append("- status: ").append(target.getStatus()).append('\n');
+        sb.append("- priority: ").append(target.getPriority())
+                .append(target.isRequired() ? " (required)" : " (optional)").append('\n');
+        if (target.getPendingValue() != null && !target.getPendingValue().isBlank()) {
+            sb.append("- pendingValue: ").append(normalizeForPrompt(target.getPendingValue())).append('\n');
+        }
+        sb.append("이번 턴은 이 slot을 우선 질문하고 collected item으로 되돌아가지 마세요.");
+        return sb.toString();
+    }
+
+    private String sanitizedUserContent(Message msg) {
+        String sanitized = msg.getSanitizedContent();
+        if (sanitized == null) {
+            String raw = msg.getContent();
+            if (raw != null && !raw.isBlank()) {
+                sanitized = sanitizeService.sanitizeUserText(raw);
+            }
+        }
+        return normalizeForPrompt(sanitized);
+    }
+
+    private String normalizeForPrompt(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        return text.trim().replaceAll("\\s+", " ");
+    }
+
+    private String blankToFallback(String text, String fallback) {
+        return text == null || text.isBlank() ? fallback : text;
+    }
+
+    private record QaMemoryItem(String question, List<String> answers) {
     }
 
     private String budgetBlock(String title, String content, int tokenBudget) {
