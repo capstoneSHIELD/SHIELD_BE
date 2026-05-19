@@ -115,11 +115,15 @@ kakao:
   redirect-uri: ${KAKAO_REDIRECT_URI:https://shieldai.kr/auth/kakao/callback}
 
 # Supabase Storage
+# - bucket          : 변호사 자격증명 등 비공개 문서 저장 버킷 (signed URL 사용)
+# - profile-bucket  : 프로필 이미지 저장 버킷. public 으로 설정해 사용 (Issue #97).
+#                     Supabase 콘솔에서 미리 bucket 생성 + Public 토글 ON 필요.
 supabase:
   url: ${SUPABASE_URL}
   service-role-key: ${SUPABASE_SERVICE_ROLE_KEY}
   storage:
     bucket: lawyer_documents
+    profile-bucket: ${SUPABASE_PROFILE_BUCKET:profile_images}
 
 # Firebase Cloud Messaging
 firebase:
