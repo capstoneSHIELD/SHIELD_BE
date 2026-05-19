@@ -93,6 +93,24 @@ public class User {
     }
 
     /**
+     * 프로필 이미지 URL 설정/교체 (Issue #97). 호출자는 빈 문자열을 넘기지 말 것 — 삭제는
+     * {@link #clearProfileImageUrl()} 를 사용한다.
+     */
+    public void updateProfileImageUrl(String profileImageUrl) {
+        if (profileImageUrl == null || profileImageUrl.isBlank()) {
+            throw new IllegalArgumentException("profileImageUrl must not be blank — use clearProfileImageUrl() to remove");
+        }
+        this.profileImageUrl = profileImageUrl;
+    }
+
+    /**
+     * 프로필 이미지 URL 제거 (Issue #97). null 로 복귀.
+     */
+    public void clearProfileImageUrl() {
+        this.profileImageUrl = null;
+    }
+
+    /**
      * 소셜 로그인으로 가입한 일반 유저(USER)가 변호사 추가정보 입력을 완료했을 때
      * 역할을 LAWYER 로 승격시킨다. 이미 LAWYER/ADMIN 인 경우에는 변경하지 않는다.
      */

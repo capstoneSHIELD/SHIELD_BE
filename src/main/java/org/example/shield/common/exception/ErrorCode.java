@@ -65,6 +65,11 @@ public enum ErrorCode {
     DOCUMENT_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "파일 크기가 10MB를 초과합니다"),
     DOCUMENT_TYPE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "지원하지 않는 파일 형식입니다"),
 
+    // Profile Image (Issue #97)
+    PROFILE_IMAGE_EMPTY(HttpStatus.BAD_REQUEST, "이미지 파일이 비어 있습니다"),
+    PROFILE_IMAGE_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "프로필 이미지 크기는 5MB 이하여야 합니다"),
+    PROFILE_IMAGE_TYPE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "지원하지 않는 이미지 형식입니다 (JPEG/PNG/WEBP 만 허용)"),
+
     // AI
     CHAT_AI_FAILURE(HttpStatus.INTERNAL_SERVER_ERROR, "AI 응답 생성에 실패했습니다"),
 

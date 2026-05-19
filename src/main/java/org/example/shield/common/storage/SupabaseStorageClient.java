@@ -16,15 +16,17 @@ import java.util.Map;
 public class SupabaseStorageClient implements StorageClient {
 
     private final WebClient webClient;
-    private final String bucket;
+    private final String defaultBucket;
     private final String baseUrl;
+    private final String publicBaseUrl;
 
     public SupabaseStorageClient(
             @Value("${supabase.url}") String supabaseUrl,
             @Value("${supabase.service-role-key}") String serviceRoleKey,
-            @Value("${supabase.storage.bucket}") String bucket) {
-        this.bucket = bucket;
+            @Value("${supabase.storage.bucket}") String defaultBucket) {
+        this.defaultBucket = defaultBucket;
         this.baseUrl = supabaseUrl + "/storage/v1";
+        this.publicBaseUrl = supabaseUrl + "/storage/v1/object/public";
         this.webClient = WebClient.builder()
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + serviceRoleKey)
                 .defaultHeader("apikey", serviceRoleKey)
@@ -33,6 +35,29 @@ public class SupabaseStorageClient implements StorageClient {
 
     @Override
     public String upload(String path, MultipartFile file) {
+        return uploadTo(defaultBucket, path, file);
+    }
+
+    @Override
+    public void delete(String path) {
+        deleteFrom(defaultBucket, path);
+    }
+
+    @Override
+    public String getSignedUrl(String path, int expiresInSeconds) {
+        Map<String, Object> response = webClient.post()
+                .uri(URI.create(baseUrl + "/object/sign/" + defaultBucket + "/" + path))
+                .bodyValue(Map.of("expiresIn", expiresInSeconds))
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block();
+
+        String signedUrl = (String) response.get("signedURL");
+        return baseUrl + signedUrl;
+    }
+
+    @Override
+    public String uploadTo(String bucket, String path, MultipartFile file) {
         try {
             byte[] fileBytes = file.getBytes();
             String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
@@ -54,7 +79,7 @@ public class SupabaseStorageClient implements StorageClient {
     }
 
     @Override
-    public void delete(String path) {
+    public void deleteFrom(String bucket, String path) {
         webClient.delete()
                 .uri(URI.create(baseUrl + "/object/" + bucket + "/" + path))
                 .retrieve()
@@ -65,15 +90,7 @@ public class SupabaseStorageClient implements StorageClient {
     }
 
     @Override
-    public String getSignedUrl(String path, int expiresInSeconds) {
-        Map<String, Object> response = webClient.post()
-                .uri(URI.create(baseUrl + "/object/sign/" + bucket + "/" + path))
-                .bodyValue(Map.of("expiresIn", expiresInSeconds))
-                .retrieve()
-                .bodyToMono(Map.class)
-                .block();
-
-        String signedUrl = (String) response.get("signedURL");
-        return baseUrl + signedUrl;
+    public String getPublicUrl(String bucket, String path) {
+        return publicBaseUrl + "/" + bucket + "/" + path;
     }
 }
