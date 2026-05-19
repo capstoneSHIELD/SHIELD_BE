@@ -43,6 +43,12 @@ public class OntologyService {
     /** 노드 name → 직계 부모 name. L1 노드는 루트 "법률" 대신 null 로 취급한다. */
     private Map<String, String> parentByName = Map.of();
 
+    /** 노드 name → 온톨로지 node id. 중복 이름은 먼저 발견된 노드를 사용한다. */
+    private Map<String, String> idByName = Map.of();
+
+    /** "부모명\u001f자식명" → 자식 node id. L3처럼 이름이 중복될 수 있는 노드 조회에 사용한다. */
+    private Map<String, String> childIdByParentAndName = Map.of();
+
     public OntologyService(@Qualifier("slimOntologyJson") String slimOntologyJson,
                            ObjectMapper objectMapper) {
         this.slimOntologyJson = slimOntologyJson;
@@ -56,10 +62,14 @@ public class OntologyService {
             Map<String, List<String>> childrenMap = new HashMap<>();
             Map<String, List<String>> pathMap = new HashMap<>();
             Map<String, String> parentMap = new HashMap<>();
-            walk(root, childrenMap, pathMap, parentMap, List.of());
+            Map<String, String> idMap = new HashMap<>();
+            Map<String, String> childIdMap = new HashMap<>();
+            walk(root, childrenMap, pathMap, parentMap, idMap, childIdMap, List.of());
             this.childrenByParentName = Map.copyOf(childrenMap);
             this.pathByName = Map.copyOf(pathMap);
             this.parentByName = Map.copyOf(parentMap);
+            this.idByName = Map.copyOf(idMap);
+            this.childIdByParentAndName = Map.copyOf(childIdMap);
             log.info("온톨로지 로드 완료: {}개 부모 노드에 자식 인덱싱", childrenByParentName.size());
         } catch (Exception e) {
             throw new IllegalStateException("온톨로지 JSON 파싱 실패", e);
@@ -70,8 +80,11 @@ public class OntologyService {
                       Map<String, List<String>> childrenMap,
                       Map<String, List<String>> pathMap,
                       Map<String, String> parentMap,
+                      Map<String, String> idMap,
+                      Map<String, String> childIdMap,
                       List<String> parentPath) {
         String currentName = node.path("name").asText(null);
+        String currentId = node.path("id").asText(null);
         boolean isRoot = currentName != null && "법률".equals(currentName);
         List<String> currentPath = parentPath;
 
@@ -79,8 +92,15 @@ public class OntologyService {
             currentPath = new ArrayList<>(parentPath);
             currentPath.add(currentName);
             pathMap.putIfAbsent(currentName, List.copyOf(currentPath));
+            if (currentId != null && !currentId.isBlank()) {
+                idMap.putIfAbsent(currentName, currentId);
+            }
             if (parentPath.size() >= 1 && parentPath.get(parentPath.size() - 1) != null) {
-                parentMap.putIfAbsent(currentName, parentPath.get(parentPath.size() - 1));
+                String parentName = parentPath.get(parentPath.size() - 1);
+                parentMap.putIfAbsent(currentName, parentName);
+                if (currentId != null && !currentId.isBlank()) {
+                    childIdMap.putIfAbsent(childKey(parentName, currentName), currentId);
+                }
             }
         }
 
@@ -89,7 +109,7 @@ public class OntologyService {
         for (JsonNode child : node.path("c")) {
             String childName = child.path("name").asText(null);
             if (childName != null) childNames.add(childName);
-            walk(child, childrenMap, pathMap, parentMap, currentPath);
+            walk(child, childrenMap, pathMap, parentMap, idMap, childIdMap, currentPath);
         }
         if (currentName != null && !childNames.isEmpty()) {
             childrenMap.put(currentName, List.copyOf(childNames));
@@ -132,7 +152,21 @@ public class OntologyService {
         return parentByName.get(nodeName);
     }
 
+    public String idOf(String nodeName) {
+        if (nodeName == null) return null;
+        return idByName.get(nodeName);
+    }
+
+    public String childIdOf(String parentName, String childName) {
+        if (parentName == null || childName == null) return null;
+        return childIdByParentAndName.get(childKey(parentName, childName));
+    }
+
     public boolean contains(String nodeName) {
         return nodeName != null && pathByName.containsKey(nodeName);
+    }
+
+    private static String childKey(String parentName, String childName) {
+        return parentName + "\u001f" + childName;
     }
 }

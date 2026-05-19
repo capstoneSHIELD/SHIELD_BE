@@ -1,0 +1,22 @@
+real-estate:
+  lease_end_date:
+    label: "계약 종료일"
+    keywords:
+      - "계약 종료"
+      - "전세 만료"
+      - "임대차 종료"
+      - "계약 기간 만료"
+      - "lease_expiry"
+  deposit_amount:
+    label: "보증금 금액"
+    keywords:
+      - "보증금"
+      - "전세금"
+      - "deposit_amount"
+      - "lease_deposit"
+  landlord_response:
+    label: "임대인 응답"
+    keywords:
+      - "임대인 답변"
+      - "반환 거절"
+      - "landlord_response"

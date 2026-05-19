@@ -1,6 +1,7 @@
 package org.example.shield.ai.domain;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -45,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  */
 @DataJpaTest(properties = "spring.flyway.enabled=false")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Tag("docker-it")
 @Testcontainers(disabledWithoutDocker = true)
 @Sql(scripts = "/it-schema/legal_chunks_only.sql",
         executionPhase = Sql.ExecutionPhase.BEFORE_TEST_CLASS)

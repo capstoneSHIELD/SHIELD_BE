@@ -64,10 +64,13 @@ class CohereClientParseResponseTest {
 
     @Test
     void 정상_JSON_원문_파싱() throws Exception {
-        String raw = "{\"nextQuestion\":\"어떤 상황인가요?\",\"aiDomains\":null,\"aiSubDomains\":null,\"aiTags\":null,\"allCompleted\":false}";
+        String raw = "{\"nextQuestion\":\"어떤 상황인가요?\",\"aiDomains\":null,\"aiSubDomains\":null,\"aiTags\":null,\"allCompleted\":false,"
+                + "\"correctedSlots\":[{\"slotId\":\"static_001\",\"previousValue\":\"30000000\",\"newValue\":\"50000000\",\"confidence\":0.91}]}";
         ChatParsedResponse r = invoke(raw);
         assertThat(r.getNextQuestion()).isEqualTo("어떤 상황인가요?");
         assertThat(r.isAllCompleted()).isFalse();
+        assertThat(r.getCorrectedSlots()).hasSize(1);
+        assertThat(r.getCorrectedSlots().get(0).newValue()).isEqualTo("50000000");
     }
 
     @Test
