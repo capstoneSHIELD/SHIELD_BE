@@ -3,22 +3,21 @@ package org.example.shield.ai.application;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.IntentClassificationResult;
+import org.example.shield.ai.dto.IntentRouterResponse;
 import org.example.shield.ai.dto.LegalChunk;
 import org.example.shield.ai.dto.MixedRetrievalResult;
+import org.example.shield.ai.dto.RagPipelineResult;
+import org.example.shield.ai.dto.RetrievalScoreMethod;
+import org.example.shield.ai.dto.RetrievalStrategyDecision;
+import org.example.shield.ai.dto.RetrievedDocument;
 import org.example.shield.ai.infrastructure.RagMetrics;
 import org.example.shield.consultation.domain.Message;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
-/**
- * RAG 파이프라인 오케스트레이터.
- * Layer 1(의도 분류) → Layer 2(법률·판례 검색) → Layer 3(컨텍스트 빌드) 를 조율.
- *
- * <p>{@code rag.retrieval.include-cases=true} 인 경우 C-5 경로로 법령 + 판례를 병합해 불러온다.
- * 기본값은 {@code false} 로 법령 전용 경로 유지 — Phase C-4 까지의 동작 호환성.</p>
- */
 @Service
 @Slf4j
 public class RagPipelineService {
@@ -28,6 +27,8 @@ public class RagPipelineService {
     private final LegalRetrievalService legalRetrievalService;
     private final RagContextBuilder ragContextBuilder;
     private final RagMetrics ragMetrics;
+    private final IntentAwareRetrievalPolicy intentAwareRetrievalPolicy;
+    private final RetrievalScoreGate retrievalScoreGate;
     private final boolean includeCases;
 
     public RagPipelineService(IntentClassificationService intentClassificationService,
@@ -35,76 +36,127 @@ public class RagPipelineService {
                               LegalRetrievalService legalRetrievalService,
                               RagContextBuilder ragContextBuilder,
                               RagMetrics ragMetrics,
+                              IntentAwareRetrievalPolicy intentAwareRetrievalPolicy,
+                              RetrievalScoreGate retrievalScoreGate,
                               @Value("${rag.retrieval.include-cases:false}") boolean includeCases) {
         this.intentClassificationService = intentClassificationService;
         this.categoryLawMappingService = categoryLawMappingService;
         this.legalRetrievalService = legalRetrievalService;
         this.ragContextBuilder = ragContextBuilder;
         this.ragMetrics = ragMetrics;
+        this.intentAwareRetrievalPolicy = intentAwareRetrievalPolicy;
+        this.retrievalScoreGate = retrievalScoreGate;
         this.includeCases = includeCases;
-        log.info("RagPipelineService 초기화 — include-cases={}", includeCases);
+        log.info("RagPipelineService initialized: include-cases={}", includeCases);
     }
 
     /**
-     * RAG 파이프라인 실행. 실패 시 빈 문자열 반환 (폴백).
-     *
-     * @param chatHistory    대화 내역
-     * @param domain         상담 대분류 (온톨로지 L1)
-     * @param consultationId 로깅용 상담 ID
-     * @return RAG 컨텍스트 문자열 (실패 시 빈 문자열)
+     * Backward-compatible context-only entrypoint.
      */
     public String execute(List<Message> chatHistory, String domain, Object consultationId) {
-        Timer.Sample pipelineSample = ragMetrics.startPipeline();
-        try {
-            // Layer 1: 의도 분류
-            IntentClassificationResult classification =
-                    intentClassificationService.classify(chatHistory, domain);
+        return executeContextOnly(chatHistory, domain, consultationId);
+    }
 
-            // Layer 2: 법률 (+ 옵션: 판례) 검색
+    public String executeContextOnly(List<Message> chatHistory, String domain, Object consultationId) {
+        return executeDetailed(chatHistory, domain, consultationId).ragContext();
+    }
+
+    public RagPipelineResult executeDetailed(List<Message> chatHistory, String domain, Object consultationId) {
+        return executeDetailed(chatHistory, domain, consultationId, null);
+    }
+
+    public RagPipelineResult executeDetailed(
+            List<Message> chatHistory,
+            String domain,
+            Object consultationId,
+            IntentRouterResponse providedIntent
+    ) {
+        Timer.Sample pipelineSample = ragMetrics.startPipeline();
+        IntentRouterResponse intent = providedIntent;
+        try {
+            if (intent == null) {
+                intent = intentClassificationService.route(chatHistory, domain);
+            }
+            IntentClassificationResult classification = intent.toClassificationResult();
+
             List<String> lawIds = categoryLawMappingService.resolveLawIds(
                     classification.matchedNodeIds());
+            List<String> categoryIds = categoryLawMappingService.resolveCategoryIds(
+                    classification.matchedNodeIds());
             String vectorQuery = classification.retrievalQueries().isEmpty()
-                    ? domain + " 관련 법률"
+                    ? fallbackQuery(domain)
                     : classification.retrievalQueries().get(0);
+            RetrievalStrategyDecision retrievalStrategy = intentAwareRetrievalPolicy.decide(intent, 3);
+            if (retrievalStrategy.skipRag()) {
+                ragMetrics.stopPipelineEmpty(pipelineSample);
+                log.info("RAG skipped by intent-aware policy: consultationId={}, reason={}, intent={}",
+                        consultationId, retrievalStrategy.reason(), intent.dialogueIntent());
+                return new RagPipelineResult(intent, "", List.of());
+            }
+            int topK = retrievalStrategy.topK();
 
             String ragContext;
+            List<RetrievedDocument> retrievalResults;
             int hits;
             if (includeCases) {
-                MixedRetrievalResult mixed = legalRetrievalService.retrieveMixed(
+                MixedRetrievalResult rawMixed = legalRetrievalService.retrieveMixed(
                         vectorQuery,
                         classification.keywords().core(),
-                        classification.matchedNodeIds(),
+                        categoryIds,
                         lawIds,
-                        3);
+                        topK);
+                List<LegalChunk> filteredLaws = retrievalScoreGate.filter(
+                        rawMixed.laws(), RetrievalScoreMethod.WEIGHTED);
+                List<org.example.shield.ai.dto.Precedent> filteredCases = retrievalScoreGate.filter(
+                        rawMixed.cases(), RetrievalScoreMethod.WEIGHTED);
+                List<RetrievedDocument> filteredMerged = retrievalScoreGate.filter(
+                        rawMixed.merged(), RetrievalScoreMethod.WEIGHTED);
+                MixedRetrievalResult mixed = new MixedRetrievalResult(
+                        filteredLaws, filteredCases, filteredMerged);
                 ragContext = ragContextBuilder.build(mixed, classification.intentSummary());
+                retrievalResults = mixed.merged();
                 hits = mixed.size();
                 if (!ragContext.isEmpty()) {
-                    log.info("RAG 컨텍스트 생성 완료 (mixed): consultationId={}, laws={}, cases={}, merged={}",
+                    log.info("RAG context built (mixed): consultationId={}, laws={}, cases={}, merged={}",
                             consultationId, mixed.laws().size(), mixed.cases().size(), hits);
                 }
             } else {
-                List<LegalChunk> chunks = legalRetrievalService.retrieve(
+                List<LegalChunk> rawChunks = legalRetrievalService.retrieve(
                         vectorQuery,
                         classification.keywords().core(),
-                        lawIds, 3);
+                        categoryIds,
+                        lawIds,
+                        topK);
+                List<LegalChunk> chunks = retrievalScoreGate.filter(
+                        rawChunks, RetrievalScoreMethod.WEIGHTED);
                 ragContext = ragContextBuilder.build(chunks, classification.intentSummary());
+                retrievalResults = new ArrayList<>(chunks);
                 hits = chunks.size();
                 if (!ragContext.isEmpty()) {
-                    log.info("RAG 컨텍스트 생성 완료: consultationId={}, chunks={}", consultationId, hits);
+                    log.info("RAG context built: consultationId={}, chunks={}", consultationId, hits);
                 }
             }
+
             if (ragContext.isEmpty()) {
                 ragMetrics.stopPipelineEmpty(pipelineSample);
             } else {
                 ragMetrics.stopPipelineSuccess(pipelineSample);
             }
-            return ragContext;
+            return new RagPipelineResult(intent, ragContext, retrievalResults);
 
         } catch (Exception e) {
             ragMetrics.stopPipelineFailure(pipelineSample);
-            log.warn("RAG 파이프라인 실패, 폴백 (RAG 없이 진행): consultationId={}, error={}",
+            log.warn("RAG pipeline failed, continuing without RAG: consultationId={}, error={}",
                     consultationId, e.getMessage());
-            return "";
+            return RagPipelineResult.empty(intent == null
+                    ? IntentRouterResponse.fallback(domain)
+                    : intent);
         }
+    }
+
+    private String fallbackQuery(String domain) {
+        return domain == null || domain.isBlank()
+                ? "legal consultation"
+                : domain + " 관련 법률";
     }
 }

@@ -13,6 +13,7 @@ import org.example.shield.consultation.exception.ConsultationTurnLimitExceededEx
 import org.example.shield.consultation.infrastructure.ConsultationRepository;
 import org.example.shield.user.domain.User;
 import org.example.shield.user.infrastructure.UserRepository;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,7 +71,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 가 클래스 단위로 SKIP 시키며 Spring 컨텍스트도 로딩되지 않는다. 일상 {@code ./gradlew test} 는 영향 없음.</p>
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@EnabledIfEnvironmentVariable(named = "BASELINE_REAL", matches = "true")
+@Tag("baseline-real")
+@EnabledIfEnvironmentVariable(
+        named = "BASELINE_REAL",
+        matches = "true",
+        disabledReason = "real-infra baseline test runs only when BASELINE_REAL=true")
 @Slf4j
 class BaselineMetricsRealIT {
 

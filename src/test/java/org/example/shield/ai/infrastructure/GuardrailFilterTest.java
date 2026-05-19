@@ -60,6 +60,36 @@ class GuardrailFilterTest {
     }
 
     @Test
+    @DisplayName("법적 결론 단정 표현은 차단")
+    void legalConclusionBlocked() {
+        ChatParsedResponse response = new ChatParsedResponse();
+        response.setNextQuestion("이 사안은 위법입니다.");
+
+        ChatParsedResponse result = filter.filterChatResponse(response);
+        assertThat(result.getNextQuestion()).contains("변호사를 통해 확인");
+    }
+
+    @Test
+    @DisplayName("손해배상 가능성 단정 표현은 차단")
+    void damagePossibilityBlocked() {
+        ChatParsedResponse response = new ChatParsedResponse();
+        response.setNextQuestion("손해배상을 받을 수 있습니다.");
+
+        ChatParsedResponse result = filter.filterChatResponse(response);
+        assertThat(result.getNextQuestion()).contains("변호사를 통해 확인");
+    }
+
+    @Test
+    @DisplayName("일반 절차 안내 표현은 과차단하지 않는다")
+    void proceduralGuidanceAllowed() {
+        ChatParsedResponse response = new ChatParsedResponse();
+        response.setNextQuestion("민사소송 절차를 진행할 때 필요한 계약서와 입금 내역을 준비해 주세요.");
+
+        ChatParsedResponse result = filter.filterChatResponse(response);
+        assertThat(result.getNextQuestion()).isEqualTo("민사소송 절차를 진행할 때 필요한 계약서와 입금 내역을 준비해 주세요.");
+    }
+
+    @Test
     @DisplayName("의뢰서 strategy 금칙어 검출 시 대체")
     void briefStrategyBlocked() {
         BriefParsedResponse response = new BriefParsedResponse();

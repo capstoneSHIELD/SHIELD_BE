@@ -7,6 +7,7 @@ import java.util.List;
  * LLM이 슬림 온톨로지 기반으로 분류한 사용자 법률 의도.
  */
 public record IntentClassificationResult(
+        String schemaVersion,
         String intentSummary,
         List<MatchedNode> matchedNodes,
         Keywords keywords,

@@ -3,6 +3,7 @@ package org.example.shield.ai.infrastructure;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.BriefParsedResponse;
 import org.example.shield.ai.dto.ChatParsedResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.text.Normalizer;
@@ -21,6 +22,17 @@ import java.util.regex.Pattern;
 @Slf4j
 public class GuardrailFilter {
 
+    private final AiRagOperationalMetrics metrics;
+
+    public GuardrailFilter() {
+        this(null);
+    }
+
+    @Autowired
+    public GuardrailFilter(AiRagOperationalMetrics metrics) {
+        this.metrics = metrics;
+    }
+
     /**
      * 금칙어 패턴 목록 (NFC 정규화 후 매칭).
      */
@@ -38,6 +50,12 @@ public class GuardrailFilter {
             // 승패 예측
             Pattern.compile("승소\\s*(가능성|확률|할 수)"),
             Pattern.compile("이길\\s*(수|가능성|확률)"),
+            Pattern.compile("(승소|패소|인용|기각)\\s*(될|됩니다|가능성|확률|예상)"),
+
+            // 법적 결론/배상 가능성 단정
+            Pattern.compile("(위법|불법|적법|합법)\\s*(입니다|합니다|으로\\s*볼\\s*수)"),
+            Pattern.compile("(손해배상|위자료|보증금|임금).{0,12}(받을\\s*수\\s*있|인정됩니다|청구\\s*가능)"),
+            Pattern.compile("(고소|고발).{0,8}(하면|하시면).{0,8}(가능|됩니다|처벌)"),
 
             // 변호사 추천
             Pattern.compile("(추천|소개).*?변호사"),
@@ -67,6 +85,7 @@ public class GuardrailFilter {
         if (containsForbiddenPattern(normalized)) {
             log.warn("가드레일 금칙어 검출 — nextQuestion 대체. 원문: {}",
                     normalized.substring(0, Math.min(200, normalized.length())));
+            recordGuardrailBlock("chat_next_question");
             response.setNextQuestion(FALLBACK_MESSAGE);
         }
 
@@ -95,6 +114,7 @@ public class GuardrailFilter {
             normalized = Normalizer.normalize(normalized, Normalizer.Form.NFC);
             if (containsForbiddenPattern(normalized)) {
                 log.warn("의뢰서 strategy 금칙어 검출 — 제거");
+                recordGuardrailBlock("brief_strategy");
                 response.setStrategy("구체적인 법률 전략은 변호사와 상담 후 결정하시기 바랍니다.");
             }
         }
@@ -116,6 +136,7 @@ public class GuardrailFilter {
                     normalized = Normalizer.normalize(normalized, Normalizer.Form.NFC);
                     if (containsForbiddenPattern(normalized)) {
                         log.warn("의뢰서 keyIssue description 금칙어 검출 — 대체");
+                        recordGuardrailBlock("brief_key_issue");
                         issue.setDescription("상세 법률 분석은 변호사 검토가 필요합니다.");
                     }
                 }
@@ -136,6 +157,23 @@ public class GuardrailFilter {
     private boolean containsUnconfirmed(String text) {
         if (text == null) return false;
         return Normalizer.normalize(text, Normalizer.Form.NFC).contains("미확인");
+    }
+
+    public boolean containsForbiddenText(String text) {
+        if (text == null) return false;
+        return containsForbiddenPattern(Normalizer.normalize(text, Normalizer.Form.NFC));
+    }
+
+    public void recordFalsePositiveCandidate(String surface) {
+        if (metrics != null) {
+            metrics.recordGuardrailFalsePositiveCandidate(surface);
+        }
+    }
+
+    private void recordGuardrailBlock(String surface) {
+        if (metrics != null) {
+            metrics.recordGuardrailBlock(surface);
+        }
     }
 
     private boolean containsForbiddenPattern(String text) {

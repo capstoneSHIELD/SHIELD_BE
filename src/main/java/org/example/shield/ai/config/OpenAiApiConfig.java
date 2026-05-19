@@ -39,6 +39,9 @@ public class OpenAiApiConfig {
     @Value("${openai.classify.reasoning-effort:minimal}")
     private String classifyReasoningEffort;
 
+    @Value("${app.ai.openai.structured-output-enabled:true}")
+    private boolean structuredOutputEnabled;
+
     @Bean
     public WebClient openAiWebClient() {
         HttpClient httpClient = HttpClient.create()

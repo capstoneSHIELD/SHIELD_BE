@@ -1,6 +1,7 @@
 package org.example.shield.ai.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import com.fasterxml.jackson.core.JsonParser;
@@ -27,6 +28,9 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ChatParsedResponse {
 
+    @JsonProperty("schema_version")
+    private String schemaVersion = "1.0";
+
     private String nextQuestion;
 
     @JsonDeserialize(using = FlexibleStringListDeserializer.class)
@@ -42,6 +46,13 @@ public class ChatParsedResponse {
     private List<String> aiTags = new ArrayList<>();
 
     private boolean allCompleted;
+
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
+    private List<CorrectedSlot> correctedSlots = new ArrayList<>();
+
+    public boolean hasCorrectedSlots() {
+        return correctedSlots != null && !correctedSlots.isEmpty();
+    }
 
     /**
      * 문자열("VALUE") 또는 배열(["VALUE"])을 모두 List&lt;String&gt;으로 변환.
