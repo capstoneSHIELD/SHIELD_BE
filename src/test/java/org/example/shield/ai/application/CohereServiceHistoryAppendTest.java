@@ -230,9 +230,12 @@ class CohereServiceHistoryAppendTest {
 
         String system = messages.get(0).getContent();
         assertThat(system).startsWith("=== CURRENT CHECKLIST COVERAGE ===");
-        assertThat(system).contains("=== DO NOT REPEAT EXACT QUESTIONS ===");
+        assertThat(system).contains("=== RECENT Q/A MEMORY ===");
+        assertThat(system).contains("[ANSWERED] Q:");
+        assertThat(system).doesNotContain("=== DO NOT REPEAT EXACT QUESTIONS ===");
+        assertThat(system).contains("3000");
         assertThat(system).contains("보증금은 얼마인가요?");
-        assertThat(system).contains("RULE: Do not ask an identical question again");
+        assertThat(system).contains("이미 답변을 받은 질문");
         assertThat(system).contains("BASE RULES");
         assertThat(system).contains("CHECKLIST YAML");
         assertThat(system).contains("RAG CONTEXT");
@@ -337,6 +340,80 @@ class CohereServiceHistoryAppendTest {
         assertThat(system).contains("BASE RULES");
     }
 
+    @Test
+    @DisplayName("buildChatMessages adds current target slot as a prompt constraint")
+    void buildChatMessages_currentTargetSlot() throws Exception {
+        CohereApiConfig config = mock(CohereApiConfig.class);
+        when(config.getMaxHistoryMessages()).thenReturn(20);
+
+        PromptService promptService = mock(PromptService.class);
+        when(promptService.loadRouterChatPrompt()).thenReturn("BASE RULES");
+
+        ClassificationResolver classificationResolver = mock(ClassificationResolver.class);
+        when(classificationResolver.candidateForCollection(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(ClassificationCandidate.empty());
+
+        CohereService chatService = createServiceWithSanitize(sanitizeService);
+        setField(chatService, "config", config);
+        setField(chatService, "promptService", promptService);
+        setField(chatService, "classificationResolver", classificationResolver);
+        setField(chatService, "staticQuestionSelector", new StaticQuestionSelector());
+        setField(chatService, "slotLedgerEnabled", true);
+
+        Consultation consultation = Consultation.create(UUID.randomUUID(), null, null, null);
+        SlotLedger ledger = SlotLedger.empty();
+        SlotStateItem target = SlotStateItem.staticChecklist(
+                "static_003", "landlord response", true, 3, false, SlotValueType.TEXT);
+        ledger.setSlots(List.of(target));
+        consultation.updateSlotState(ledger);
+
+        Method buildChatMessages = CohereService.class.getDeclaredMethod(
+                "buildChatMessages", Consultation.class, String.class, String.class, List.class);
+        buildChatMessages.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<CohereChatRequest.Message> messages = (List<CohereChatRequest.Message>) buildChatMessages.invoke(
+                chatService, consultation, "latest", "", List.of());
+
+        String system = messages.get(0).getContent();
+        assertThat(system).contains("=== CURRENT TARGET SLOT ===");
+        assertThat(system).contains("static_003");
+        assertThat(system).contains("landlord response");
+        assertThat(system).contains("이번 턴은 이 slot을 우선 질문");
+        assertThat(system).contains("BASE RULES");
+    }
+
+    @Test
+    @DisplayName("buildRecentQaMemoryBlock marks answered and unanswered questions with latest first")
+    void buildRecentQaMemoryBlock_answeredAndUnansweredLatestFirst() throws Exception {
+        String memory = invokeRecentQaMemory(List.of(
+                messageWithId(MessageRole.CHATBOT, "First question?"),
+                messageWithId(MessageRole.USER, "First answer"),
+                messageWithId(MessageRole.CHATBOT, "Second question?")
+        ));
+
+        assertThat(memory).contains("[UNANSWERED] Q: Second question?");
+        assertThat(memory).contains("[ANSWERED] Q: First question? / A: First answer");
+        assertThat(memory.indexOf("Second question?")).isLessThan(memory.indexOf("First question?"));
+    }
+
+    @Test
+    @DisplayName("buildRecentQaMemoryBlock dedupes repeated questions and keeps the latest answer")
+    void buildRecentQaMemoryBlock_dedupesRepeatedQuestions() throws Exception {
+        String memory = invokeRecentQaMemory(List.of(
+                messageWithId(MessageRole.CHATBOT, "Repeat question?"),
+                messageWithId(MessageRole.USER, "old answer"),
+                messageWithId(MessageRole.CHATBOT, "Other question?"),
+                messageWithId(MessageRole.USER, "other answer"),
+                messageWithId(MessageRole.CHATBOT, "Repeat question?"),
+                messageWithId(MessageRole.USER, "new answer")
+        ));
+
+        assertThat(memory.indexOf("Repeat question?")).isEqualTo(memory.lastIndexOf("Repeat question?"));
+        assertThat(memory).contains("new answer");
+        assertThat(memory).doesNotContain("old answer");
+    }
+
     /** Message 는 @GeneratedValue 로 id 가 null 이므로, 로그에 쓰일 id 를 리플렉션으로 주입. */
     private Message messageWithId(MessageRole role, String content) throws Exception {
         Message msg;
@@ -349,6 +426,12 @@ class CohereServiceHistoryAppendTest {
         idField.setAccessible(true);
         idField.set(msg, UUID.randomUUID());
         return msg;
+    }
+
+    private String invokeRecentQaMemory(List<Message> history) throws Exception {
+        Method method = CohereService.class.getDeclaredMethod("buildRecentQaMemoryBlock", List.class);
+        method.setAccessible(true);
+        return (String) method.invoke(service, history);
     }
 
     /**
