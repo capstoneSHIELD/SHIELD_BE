@@ -1,6 +1,7 @@
 package org.example.shield.ai.infrastructure;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.config.OpenAiApiConfig;
 import org.example.shield.ai.dto.AiCallResult;
@@ -28,19 +29,22 @@ public class OpenAiClassifyClient {
     private final WebClient openAiWebClient;
     private final OpenAiApiConfig config;
     private final AiRagOperationalMetrics operationalMetrics;
+    private final ObjectMapper objectMapper;
 
     public OpenAiClassifyClient(@Qualifier("openAiWebClient") WebClient openAiWebClient,
                                 OpenAiApiConfig config) {
-        this(openAiWebClient, config, null);
+        this(openAiWebClient, config, null, new ObjectMapper());
     }
 
     @Autowired
     public OpenAiClassifyClient(@Qualifier("openAiWebClient") WebClient openAiWebClient,
                                 OpenAiApiConfig config,
-                                AiRagOperationalMetrics operationalMetrics) {
+                                AiRagOperationalMetrics operationalMetrics,
+                                ObjectMapper objectMapper) {
         this.openAiWebClient = openAiWebClient;
         this.config = config;
         this.operationalMetrics = operationalMetrics;
+        this.objectMapper = objectMapper;
     }
 
     public AiCallResult<String> callRawJson(List<CohereChatRequest.Message> messages) {
@@ -52,19 +56,23 @@ public class OpenAiClassifyClient {
         Map<String, Object> request = buildRequest(messages);
 
         try {
-            JsonNode response = openAiWebClient.post()
+            // Issue #104: Spring Boot 4 Jackson 3 가 구 JsonNode 추상 타입을 deserialize 못해서
+            // 일단 String 으로 받은 뒤 ObjectMapper 로 JsonNode 변환.
+            String responseBody = openAiWebClient.post()
                     .uri("/v1/chat/completions")
                     .bodyValue(request)
                     .retrieve()
-                    .bodyToMono(JsonNode.class)
+                    .bodyToMono(String.class)
                     .timeout(Duration.ofMillis(config.getClassifyReadTimeout()))
                     .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
                             .filter(this::isRetryable))
                     .block();
 
-            if (response == null) {
+            if (responseBody == null || responseBody.isBlank()) {
                 throw new AnalysisFailedException("OpenAI classify API response is null");
             }
+
+            JsonNode response = objectMapper.readTree(responseBody);
 
             String contentJson = response.path("choices")
                     .path(0)
