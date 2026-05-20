@@ -146,4 +146,18 @@ public class ChatTransactionalBoundary {
 
         return savedAi;
     }
+
+    /**
+     * allCompleted 게이트가 true 를 반환했을 때 영구 저장 (Issue #100).
+     * Idempotent — 이미 true 면 no-op.
+     * 별도 짧은 트랜잭션으로 분리해 외부 API 호출 동안 DB 점유를 피한다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markConsultationAllCompleted(UUID consultationId) {
+        Consultation consultation = consultationReader.findById(consultationId);
+        if (!consultation.isAllCompleted()) {
+            consultation.markAllCompleted();
+            consultationWriter.save(consultation);
+        }
+    }
 }

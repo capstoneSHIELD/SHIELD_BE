@@ -244,6 +244,11 @@ public class MessageService {
             boolean effectiveAllCompleted = evaluateAllCompletedGate(
                     consultationId, consultation, parsed, turnLimitReached);
 
+            // 8. allCompleted=true 시 영구 저장 — 페이지 재진입 복원용 (Issue #100, idempotent)
+            if (effectiveAllCompleted) {
+                chatTxBoundary.markConsultationAllCompleted(consultationId);
+            }
+
             chatMetrics.recordSendMessage(pipelineStart, turnLimitReached ? "turn_limit_reached" : "success");
             // 방금 저장된 USER 메시지를 포함한 누적 턴 수로 진행률 계산
             SendMessageResponse.Progress progress =

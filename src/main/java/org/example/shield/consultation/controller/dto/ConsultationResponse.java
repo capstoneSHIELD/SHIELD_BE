@@ -20,7 +20,9 @@ public record ConsultationResponse(
         String lastMessage,
         LocalDateTime lastMessageAt,
         LocalDateTime createdAt,
-        BriefSummary brief
+        BriefSummary brief,
+        /** AI 사실관계 수집 완료 여부 (Issue #100). FE 의 의뢰서 생성 버튼 노출 복원용. */
+        boolean allCompleted
 ) {
     public record BriefSummary(UUID briefId, String title, String status) {}
 
@@ -39,7 +41,8 @@ public record ConsultationResponse(
                 consultation.getLastMessage(),
                 consultation.getLastMessageAt(),
                 consultation.getCreatedAt(),
-                brief
+                brief,
+                consultation.isAllCompleted()
         );
     }
 }

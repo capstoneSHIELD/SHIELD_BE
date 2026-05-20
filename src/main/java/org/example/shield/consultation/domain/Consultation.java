@@ -79,6 +79,15 @@ public class Consultation extends BaseEntity {
     @Column(columnDefinition = "text")
     private String lastResponseId;
 
+    /**
+     * AI 가 사실관계 수집을 완료했는지 여부 (Issue #100, V16 마이그레이션).
+     * MessageService.evaluateAllCompletedGate 가 true 를 반환한 시점에 영구 저장되며,
+     * 한 번 true 가 되면 다시 false 로 돌리지 않는다 (idempotent).
+     * FE 가 GET /consultations/{id} 응답으로 의뢰서 생성 버튼 노출 여부를 복원하는 데 사용한다.
+     */
+    @Column(name = "all_completed", nullable = false)
+    private boolean allCompleted = false;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
@@ -153,6 +162,16 @@ public class Consultation extends BaseEntity {
 
     public void updateSlotState(SlotLedger slotState) {
         this.slotState = slotState;
+    }
+
+    /**
+     * AI 사실관계 수집 완료 시 호출. Idempotent — 한 번 true 면 다시 호출돼도 변화 없음.
+     * MessageService.evaluateAllCompletedGate 결과가 true 일 때 호출된다 (Issue #100).
+     */
+    public void markAllCompleted() {
+        if (!this.allCompleted) {
+            this.allCompleted = true;
+        }
     }
 
     /**
