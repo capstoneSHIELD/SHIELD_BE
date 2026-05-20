@@ -120,6 +120,8 @@ public class ConsultationController {
 
         // P0-IV 멱등성 가드: 원자적 상태 전이 COLLECTING → ANALYZING
         Consultation consultation = consultationReader.findById(consultationId);
+        // Issue #102: AI 분류 우선 정책 — conflict 자동 해소를 위해 user 분류를 AI 결과로 동기화
+        consultation.syncUserClassificationWithAi();
         if (classificationResolver.resolve(consultation).conflict()) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiResponse.error("분류 확인이 필요합니다"));

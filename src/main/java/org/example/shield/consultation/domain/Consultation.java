@@ -147,6 +147,19 @@ public class Consultation extends BaseEntity {
         this.aiTags = null;
     }
 
+    /**
+     * AI 분류 결과를 user 분류에 동기화 (AI 우선 정책, Issue #102).
+     * /analyze 진입 시 ClassificationResolver 의 conflict 를 자동 해소하기 위해 사용.
+     * ai_* 중 하나라도 값이 있으면 user_* 를 ai_* 로 덮어쓴다. ai_* 가 모두 null/empty 이면 no-op.
+     */
+    public void syncUserClassificationWithAi() {
+        boolean aiHasAny = isNonEmpty(aiDomains) || isNonEmpty(aiSubDomains) || isNonEmpty(aiTags);
+        if (!aiHasAny) return;
+        this.userDomains = aiDomains;
+        this.userSubDomains = aiSubDomains;
+        this.userTags = aiTags;
+    }
+
     public void updateLastResponseId(String responseId) {
         this.lastResponseId = responseId;
     }
