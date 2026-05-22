@@ -106,6 +106,15 @@ public class Brief extends BaseEntity {
         this.strategy = strategy;
     }
 
+    /**
+     * 분류 수정 시 Brief 의 법률 분야도 함께 갱신 (Issue #108).
+     * Consultation.user_domains 변경에 연동.
+     */
+    public void updateLegalField(String legalField) {
+        if (legalField == null || legalField.isBlank()) return;
+        this.legalField = legalField;
+    }
+
     public void updatePrivacySetting(PrivacySetting privacySetting) {
         this.privacySetting = privacySetting;
     }

@@ -2,6 +2,7 @@ package org.example.shield.consultation.application;
 
 import lombok.RequiredArgsConstructor;
 import org.example.shield.brief.domain.BriefReader;
+import org.example.shield.brief.domain.BriefWriter;
 import org.example.shield.common.response.PageResponse;
 import org.example.shield.consultation.controller.dto.ClassifyResponse;
 import org.example.shield.consultation.controller.dto.ConsultationResponse;
@@ -28,6 +29,7 @@ public class ConsultationService {
     private final ConsultationWriter consultationWriter;
     private final MessageWriter messageWriter;
     private final BriefReader briefReader;
+    private final BriefWriter briefWriter;
     private final ClassificationResolver classificationResolver;
 
     private static final String WELCOME_MESSAGE =
@@ -78,6 +80,15 @@ public class ConsultationService {
         Consultation consultation = consultationReader.findById(consultationId);
         consultation.updateUserClassification(domains, subDomains, tags);
         consultationWriter.save(consultation);
+
+        // Issue #108: 이미 생성된 Brief 가 있다면 legalField 도 동기화.
+        // Brief 가 아직 생성 전(분석 중) 인 경우는 no-op.
+        if (domains != null && !domains.isEmpty()) {
+            briefReader.findOptionalByConsultationId(consultationId).ifPresent(brief -> {
+                brief.updateLegalField(domains.get(0));
+                briefWriter.save(brief);
+            });
+        }
 
         return new ClassifyResponse(domains, subDomains, tags);
     }
