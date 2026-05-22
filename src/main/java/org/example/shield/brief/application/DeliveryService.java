@@ -173,6 +173,10 @@ public class DeliveryService {
                     lawyerId, DeliveryStatus.DELIVERED, pageable);
             case REVIEWING -> deliveryReader.findAllByLawyerIdAndStatusAndViewedAtIsNotNull(
                     lawyerId, DeliveryStatus.DELIVERED, pageable);
+            case CONFIRMED -> deliveryReader.findAllByLawyerIdAndStatus(
+                    lawyerId, DeliveryStatus.CONFIRMED, pageable);
+            case REJECTED -> deliveryReader.findAllByLawyerIdAndStatus(
+                    lawyerId, DeliveryStatus.REJECTED, pageable);
             case RESPONDED -> deliveryReader.findAllByLawyerIdAndStatusIn(
                     lawyerId, List.of(DeliveryStatus.CONFIRMED, DeliveryStatus.REJECTED), pageable);
         };
