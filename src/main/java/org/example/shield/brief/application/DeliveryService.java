@@ -65,6 +65,11 @@ public class DeliveryService {
             throw new BusinessException(ErrorCode.DELIVERY_ALREADY_PROCESSED) {};
         }
 
+        // Issue #106: 24시간 응답 기한 경과 시 수락/거절 불가
+        if (delivery.isExpired()) {
+            throw new BusinessException(ErrorCode.DELIVERY_EXPIRED) {};
+        }
+
         // 1차 가드: 이미 다른 변호사가 수락한 의뢰서는 추가 수락 차단 (빠른 fail).
         // 2차 방어: Brief.@Version (낙관적 락), 3차 방어: deliveries partial unique index.
         if (status == DeliveryStatus.CONFIRMED

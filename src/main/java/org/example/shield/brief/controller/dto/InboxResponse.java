@@ -12,7 +12,9 @@ public record InboxResponse(
         String briefTitle,
         String legalField,
         String status,
-        LocalDateTime sentAt
+        LocalDateTime sentAt,
+        /** 24시간 응답 기한 경과 여부 (Issue #106). FE 가 수락 버튼 비활성화 등에 사용. */
+        boolean isExpired
 ) {
     public static InboxResponse of(BriefDelivery delivery, Brief brief) {
         return new InboxResponse(
@@ -21,7 +23,8 @@ public record InboxResponse(
                 brief.getTitle(),
                 brief.getLegalField(),
                 delivery.getStatus().name(),
-                delivery.getSentAt()
+                delivery.getSentAt(),
+                delivery.isExpired()
         );
     }
 }

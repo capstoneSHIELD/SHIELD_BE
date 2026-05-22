@@ -19,7 +19,9 @@ public record InboxDetailResponse(
         String status,
         String clientName,
         String clientEmail,
-        LocalDateTime sentAt
+        LocalDateTime sentAt,
+        /** 24시간 응답 기한 경과 여부 (Issue #106). */
+        boolean isExpired
 ) {
     public static InboxDetailResponse of(BriefDelivery delivery, Brief brief,
                                           String clientName, String clientEmail) {
@@ -34,7 +36,8 @@ public record InboxDetailResponse(
                 delivery.getStatus().name(),
                 clientName,
                 clientEmail,
-                delivery.getSentAt()
+                delivery.getSentAt(),
+                delivery.isExpired()
         );
     }
 }
