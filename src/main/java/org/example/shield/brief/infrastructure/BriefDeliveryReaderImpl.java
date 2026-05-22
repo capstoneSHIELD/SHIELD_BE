@@ -43,6 +43,21 @@ public class BriefDeliveryReaderImpl implements BriefDeliveryReader {
     }
 
     @Override
+    public Page<BriefDelivery> findAllByLawyerIdAndStatusAndViewedAtIsNull(UUID lawyerId, DeliveryStatus status, Pageable pageable) {
+        return briefDeliveryRepository.findAllByLawyerIdAndStatusAndViewedAtIsNull(lawyerId, status, pageable);
+    }
+
+    @Override
+    public Page<BriefDelivery> findAllByLawyerIdAndStatusAndViewedAtIsNotNull(UUID lawyerId, DeliveryStatus status, Pageable pageable) {
+        return briefDeliveryRepository.findAllByLawyerIdAndStatusAndViewedAtIsNotNull(lawyerId, status, pageable);
+    }
+
+    @Override
+    public Page<BriefDelivery> findAllByLawyerIdAndStatusIn(UUID lawyerId, List<DeliveryStatus> statuses, Pageable pageable) {
+        return briefDeliveryRepository.findAllByLawyerIdAndStatusIn(lawyerId, statuses, pageable);
+    }
+
+    @Override
     public boolean existsByBriefIdAndLawyerId(UUID briefId, UUID lawyerId) {
         return briefDeliveryRepository.existsByBriefIdAndLawyerId(briefId, lawyerId);
     }

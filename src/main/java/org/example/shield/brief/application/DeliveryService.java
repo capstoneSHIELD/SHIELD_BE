@@ -160,10 +160,17 @@ public class DeliveryService {
         return new DeliveryListResponse(responses);
     }
 
-    public PageResponse<InboxResponse> getInbox(UUID lawyerId, DeliveryStatus status, Pageable pageable) {
-        Page<BriefDelivery> deliveries = (status != null)
-                ? deliveryReader.findAllByLawyerIdAndStatus(lawyerId, status, pageable)
-                : deliveryReader.findAllByLawyerId(lawyerId, pageable);
+    public PageResponse<InboxResponse> getInbox(UUID lawyerId, InboxFilter filter, Pageable pageable) {
+        InboxFilter f = filter != null ? filter : InboxFilter.ALL;
+        Page<BriefDelivery> deliveries = switch (f) {
+            case ALL -> deliveryReader.findAllByLawyerId(lawyerId, pageable);
+            case NEW -> deliveryReader.findAllByLawyerIdAndStatusAndViewedAtIsNull(
+                    lawyerId, DeliveryStatus.DELIVERED, pageable);
+            case REVIEWING -> deliveryReader.findAllByLawyerIdAndStatusAndViewedAtIsNotNull(
+                    lawyerId, DeliveryStatus.DELIVERED, pageable);
+            case RESPONDED -> deliveryReader.findAllByLawyerIdAndStatusIn(
+                    lawyerId, List.of(DeliveryStatus.CONFIRMED, DeliveryStatus.REJECTED), pageable);
+        };
 
         List<UUID> briefIds = deliveries.getContent().stream()
                 .map(BriefDelivery::getBriefId).toList();
