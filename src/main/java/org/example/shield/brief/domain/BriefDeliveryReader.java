@@ -20,4 +20,6 @@ public interface BriefDeliveryReader {
     boolean existsByBriefIdAndStatus(UUID briefId, DeliveryStatus status);
     List<BriefDelivery> findAllByBriefIdInAndStatus(List<UUID> briefIds, DeliveryStatus status);
     Map<DeliveryStatus, Long> countGroupByStatus(UUID lawyerId);
+    long countByLawyerIdAndStatusAndViewedAtIsNull(UUID lawyerId, DeliveryStatus status);
+    long countByLawyerIdAndStatusAndViewedAtIsNotNull(UUID lawyerId, DeliveryStatus status);
 }

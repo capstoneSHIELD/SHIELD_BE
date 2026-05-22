@@ -23,4 +23,7 @@ public interface BriefDeliveryRepository extends JpaRepository<BriefDelivery, UU
 
     @Query("SELECT d.status, COUNT(d) FROM BriefDelivery d WHERE d.lawyerId = :lawyerId GROUP BY d.status")
     List<Object[]> countGroupByStatus(UUID lawyerId);
+
+    long countByLawyerIdAndStatusAndViewedAtIsNull(UUID lawyerId, DeliveryStatus status);
+    long countByLawyerIdAndStatusAndViewedAtIsNotNull(UUID lawyerId, DeliveryStatus status);
 }

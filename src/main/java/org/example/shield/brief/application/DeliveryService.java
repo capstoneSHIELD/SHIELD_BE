@@ -186,11 +186,14 @@ public class DeliveryService {
     }
 
     public InboxStatsResponse getInboxStats(UUID lawyerId) {
+        long newCount = deliveryReader.countByLawyerIdAndStatusAndViewedAtIsNull(lawyerId, DeliveryStatus.DELIVERED);
+        long reviewing = deliveryReader.countByLawyerIdAndStatusAndViewedAtIsNotNull(lawyerId, DeliveryStatus.DELIVERED);
         Map<DeliveryStatus, Long> statusCountMap = deliveryReader.countGroupByStatus(lawyerId);
-        long pending = statusCountMap.getOrDefault(DeliveryStatus.DELIVERED, 0L);
         long confirmed = statusCountMap.getOrDefault(DeliveryStatus.CONFIRMED, 0L);
         long rejected = statusCountMap.getOrDefault(DeliveryStatus.REJECTED, 0L);
-        return new InboxStatsResponse(pending + confirmed + rejected, pending, confirmed, rejected);
+        long responded = confirmed + rejected;
+        long all = newCount + reviewing + responded;
+        return new InboxStatsResponse(all, newCount, reviewing, confirmed, rejected, responded);
     }
 
     @Transactional

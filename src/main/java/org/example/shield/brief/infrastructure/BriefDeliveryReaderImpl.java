@@ -81,4 +81,14 @@ public class BriefDeliveryReaderImpl implements BriefDeliveryReader {
                         row -> (Long) row[1]
                 ));
     }
+
+    @Override
+    public long countByLawyerIdAndStatusAndViewedAtIsNull(UUID lawyerId, DeliveryStatus status) {
+        return briefDeliveryRepository.countByLawyerIdAndStatusAndViewedAtIsNull(lawyerId, status);
+    }
+
+    @Override
+    public long countByLawyerIdAndStatusAndViewedAtIsNotNull(UUID lawyerId, DeliveryStatus status) {
+        return briefDeliveryRepository.countByLawyerIdAndStatusAndViewedAtIsNotNull(lawyerId, status);
+    }
 }
