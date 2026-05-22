@@ -5,12 +5,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.shield.brief.application.DeliveryService;
+import org.example.shield.brief.application.InboxFilter;
 import org.example.shield.brief.controller.dto.DeliveryStatusRequest;
 import org.example.shield.brief.controller.dto.DeliveryStatusResponse;
 import org.example.shield.brief.controller.dto.InboxDetailResponse;
 import org.example.shield.brief.controller.dto.InboxResponse;
 import org.example.shield.brief.controller.dto.InboxStatsResponse;
-import org.example.shield.common.enums.DeliveryStatus;
 import org.example.shield.common.response.ApiResponse;
 import org.example.shield.common.response.PageResponse;
 import org.springframework.data.domain.PageRequest;
@@ -37,15 +37,15 @@ public class LawyerInboxController {
 
     private final DeliveryService deliveryService;
 
-    @Operation(summary = "수신 의뢰서 목록", description = "변호사에게 전달된 의뢰서 목록을 조회합니다. status 파라미터로 필터링 가능")
+    @Operation(summary = "수신 의뢰서 목록", description = "filter=ALL|NEW|REVIEWING|RESPONDED 로 필터링")
     @GetMapping
     public ApiResponse<PageResponse<InboxResponse>> getInbox(
             @AuthenticationPrincipal UUID lawyerId,
-            @RequestParam(required = false) DeliveryStatus status,
+            @RequestParam(defaultValue = "ALL") InboxFilter filter,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, Math.min(size, 100), Sort.by(Sort.Direction.DESC, "sentAt"));
-        PageResponse<InboxResponse> result = deliveryService.getInbox(lawyerId, status, pageable);
+        PageResponse<InboxResponse> result = deliveryService.getInbox(lawyerId, filter, pageable);
         return ApiResponse.success("조회 성공", result);
     }
 

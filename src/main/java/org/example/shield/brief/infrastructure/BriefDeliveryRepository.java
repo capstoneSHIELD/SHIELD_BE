@@ -14,10 +14,16 @@ public interface BriefDeliveryRepository extends JpaRepository<BriefDelivery, UU
     List<BriefDelivery> findAllByBriefId(UUID briefId);
     Page<BriefDelivery> findAllByLawyerId(UUID lawyerId, Pageable pageable);
     Page<BriefDelivery> findAllByLawyerIdAndStatus(UUID lawyerId, DeliveryStatus status, Pageable pageable);
+    Page<BriefDelivery> findAllByLawyerIdAndStatusAndViewedAtIsNull(UUID lawyerId, DeliveryStatus status, Pageable pageable);
+    Page<BriefDelivery> findAllByLawyerIdAndStatusAndViewedAtIsNotNull(UUID lawyerId, DeliveryStatus status, Pageable pageable);
+    Page<BriefDelivery> findAllByLawyerIdAndStatusIn(UUID lawyerId, List<DeliveryStatus> statuses, Pageable pageable);
     boolean existsByBriefIdAndLawyerId(UUID briefId, UUID lawyerId);
     boolean existsByBriefIdAndStatus(UUID briefId, DeliveryStatus status);
     List<BriefDelivery> findAllByBriefIdInAndStatus(List<UUID> briefIds, DeliveryStatus status);
 
     @Query("SELECT d.status, COUNT(d) FROM BriefDelivery d WHERE d.lawyerId = :lawyerId GROUP BY d.status")
     List<Object[]> countGroupByStatus(UUID lawyerId);
+
+    long countByLawyerIdAndStatusAndViewedAtIsNull(UUID lawyerId, DeliveryStatus status);
+    long countByLawyerIdAndStatusAndViewedAtIsNotNull(UUID lawyerId, DeliveryStatus status);
 }

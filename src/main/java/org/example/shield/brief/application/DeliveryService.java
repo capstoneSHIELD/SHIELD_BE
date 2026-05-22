@@ -165,10 +165,17 @@ public class DeliveryService {
         return new DeliveryListResponse(responses);
     }
 
-    public PageResponse<InboxResponse> getInbox(UUID lawyerId, DeliveryStatus status, Pageable pageable) {
-        Page<BriefDelivery> deliveries = (status != null)
-                ? deliveryReader.findAllByLawyerIdAndStatus(lawyerId, status, pageable)
-                : deliveryReader.findAllByLawyerId(lawyerId, pageable);
+    public PageResponse<InboxResponse> getInbox(UUID lawyerId, InboxFilter filter, Pageable pageable) {
+        InboxFilter f = filter != null ? filter : InboxFilter.ALL;
+        Page<BriefDelivery> deliveries = switch (f) {
+            case ALL -> deliveryReader.findAllByLawyerId(lawyerId, pageable);
+            case NEW -> deliveryReader.findAllByLawyerIdAndStatusAndViewedAtIsNull(
+                    lawyerId, DeliveryStatus.DELIVERED, pageable);
+            case REVIEWING -> deliveryReader.findAllByLawyerIdAndStatusAndViewedAtIsNotNull(
+                    lawyerId, DeliveryStatus.DELIVERED, pageable);
+            case RESPONDED -> deliveryReader.findAllByLawyerIdAndStatusIn(
+                    lawyerId, List.of(DeliveryStatus.CONFIRMED, DeliveryStatus.REJECTED), pageable);
+        };
 
         List<UUID> briefIds = deliveries.getContent().stream()
                 .map(BriefDelivery::getBriefId).toList();
@@ -184,11 +191,14 @@ public class DeliveryService {
     }
 
     public InboxStatsResponse getInboxStats(UUID lawyerId) {
+        long newCount = deliveryReader.countByLawyerIdAndStatusAndViewedAtIsNull(lawyerId, DeliveryStatus.DELIVERED);
+        long reviewing = deliveryReader.countByLawyerIdAndStatusAndViewedAtIsNotNull(lawyerId, DeliveryStatus.DELIVERED);
         Map<DeliveryStatus, Long> statusCountMap = deliveryReader.countGroupByStatus(lawyerId);
-        long pending = statusCountMap.getOrDefault(DeliveryStatus.DELIVERED, 0L);
         long confirmed = statusCountMap.getOrDefault(DeliveryStatus.CONFIRMED, 0L);
         long rejected = statusCountMap.getOrDefault(DeliveryStatus.REJECTED, 0L);
-        return new InboxStatsResponse(pending + confirmed + rejected, pending, confirmed, rejected);
+        long responded = confirmed + rejected;
+        long all = newCount + reviewing + responded;
+        return new InboxStatsResponse(all, newCount, reviewing, confirmed, rejected, responded);
     }
 
     @Transactional

@@ -43,6 +43,21 @@ public class BriefDeliveryReaderImpl implements BriefDeliveryReader {
     }
 
     @Override
+    public Page<BriefDelivery> findAllByLawyerIdAndStatusAndViewedAtIsNull(UUID lawyerId, DeliveryStatus status, Pageable pageable) {
+        return briefDeliveryRepository.findAllByLawyerIdAndStatusAndViewedAtIsNull(lawyerId, status, pageable);
+    }
+
+    @Override
+    public Page<BriefDelivery> findAllByLawyerIdAndStatusAndViewedAtIsNotNull(UUID lawyerId, DeliveryStatus status, Pageable pageable) {
+        return briefDeliveryRepository.findAllByLawyerIdAndStatusAndViewedAtIsNotNull(lawyerId, status, pageable);
+    }
+
+    @Override
+    public Page<BriefDelivery> findAllByLawyerIdAndStatusIn(UUID lawyerId, List<DeliveryStatus> statuses, Pageable pageable) {
+        return briefDeliveryRepository.findAllByLawyerIdAndStatusIn(lawyerId, statuses, pageable);
+    }
+
+    @Override
     public boolean existsByBriefIdAndLawyerId(UUID briefId, UUID lawyerId) {
         return briefDeliveryRepository.existsByBriefIdAndLawyerId(briefId, lawyerId);
     }
@@ -65,5 +80,15 @@ public class BriefDeliveryReaderImpl implements BriefDeliveryReader {
                         row -> (DeliveryStatus) row[0],
                         row -> (Long) row[1]
                 ));
+    }
+
+    @Override
+    public long countByLawyerIdAndStatusAndViewedAtIsNull(UUID lawyerId, DeliveryStatus status) {
+        return briefDeliveryRepository.countByLawyerIdAndStatusAndViewedAtIsNull(lawyerId, status);
+    }
+
+    @Override
+    public long countByLawyerIdAndStatusAndViewedAtIsNotNull(UUID lawyerId, DeliveryStatus status) {
+        return briefDeliveryRepository.countByLawyerIdAndStatusAndViewedAtIsNotNull(lawyerId, status);
     }
 }
