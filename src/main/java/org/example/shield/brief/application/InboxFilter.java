@@ -4,5 +4,7 @@ public enum InboxFilter {
     ALL,
     NEW,
     REVIEWING,
+    CONFIRMED,
+    REJECTED,
     RESPONDED
 }
