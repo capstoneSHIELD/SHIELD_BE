@@ -15,6 +15,10 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 /**
  * Kakao OAuth 2.0 클라이언트.
  *
@@ -27,6 +31,9 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
  *       {@code kakao-{providerId}@shield.local} 형태의 합성 이메일을 발급한다.
  *       비즈앱 전환 후에는 실제 이메일이 들어오므로 자연스럽게 전환된다.</li>
  * </ul>
+ *
+ * <p>Issue #114: 모바일 native 앱 지원을 위해 redirect_uri 를 동적으로 받고
+ * {@code allowed-redirect-uris} 화이트리스트로 검증한다.</p>
  */
 @Slf4j
 @Component("kakaoOAuthClient")
@@ -38,25 +45,43 @@ public class KakaoOAuthClient implements OAuthClient {
     private final WebClient webClient;
     private final String clientId;
     private final String clientSecret;
-    private final String redirectUri;
+    private final String defaultRedirectUri;
+    private final Set<String> allowedRedirectUris;
 
     public KakaoOAuthClient(
             @Value("${kakao.client-id}") String clientId,
             @Value("${kakao.client-secret}") String clientSecret,
-            @Value("${kakao.redirect-uri}") String redirectUri) {
+            @Value("${kakao.redirect-uri}") String defaultRedirectUri,
+            @Value("${kakao.allowed-redirect-uris}") String allowedRedirectUrisCsv) {
         this.webClient = WebClient.create();
         this.clientId = clientId;
         this.clientSecret = clientSecret;
-        this.redirectUri = redirectUri;
+        this.defaultRedirectUri = defaultRedirectUri;
+        this.allowedRedirectUris = Arrays.stream(allowedRedirectUrisCsv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override
-    public OAuthUserInfo getUserInfo(String authorizationCode) {
-        String accessToken = exchangeCodeForToken(authorizationCode);
+    public OAuthUserInfo getUserInfo(String authorizationCode, String redirectUri) {
+        String resolvedRedirectUri = resolveRedirectUri(redirectUri);
+        String accessToken = exchangeCodeForToken(authorizationCode, resolvedRedirectUri);
         return fetchUserInfo(accessToken);
     }
 
-    private String exchangeCodeForToken(String authorizationCode) {
+    private String resolveRedirectUri(String requested) {
+        if (requested == null || requested.isBlank()) {
+            return defaultRedirectUri;
+        }
+        if (!allowedRedirectUris.contains(requested)) {
+            log.warn("Kakao OAuth: rejected redirect_uri='{}' (not in whitelist)", requested);
+            throw new OAuthFailedException(ErrorCode.OAUTH_INVALID_REDIRECT_URI);
+        }
+        return requested;
+    }
+
+    private String exchangeCodeForToken(String authorizationCode, String redirectUri) {
         try {
             MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
             form.add("grant_type", "authorization_code");

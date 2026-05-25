@@ -31,8 +31,8 @@ public class AuthService {
 
     public record LoginResult(LoginResponse response, String refreshToken) {}
 
-    public LoginResult googleLogin(String authorizationCode, String role) {
-        OAuthUserInfo userInfo = googleOAuthService.getUserInfo(authorizationCode);
+    public LoginResult googleLogin(String authorizationCode, String redirectUri, String role) {
+        OAuthUserInfo userInfo = googleOAuthService.getUserInfo(authorizationCode, redirectUri);
 
         // 신규 가입 여부를 구분하기 위해 조회 시점을 명시적으로 분리한다.
         var existing = userReader.findByGoogleId(userInfo.providerId());
@@ -73,8 +73,8 @@ public class AuthService {
     /**
      * Naver OAuth 로그인 (Issue #83). googleLogin 과 동일 구조, naverId 컬럼으로 user 식별.
      */
-    public LoginResult naverLogin(String authorizationCode, String role) {
-        OAuthUserInfo userInfo = naverOAuthService.getUserInfo(authorizationCode);
+    public LoginResult naverLogin(String authorizationCode, String redirectUri, String role) {
+        OAuthUserInfo userInfo = naverOAuthService.getUserInfo(authorizationCode, redirectUri);
 
         var existing = userReader.findByNaverId(userInfo.providerId());
         boolean isNewUser = existing.isEmpty();
@@ -110,8 +110,8 @@ public class AuthService {
     /**
      * Kakao OAuth 로그인. googleLogin/naverLogin 과 동일 구조, kakaoId 컬럼으로 user 식별.
      */
-    public LoginResult kakaoLogin(String authorizationCode, String role) {
-        OAuthUserInfo userInfo = kakaoOAuthService.getUserInfo(authorizationCode);
+    public LoginResult kakaoLogin(String authorizationCode, String redirectUri, String role) {
+        OAuthUserInfo userInfo = kakaoOAuthService.getUserInfo(authorizationCode, redirectUri);
 
         var existing = userReader.findByKakaoId(userInfo.providerId());
         boolean isNewUser = existing.isEmpty();

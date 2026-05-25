@@ -31,7 +31,11 @@ public class GoogleOAuthClient implements OAuthClient {
     }
 
     @Override
-    public OAuthUserInfo getUserInfo(String authorizationCode) {
+    public OAuthUserInfo getUserInfo(String authorizationCode, String redirectUri) {
+        // Phase 1 (Issue #114): Google 은 모바일 native OAuth 미지원 상태.
+        // redirectUri 매개변수는 인터페이스 통일을 위해 받지만 사용하지 않고 환경변수의
+        // 기본 redirect-uri 를 그대로 사용한다. Phase 2 에서 Google native SDK 또는
+        // Android OAuth Client 도입 시 활용 예정.
         String accessToken = exchangeCodeForToken(authorizationCode);
         return fetchUserInfo(accessToken);
     }

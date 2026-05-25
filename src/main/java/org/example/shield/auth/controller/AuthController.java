@@ -40,7 +40,7 @@ public class AuthController {
             @Valid @RequestBody GoogleLoginRequest request,
             HttpServletResponse response) {
         AuthService.LoginResult result = authService.googleLogin(
-                request.authorizationCode(), request.role());
+                request.authorizationCode(), request.redirectUri(), request.role());
 
         addRefreshTokenCookie(response, result.refreshToken());
         return ResponseEntity.ok(ApiResponse.success("로그인 성공", result.response()));
@@ -52,7 +52,7 @@ public class AuthController {
             @Valid @RequestBody NaverLoginRequest request,
             HttpServletResponse response) {
         AuthService.LoginResult result = authService.naverLogin(
-                request.authorizationCode(), request.role());
+                request.authorizationCode(), request.redirectUri(), request.role());
 
         addRefreshTokenCookie(response, result.refreshToken());
         return ResponseEntity.ok(ApiResponse.success("로그인 성공", result.response()));
@@ -64,7 +64,7 @@ public class AuthController {
             @Valid @RequestBody KakaoLoginRequest request,
             HttpServletResponse response) {
         AuthService.LoginResult result = authService.kakaoLogin(
-                request.authorizationCode(), request.role());
+                request.authorizationCode(), request.redirectUri(), request.role());
 
         addRefreshTokenCookie(response, result.refreshToken());
         return ResponseEntity.ok(ApiResponse.success("로그인 성공", result.response()));
