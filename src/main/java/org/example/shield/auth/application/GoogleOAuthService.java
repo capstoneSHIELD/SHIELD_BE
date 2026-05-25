@@ -14,7 +14,7 @@ public class GoogleOAuthService {
         this.oAuthClient = oAuthClient;
     }
 
-    public OAuthUserInfo getUserInfo(String authorizationCode) {
-        return oAuthClient.getUserInfo(authorizationCode);
+    public OAuthUserInfo getUserInfo(String authorizationCode, String redirectUri) {
+        return oAuthClient.getUserInfo(authorizationCode, redirectUri);
     }
 }

@@ -23,6 +23,7 @@ public enum ErrorCode {
     // Auth - OAuth
     OAUTH_CODE_INVALID(HttpStatus.UNAUTHORIZED, "OAuth 인증 코드가 유효하지 않습니다"),
     OAUTH_USER_INFO_FAILED(HttpStatus.UNAUTHORIZED, "OAuth 사용자 정보 조회에 실패했습니다"),
+    OAUTH_INVALID_REDIRECT_URI(HttpStatus.BAD_REQUEST, "허용되지 않은 redirect URI 입니다"),
 
     // Auth - Role
     INVALID_ROLE(HttpStatus.BAD_REQUEST, "유효하지 않은 역할입니다 (USER, LAWYER, ADMIN)"),

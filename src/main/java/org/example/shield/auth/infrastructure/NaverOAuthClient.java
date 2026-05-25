@@ -11,6 +11,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 /**
  * Naver OAuth 2.0 클라이언트 (Issue #83).
  *
@@ -19,6 +23,9 @@ import org.springframework.web.util.UriComponentsBuilder;
  *   <li>유저 정보: {@code https://openapi.naver.com/v1/nid/me}</li>
  *   <li>응답 구조: {@code { resultcode, message, response: { id, email, name, ... } }}</li>
  * </ul>
+ *
+ * <p>Issue #114: 모바일 native 앱 지원을 위해 redirect_uri 를 동적으로 받고
+ * {@code allowed-redirect-uris} 화이트리스트로 검증한다.</p>
  */
 @Slf4j
 @Component("naverOAuthClient")
@@ -30,25 +37,43 @@ public class NaverOAuthClient implements OAuthClient {
     private final WebClient webClient;
     private final String clientId;
     private final String clientSecret;
-    private final String redirectUri;
+    private final String defaultRedirectUri;
+    private final Set<String> allowedRedirectUris;
 
     public NaverOAuthClient(
             @Value("${naver.client-id}") String clientId,
             @Value("${naver.client-secret}") String clientSecret,
-            @Value("${naver.redirect-uri}") String redirectUri) {
+            @Value("${naver.redirect-uri}") String defaultRedirectUri,
+            @Value("${naver.allowed-redirect-uris}") String allowedRedirectUrisCsv) {
         this.webClient = WebClient.create();
         this.clientId = clientId;
         this.clientSecret = clientSecret;
-        this.redirectUri = redirectUri;
+        this.defaultRedirectUri = defaultRedirectUri;
+        this.allowedRedirectUris = Arrays.stream(allowedRedirectUrisCsv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override
-    public OAuthUserInfo getUserInfo(String authorizationCode) {
-        String accessToken = exchangeCodeForToken(authorizationCode);
+    public OAuthUserInfo getUserInfo(String authorizationCode, String redirectUri) {
+        String resolvedRedirectUri = resolveRedirectUri(redirectUri);
+        String accessToken = exchangeCodeForToken(authorizationCode, resolvedRedirectUri);
         return fetchUserInfo(accessToken);
     }
 
-    private String exchangeCodeForToken(String authorizationCode) {
+    private String resolveRedirectUri(String requested) {
+        if (requested == null || requested.isBlank()) {
+            return defaultRedirectUri;
+        }
+        if (!allowedRedirectUris.contains(requested)) {
+            log.warn("Naver OAuth: rejected redirect_uri='{}' (not in whitelist)", requested);
+            throw new OAuthFailedException(ErrorCode.OAUTH_INVALID_REDIRECT_URI);
+        }
+        return requested;
+    }
+
+    private String exchangeCodeForToken(String authorizationCode, String redirectUri) {
         try {
             String url = UriComponentsBuilder.fromUriString(TOKEN_URI)
                     .queryParam("grant_type", "authorization_code")

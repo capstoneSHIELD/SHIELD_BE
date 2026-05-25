@@ -2,5 +2,5 @@ package org.example.shield.auth.domain;
 
 public interface OAuthClient {
 
-    OAuthUserInfo getUserInfo(String token);
+    OAuthUserInfo getUserInfo(String code, String redirectUri);
 }

@@ -100,19 +100,25 @@ google:
 # Naver OAuth (Issue #83)
 # 테스트/로컬에서 env 미설정 시에도 컨텍스트 로드되도록 기본값 제공.
 # 운영 환경(EC2)에는 실제 NAVER_* 환경변수가 주입됨.
+# allowed-redirect-uris: 클라이언트가 보낸 redirect_uri 화이트리스트 (Issue #114).
+#   카카오/네이버 정책상 redirect URI 는 https 만 받으므로, 모바일 native 도 https URL 을 사용.
+#   `-mobile` suffix 페이지가 받은 code 를 shield:// scheme deep link 로 native 앱에 전달.
 naver:
   client-id: ${NAVER_CLIENT_ID:dummy-naver-client-id}
   client-secret: ${NAVER_CLIENT_SECRET:dummy-naver-secret}
   redirect-uri: ${NAVER_REDIRECT_URI:https://shieldai.kr/auth/naver/callback}
+  allowed-redirect-uris: ${NAVER_ALLOWED_REDIRECT_URIS:https://shieldai.kr/auth/naver/callback,https://shieldai.kr/auth/naver/callback-mobile,https://localhost:5174/auth/naver/callback}
 
 # Kakao OAuth
 # - client-id: 카카오 개발자 콘솔의 REST API 키 (NOT JavaScript 키)
 # - client-secret: '카카오 로그인' > '보안' 에서 발급 + 활성화 (선택이지만 보안상 권장)
 # - redirect-uri: 콘솔의 'Redirect URI' 와 정확히 일치해야 함
+# - allowed-redirect-uris: 클라이언트가 보낸 redirect_uri 화이트리스트 (Issue #114).
 kakao:
   client-id: ${KAKAO_REST_API_KEY:dummy-kakao-rest-api-key}
   client-secret: ${KAKAO_CLIENT_SECRET:dummy-kakao-secret}
   redirect-uri: ${KAKAO_REDIRECT_URI:https://shieldai.kr/auth/kakao/callback}
+  allowed-redirect-uris: ${KAKAO_ALLOWED_REDIRECT_URIS:https://shieldai.kr/auth/kakao/callback,https://shieldai.kr/auth/kakao/callback-mobile,https://localhost:5174/auth/kakao/callback}
 
 # Supabase Storage
 # - bucket          : 변호사 자격증명 등 비공개 문서 저장 버킷 (signed URL 사용)
