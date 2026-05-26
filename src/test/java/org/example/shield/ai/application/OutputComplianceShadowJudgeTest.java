@@ -60,4 +60,56 @@ class OutputComplianceShadowJudgeTest {
                 RagMetrics.METRIC_OUTPUT_JUDGE_SHADOW,
                 "outcome", "sampled").count()).isEqualTo(1.0);
     }
+
+    // === P5.2 Commit 4 — conversationId-based deterministic sampling ===
+
+    @Test
+    @DisplayName("P5.2 — evaluate(response, conversationId): same convId → deterministic")
+    void evaluateWithConversationId_isDeterministic() {
+        ReflectionTestUtils.setField(judge, "samplingRate", 0.5);
+
+        OutputComplianceResult first = judge.evaluate("hello", "conv-stable-1");
+        OutputComplianceResult second = judge.evaluate("hello", "conv-stable-1");
+
+        // 같은 conversationId는 항상 같은 sampling 결정
+        assertThat(first.shadowScheduled()).isEqualTo(second.shadowScheduled());
+        assertThat(first.hashedConversationId()).isEqualTo(second.hashedConversationId());
+        assertThat(first.hashedConversationId()).hasSize(8);  // SHA-256 short
+    }
+
+    @Test
+    @DisplayName("P5.2 — hashedConversationId는 원본 conversationId를 노출하지 않음")
+    void hashedConversationIdDoesNotLeakOriginal() {
+        ReflectionTestUtils.setField(judge, "samplingRate", 1.0);
+
+        String originalId = "user-12345-secret-conv-abc";
+        OutputComplianceResult result = judge.evaluate("response", originalId);
+
+        assertThat(result.hashedConversationId())
+                .isNotNull()
+                .doesNotContain(originalId)
+                .doesNotContain("12345")
+                .doesNotContain("secret");
+    }
+
+    @Test
+    @DisplayName("P5.2 — null conversationId → hashedConversationId=null, sampling=false")
+    void nullConversationIdNoSampling() {
+        ReflectionTestUtils.setField(judge, "samplingRate", 1.0);
+
+        OutputComplianceResult result = judge.evaluate("response", null);
+
+        assertThat(result.hashedConversationId()).isNull();
+        assertThat(result.shadowScheduled()).isFalse();
+    }
+
+    @Test
+    @DisplayName("P5.2 — evaluate(response) BC는 hashedConversationId=null")
+    void legacyEvaluateHasNoHashedId() {
+        ReflectionTestUtils.setField(judge, "samplingRate", 1.0);
+
+        OutputComplianceResult result = judge.evaluate("response");
+
+        assertThat(result.hashedConversationId()).isNull();
+    }
 }

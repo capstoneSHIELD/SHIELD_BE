@@ -90,7 +90,10 @@ public class CohereService {
         if (outputComplianceShadowJudge != null
                 && filtered != null
                 && filtered.getNextQuestion() != null) {
-            outputComplianceShadowJudge.evaluate(filtered.getNextQuestion());
+            // P5.2 Commit 4: conversationId 기반 deterministic sampling
+            String conversationId = consultation != null && consultation.getId() != null
+                    ? consultation.getId().toString() : null;
+            outputComplianceShadowJudge.evaluate(filtered.getNextQuestion(), conversationId);
         }
         return new AiCallResult<>(
                 result.responseId(),

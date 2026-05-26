@@ -67,6 +67,9 @@ class RagBaselineEvaluatorTest {
         RagEvalItem statute = new RagEvalItem(
                 "V22-Q001",
                 "dev",
+                "ask_legal_advice",  // P5.2 Commit 1: dialogueIntent
+                false,               // P5.2 Commit 1: lowEvidence
+                "statute_only",      // P5.2 Commit 1: mixedType
                 "law-001-02-02",
                 "부동산 거래",
                 "부동산 임대차",
@@ -85,6 +88,9 @@ class RagBaselineEvaluatorTest {
         RagEvalItem precedent = new RagEvalItem(
                 "V22-Q002",
                 "holdout",
+                "ask_legal_advice",  // P5.2 Commit 1: dialogueIntent
+                false,               // P5.2 Commit 1: lowEvidence
+                "case_only",         // P5.2 Commit 1: mixedType (판례 전용)
                 "law-001-02-02",
                 "부동산 거래",
                 "부동산 임대차",

@@ -57,6 +57,9 @@ class RagEvalSetValidatorTest {
         RagEvalItem invalid = new RagEvalItem(
                 "Q1",
                 "dev",
+                "ask_legal_advice",  // P5.2 Commit 1
+                false,
+                "statute_only",
                 "law-001-02-02",
                 "부동산 거래",
                 "부동산 임대차",
@@ -84,6 +87,42 @@ class RagEvalSetValidatorTest {
                 assertThat(failure).contains("no expected document reference"));
         assertThat(result.failures()).anySatisfy(failure ->
                 assertThat(failure).contains("out-of-range relevance grade"));
+    }
+
+    @Test
+    @DisplayName("P5.2 — low_evidence=true 항목은 expectedDocument 부재 허용")
+    void validate_lowEvidenceAllowsEmptyExpected() {
+        RagEvalItem lowEvidence = new RagEvalItem(
+                "LE-1",
+                "dev",
+                "ask_legal_advice",
+                true,   // lowEvidence
+                "statute_only",
+                "law-001-02-02",
+                "부동산 거래",
+                "부동산 임대차",
+                "보증금 및 차임",
+                "real_estate_lease",
+                "법률 문제 있어요",  // 모호한 질문
+                java.util.List.of(),
+                java.util.List.of(),
+                java.util.List.of(),
+                java.util.List.of(),    // expectedDocument 비어있음
+                java.util.Map.of(),
+                "baseline",
+                "seed",
+                "reviewer-a",
+                "2026-05-26");
+
+        RagEvalSetValidationResult result = validator.validate(
+                List.of(lowEvidence),
+                Map.of("dev", 1L),
+                Map.of(),
+                false);
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.failures())
+                .noneSatisfy(failure -> assertThat(failure).contains("no expected document reference"));
     }
 
     @Test
@@ -117,6 +156,9 @@ class RagEvalSetValidatorTest {
         return new RagEvalItem(
                 id,
                 split,
+                "ask_legal_advice",  // P5.2 Commit 1
+                false,
+                "statute_only",
                 "law-001-02-02",
                 "부동산 거래",
                 "부동산 임대차",
