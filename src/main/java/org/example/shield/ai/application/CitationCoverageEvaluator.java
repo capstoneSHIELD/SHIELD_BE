@@ -5,6 +5,7 @@ import org.example.shield.ai.dto.RagEvalLawRef;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -40,13 +41,13 @@ public class CitationCoverageEvaluator {
 
     /**
      * 법령 조문 패턴. 예: "민법 제618조", "민법제618조", "민법 618조".
-     * - 법령명: 한글 1~10자 + "법" (민법/상법/형법/주택임대차보호법 등, 총 2~11자)
+     * - 법령명: 주요 특별법 별칭 또는 한글 1~10자 + "법"
      * - 분리: 공백 0개 이상
      * - "제" 0~1회
      * - 조문번호: 1~4 자리 숫자 + "조" + 선택적 "의N"
      */
     private static final Pattern STATUTE_REF = Pattern.compile(
-            "([가-힣]{1,10}법)\\s*제?(\\d{1,4})\\s*조(?:의\\d+)?"
+            "(주택임대차보호법|상가건물\\s*임대차보호법|[가-힣]{1,10}법)\\s*제?(\\d{1,4})\\s*조(?:의\\d+)?"
     );
 
     /**
@@ -135,11 +136,21 @@ public class CitationCoverageEvaluator {
      */
     private static String inferLawName(String lawId) {
         if (lawId == null) return "";
-        return switch (lawId.toLowerCase()) {
+        String key = lawId.trim()
+                .toLowerCase(Locale.ROOT)
+                .replace('_', '-')
+                .replaceAll("\\s+", "");
+        return switch (key) {
             case "law-civil", "civil", "법-civil" -> "민법";
             case "law-commercial", "commercial" -> "상법";
             case "law-criminal", "criminal" -> "형법";
             case "law-labor", "labor" -> "근로기준법";
+            case "law-housing-lease", "housing-lease",
+                 "law-residential-lease", "residential-lease",
+                 "주택임대차보호법" -> "주택임대차보호법";
+            case "law-commercial-lease", "commercial-lease",
+                 "law-commercial-building-lease", "commercial-building-lease",
+                 "상가건물임대차보호법" -> "상가건물임대차보호법";
             default -> lawId;
         };
     }
@@ -161,7 +172,7 @@ public class CitationCoverageEvaluator {
      * 법령명 + 조항번호를 일관된 키로. 공백 제거하고 "제N조" 형식 강제.
      */
     private static String normalizeLaw(String lawName, String articleNo) {
-        String name = lawName == null ? "" : lawName.trim();
+        String name = lawName == null ? "" : lawName.replaceAll("\\s+", "").trim();
         String article = articleNo == null ? "" : articleNo.trim();
         if (!article.startsWith("제")) {
             article = "제" + article;

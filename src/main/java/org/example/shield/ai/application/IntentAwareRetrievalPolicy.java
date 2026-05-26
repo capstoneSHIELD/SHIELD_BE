@@ -107,6 +107,10 @@ public class IntentAwareRetrievalPolicy {
         double confidence = intent.intentConfidence();
         DialogueIntent dialogueIntent = intent.dialogueIntent();
 
+        if (dialogueIntent == null) {
+            return RetrievalStrategyDecision.baseline(safeDefaultTopK, "null_intent_baseline");
+        }
+
         // P5.3 Commit 4 — CRITICAL: ASK_LEGAL_ADVICE는 절대 RAG skip 금지.
         // 법률 조언 요청은 항상 법령/판례 근거 필요. 의도 분류가 잘못된 경우에도
         // skip되지 않도록 가장 먼저 가드.

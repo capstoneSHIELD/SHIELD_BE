@@ -149,6 +149,21 @@ class CitationCoverageEvaluatorTest {
     }
 
     @Test
+    @DisplayName("주요 특별법 lawId — 주택/상가 임대차보호법 한글 명칭과 매칭")
+    void specialLeaseLawIdsMatchKoreanNames() {
+        RagEvalItem item = itemWith(
+                List.of(new RagEvalLawRef("law-housing-lease", "제3조")),
+                List.of("law-commercial-building-lease:제10조"),
+                false);
+
+        CoverageResult result = evaluator.evaluate(
+                "주택임대차보호법 제3조와 상가건물 임대차보호법 제10조에 따라", item);
+
+        assertThat(result.expectedReferenceMentionRate()).isEqualTo(1.0);
+        assertThat(result.expectedHits()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("null/blank 답변 텍스트 안전 처리")
     void nullAnswerSafe() {
         RagEvalItem item = itemWith(

@@ -16,6 +16,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * {@link IntentAwareRetrievalPolicy} 검증 (P5.3 Commit 3).
@@ -284,6 +286,25 @@ class IntentAwareRetrievalPolicyTest {
             assertThat(registry.counter(AiRagOperationalMetrics.INTENT_ROUTING,
                     "mode", "enforce", "intent", "UNKNOWN",
                     "decision", "baseline_missing_intent", "confidence", "unknown").count())
+                    .isEqualTo(1.0);
+        }
+
+        @Test
+        @DisplayName("dialogueIntent=null + mode=enforce → null_intent_baseline")
+        void nullDialogueIntentFallsBackToBaseline() {
+            ReflectionTestUtils.setField(policy, "modeRaw", "enforce");
+
+            IntentRouterResponse malformed = mock(IntentRouterResponse.class);
+            when(malformed.dialogueIntent()).thenReturn(null);
+            when(malformed.intentConfidence()).thenReturn(0.99);
+
+            RetrievalStrategyDecision decision = policy.decide(malformed, 3);
+
+            assertThat(decision.skipRag()).isFalse();
+            assertThat(decision.reason()).isEqualTo("null_intent_baseline");
+            assertThat(registry.counter(AiRagOperationalMetrics.INTENT_ROUTING,
+                    "mode", "enforce", "intent", "UNKNOWN",
+                    "decision", "null_intent_baseline", "confidence", "high").count())
                     .isEqualTo(1.0);
         }
 
