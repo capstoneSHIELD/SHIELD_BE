@@ -1,5 +1,6 @@
 package org.example.shield.ai.application;
 
+import org.example.shield.ai.application.CitationCoverageEvaluator.CoverageResult;
 import org.example.shield.ai.dto.LegalChunk;
 import org.example.shield.ai.dto.Precedent;
 import org.example.shield.ai.dto.RagBaselineEvaluationResult;
@@ -7,6 +8,8 @@ import org.example.shield.ai.dto.RagBaselineSplitMetrics;
 import org.example.shield.ai.dto.RagEvalItem;
 import org.example.shield.ai.dto.RagEvalLawRef;
 import org.example.shield.ai.dto.RetrievedDocument;
+import org.example.shield.ai.infrastructure.AiRagOperationalMetrics;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -23,18 +26,55 @@ import java.util.stream.Collectors;
 @Component
 public class RagBaselineEvaluator {
 
+    private final CitationCoverageEvaluator citationCoverageEvaluator;
+    private final AiRagOperationalMetrics metrics;
+
+    public RagBaselineEvaluator(CitationCoverageEvaluator citationCoverageEvaluator,
+                                @Nullable AiRagOperationalMetrics metrics) {
+        this.citationCoverageEvaluator = citationCoverageEvaluator;
+        this.metrics = metrics;
+    }
+
     public RagBaselineEvaluationResult evaluate(
             List<RagEvalItem> items,
             Map<String, List<RetrievedDocument>> resultsByEvalId,
             Map<String, Long> latencyMsByEvalId,
             String method
     ) {
+        return evaluate(items, resultsByEvalId, latencyMsByEvalId, method, Map.of());
+    }
+
+    public RagBaselineEvaluationResult evaluate(
+            List<RagEvalItem> items,
+            Map<String, List<RetrievedDocument>> resultsByEvalId,
+            Map<String, Long> latencyMsByEvalId,
+            String method,
+            Map<String, String> answerTextsByEvalId
+    ) {
         if (items == null || items.isEmpty()) {
-            return new RagBaselineEvaluationResult(LocalDate.now(), methodName(method),
-                    0, 0.0, 0.0, 0.0, 0.0, 0.0, 0);
+            return new RagBaselineEvaluationResult(
+                    LocalDate.now(),
+                    methodName(method),
+                    0,
+                    0.0,
+                    0,
+                    0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0,
+                    0.0,
+                    0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0,
+                    Map.of());
         }
 
-        Metrics overall = evaluateScope(items, resultsByEvalId, latencyMsByEvalId);
+        Metrics overall = evaluateScope(items, resultsByEvalId, latencyMsByEvalId, answerTextsByEvalId, true);
         Map<String, RagBaselineSplitMetrics> splitMetrics = items.stream()
                 .filter(item -> item != null && item.id() != null)
                 .collect(Collectors.groupingBy(
@@ -45,7 +85,7 @@ public class RagBaselineEvaluator {
                 .stream()
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
-                        entry -> evaluateScope(entry.getValue(), resultsByEvalId, latencyMsByEvalId)
+                        entry -> evaluateScope(entry.getValue(), resultsByEvalId, latencyMsByEvalId, answerTextsByEvalId, false)
                                 .toSplitMetrics(entry.getKey()),
                         (left, right) -> left,
                         LinkedHashMap::new));
@@ -63,6 +103,8 @@ public class RagBaselineEvaluator {
                 overall.mrr(),
                 overall.ndcgAt5(),
                 overall.gradedNdcgQueryCount(),
+                overall.expectedReferenceMentionRate(),
+                overall.expectedReferenceMentionQueryCount(),
                 overall.emptyRate(),
                 overall.latencyP50Ms(),
                 overall.latencyP95Ms(),
@@ -74,7 +116,9 @@ public class RagBaselineEvaluator {
     private Metrics evaluateScope(
             List<RagEvalItem> items,
             Map<String, List<RetrievedDocument>> resultsByEvalId,
-            Map<String, Long> latencyMsByEvalId
+            Map<String, Long> latencyMsByEvalId,
+            Map<String, String> answerTextsByEvalId,
+            boolean emitCoverageMetrics
     ) {
         int evaluated = 0;
         int mixedHits = 0;
@@ -84,8 +128,10 @@ public class RagBaselineEvaluator {
         int caseHits = 0;
         int empty = 0;
         int gradedNdcgQueries = 0;
+        int coverageQueries = 0;
         double reciprocalRankSum = 0.0;
         double ndcgSum = 0.0;
+        double coverageRateSum = 0.0;
         List<Long> latencies = new ArrayList<>();
 
         for (RagEvalItem item : items == null ? List.<RagEvalItem>of() : items) {
@@ -125,6 +171,10 @@ public class RagBaselineEvaluator {
             if (latencyMsByEvalId != null && latencyMsByEvalId.containsKey(item.id())) {
                 latencies.add(latencyMsByEvalId.get(item.id()));
             }
+
+            CoverageStats coverageStats = evaluateCoverage(item, answerTextsByEvalId, emitCoverageMetrics);
+            coverageQueries += coverageStats.queryCount();
+            coverageRateSum += coverageStats.rateSum();
         }
 
         return new Metrics(
@@ -137,9 +187,53 @@ public class RagBaselineEvaluator {
                 ratio(reciprocalRankSum, evaluated),
                 ratio(ndcgSum, evaluated),
                 gradedNdcgQueries,
+                ratio(coverageRateSum, coverageQueries),
+                coverageQueries,
                 ratio(empty, evaluated),
                 percentile(latencies, 0.50),
                 percentile(latencies, 0.95));
+    }
+
+    private CoverageStats evaluateCoverage(
+            RagEvalItem item,
+            Map<String, String> answerTextsByEvalId,
+            boolean emitCoverageMetrics
+    ) {
+        if (item == null || item.id() == null || answerTextsByEvalId == null || !answerTextsByEvalId.containsKey(item.id())) {
+            return CoverageStats.EMPTY;
+        }
+
+        String answerText = answerTextsByEvalId.get(item.id());
+        CoverageResult coverage = citationCoverageEvaluator.evaluate(answerText, item);
+        Set<String> expectedRefs = citationCoverageEvaluator.expectedRefIds(item);
+        if (emitCoverageMetrics) {
+            recordCoverageMetrics(expectedRefs.size(), coverage);
+        }
+
+        Double rate = coverage.expectedReferenceMentionRate();
+        if (rate == null) {
+            return CoverageStats.EMPTY;
+        }
+        return new CoverageStats(rate, 1);
+    }
+
+    private void recordCoverageMetrics(int expectedCount, CoverageResult coverage) {
+        if (metrics == null || coverage == null) {
+            return;
+        }
+        if (coverage.totalMentions() > 0) {
+            metrics.recordReferenceMention("answer", "mentioned", coverage.totalMentions());
+        }
+        if (expectedCount <= 0) {
+            return;
+        }
+        if (coverage.expectedHits() > 0) {
+            metrics.recordReferenceMention("expected", "hit", coverage.expectedHits());
+        }
+        long misses = Math.max(0, expectedCount - coverage.expectedHits());
+        if (misses > 0) {
+            metrics.recordReferenceMention("expected", "miss", misses);
+        }
     }
 
     private int firstRelevantRank(List<RetrievedDocument> docs, RagEvalItem item, ExpectedScope scope) {
@@ -343,6 +437,10 @@ public class RagBaselineEvaluator {
         CASE
     }
 
+    private record CoverageStats(double rateSum, int queryCount) {
+        private static final CoverageStats EMPTY = new CoverageStats(0.0, 0);
+    }
+
     private record Metrics(
             int queryCount,
             int statuteQueryCount,
@@ -353,6 +451,8 @@ public class RagBaselineEvaluator {
             double mrr,
             double ndcgAt5,
             int gradedNdcgQueryCount,
+            double expectedReferenceMentionRate,
+            int expectedReferenceMentionQueryCount,
             double emptyRate,
             double latencyP50Ms,
             double latencyP95Ms
@@ -369,6 +469,8 @@ public class RagBaselineEvaluator {
                     mrr,
                     ndcgAt5,
                     gradedNdcgQueryCount,
+                    expectedReferenceMentionRate,
+                    expectedReferenceMentionQueryCount,
                     emptyRate,
                     latencyP50Ms,
                     latencyP95Ms);

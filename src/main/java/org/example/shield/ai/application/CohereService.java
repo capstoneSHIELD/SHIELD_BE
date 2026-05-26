@@ -61,6 +61,7 @@ public class CohereService {
     private final StaticQuestionSelector staticQuestionSelector;
     private final OutputComplianceShadowJudge outputComplianceShadowJudge;
     private final CohereMetricEmitter cohereMetricEmitter;
+    private final ChatProviderShadowComparator chatProviderShadowComparator;
 
     @Value("${app.ai.slot-ledger.enabled:true}")
     private boolean slotLedgerEnabled;
@@ -84,13 +85,21 @@ public class CohereService {
 
         // Layer 2 가드레일: 금칙어 필터
         ChatParsedResponse filtered = guardrailFilter.filterChatResponse(result.data());
+        String conversationId = consultation != null && consultation.getId() != null
+                ? consultation.getId().toString() : null;
         if (outputComplianceShadowJudge != null
                 && filtered != null
                 && filtered.getNextQuestion() != null) {
             // P5.2 Commit 4: conversationId 기반 deterministic sampling
-            String conversationId = consultation != null && consultation.getId() != null
-                    ? consultation.getId().toString() : null;
             outputComplianceShadowJudge.evaluate(filtered.getNextQuestion(), conversationId);
+        }
+        // P5.5 Commit 4: HyperCLOVA X chat shadow 비교 (sampling 활성 시에만 호출).
+        // 비교는 best-effort, 본 응답에 영향 없음.
+        if (chatProviderShadowComparator != null) {
+            AiCallResult<ChatParsedResponse> cohereSnapshot = new AiCallResult<>(
+                    result.responseId(), filtered,
+                    result.tokensInput(), result.tokensOutput(), result.latencyMs());
+            chatProviderShadowComparator.compare(messages, cohereSnapshot, conversationId, null);
         }
         return new AiCallResult<>(
                 result.responseId(),

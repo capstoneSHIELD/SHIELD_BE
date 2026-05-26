@@ -44,6 +44,13 @@ public class AiRagOperationalMetrics {
     public static final String JUDGE_OUTCOME = "shield.ai.judge.outcome";
     public static final String JUDGE_LATENCY = "shield.ai.judge.latency";
 
+    // P5.5 Commit 4 — Chat provider shadow comparison
+    public static final String CHAT_SHADOW_COMPARE = "shield.ai.chat.shadow_compare";
+    public static final String CHAT_SHADOW_COMPARE_FAILURE = "shield.ai.chat.shadow_compare.failure";
+
+    // P5.2 Commit 3 reference mention coverage
+    public static final String REFERENCE_MENTION = "shield.ai.reference.mention";
+
     private final MeterRegistry registry;
 
     public AiRagOperationalMetrics(MeterRegistry registry) {
@@ -221,6 +228,52 @@ public class AiRagOperationalMetrics {
                 "provider", value(provider),
                 "status", value(status))
                 .record(duration);
+    }
+
+    /**
+     * P5.5 Commit 4 — Chat provider shadow 비교 측정값.
+     *
+     * @param provider {@code "cohere"} / {@code "hyperclova"}
+     * @param metric   {@code "length"} / {@code "statute_refs"} / {@code "case_refs"} /
+     *                 {@code "guardrail_violation"} / {@code "latency_ms"}
+     * @param value    측정값 (음수면 무시)
+     */
+    public void recordChatShadowCompare(String provider, String metric, long value) {
+        if (value < 0) {
+            return;
+        }
+        DistributionSummary.builder(CHAT_SHADOW_COMPARE)
+                .tag("provider", value(provider))
+                .tag("metric", value(metric))
+                .register(registry)
+                .record(value);
+    }
+
+    /**
+     * P5.5 Commit 4 — Chat provider shadow 호출 실패 카운트.
+     */
+    public void recordChatShadowCompareFailure(String provider) {
+        counter(CHAT_SHADOW_COMPARE_FAILURE, "provider", value(provider)).increment();
+    }
+
+    public void recordReferenceMention(String kind, String outcome) {
+        recordReferenceMention(kind, outcome, 1L);
+    }
+
+    /**
+     * P5.2 reference mention coverage counters.
+     *
+     * @param kind    {@code "expected"} / {@code "answer"}
+     * @param outcome {@code "hit"} / {@code "miss"} / {@code "mentioned"}
+     */
+    public void recordReferenceMention(String kind, String outcome, long count) {
+        if (count <= 0) {
+            return;
+        }
+        counter(REFERENCE_MENTION,
+                "kind", value(kind),
+                "outcome", value(outcome))
+                .increment(count);
     }
 
     /**

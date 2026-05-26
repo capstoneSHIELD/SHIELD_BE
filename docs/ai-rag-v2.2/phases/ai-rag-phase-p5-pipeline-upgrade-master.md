@@ -32,7 +32,7 @@
 | **P5.2** | 평가 인프라 + Baseline | [ai-rag-phase-p5_2-evaluation-baseline.md](./ai-rag-phase-p5_2-evaluation-baseline.md) | ✅ 5/5 commits | RagEvalItem v1.6 (3개 신규 필드), Validator low_evidence 허용, eval-set.v1.6 50건, CitationCoverageEvaluator (reference mention coverage), PiiMasker 추출 + Sampler, baseline 인프라 보고서 |
 | **P5.3** | 비용/성능 Quick Wins | [ai-rag-phase-p5_3-cost-routing.md](./ai-rag-phase-p5_3-cost-routing.md) | ✅ 5/5 commits | EmbeddingCache 인터페이스 + Noop + Caffeine, QueryEmbeddingService 캐시 통합, IntentAwareRetrievalPolicy shadow mode, **ASK_LEGAL_ADVICE skip 절대 금지 + GREETING-only enforce**, RagContextBuilder budget shadow |
 | **P5.4** | 품질 실험 (RAG 검색 레이어) | [ai-rag-phase-p5_4-quality-experiments.md](./ai-rag-phase-p5_4-quality-experiments.md) | ✅ 6/6 commits | CohereRerankClient + Adapter, RerankingService shadow/sampled/enforce, Auto-OFF 회로 차단기, RRF path-specific repo + OfflineRrfRetrievalService (production guard), 4-mode 비교 보고서 |
-| **P5.5** | **Cohere × HyperCLOVA X 하이브리드** (생성·판정 레이어) | [ai-rag-phase-p5_5-hyperclova-hybrid.md](./ai-rag-phase-p5_5-hyperclova-hybrid.md) | ⏸️ 미시작 (분석 문서만) | AiJudgeClient → OutputComplianceShadowJudge judge 본체 (HyperCLOVA) → Chat/Brief shadow 비교 → 최종 결정 |
+| **P5.5** | **Cohere × HyperCLOVA X 하이브리드** (생성·판정 레이어) | [ai-rag-phase-p5_5-hyperclova-hybrid.md](./ai-rag-phase-p5_5-hyperclova-hybrid.md) | ✅ 4/5 commits (운영 데이터 1~2주 누적 후 Commit 5 결정) | AiJudgeClient + JudgeResult/JudgeRequest, HyperClovaJudgeClient + Adapter (judge 프롬프트 포함), OutputComplianceShadowJudge judge 본체 통합 + 메트릭, HyperClovaChatClient + AiChatClient adapter + ChatProviderShadowComparator, [eval_chat.py](../../../scripts/eval_chat.py) 오프라인 비교, [judge shadow 보고서](../reports/p5_5-judge-shadow.md) + [최종 결정 템플릿](../reports/p5_5-final-decision.md) |
 
 **구현 노트 (2026-05-26 refine)**: P5.1/P5.2 모두 명세 부합. 일부 구현은 명세보다 보수적으로 조정:
 - P5.1-C3: Breaking 시그니처 변경 → Non-breaking 신규 메서드 추가 (ingest 서비스 blast radius 회피)
@@ -40,8 +40,12 @@
 - P5.2-C2: jsonl 50건 (v1.5 schema 비호환으로 변환 보류)
 - P5.2-C4: PiiMasker NAME/ADDRESS 제외 (regex false positive)
 - P5.2-C5: 실측 baseline 수치는 production DB 의존 — 인프라만 완성
+- P5.5-C1: HyperCLOVA `read-judge` timeout 3s + `judgeModel` 기본 HCX-005 (analysis 문서의 DASH-002는 단가 추정 차이만, 변경 가능 flag)
+- P5.5-C2: `OutputComplianceResult.judgeResult` nullable record 확장, 6-arg/5-arg 호환 생성자로 BC 유지
+- P5.5-C4: CohereClient에 `@Primary` 부여, HyperClovaChatClientAdapter는 `app.ai.chat.provider=shadow_compare`일 때만 bean 등록 (cohere mode에서는 ambiguous AiClient 회피)
+- P5.5-C3/C5: Grafana JSON 미생성 — PromQL 스니펫 + 결정 트리 문서로 대체 (실제 dashboard import는 별도 PR로 P5.1의 grafana-p5-observability.json에 패널 추가 권장)
 
-## 4. Commit 분해 요약 (22개)
+## 4. Commit 분해 요약 (27개)
 
 | Phase | Commit 수 | 작업 요약 |
 |---|---|---|
@@ -49,6 +53,7 @@
 | **P5.2 Evaluation** (Sprint 1B, ~3-4일) | 5 | Eval schema v1.6 / Validator + 50건 보강 / CitationCoverageEvaluator / PII masking judge / Baseline 측정 |
 | **P5.3 Cost+Routing** (Sprint 2, ~1주) | 5 | EmbeddingCache 뼈대 / CaffeineEmbeddingCache / Intent-aware shadow / GREETING enforce / Context budget shadow |
 | **P5.4 Quality Experiments** (Sprint 3, ~1주) | 6 | CohereRerankClient / RerankingService shadow / Sampled 30% / RRF path repos / RRF 분기 / 4-mode offline report |
+| **P5.5 Cohere×HyperCLOVA X 하이브리드** (2~3주) | 5 | AiJudgeClient + HyperCLOVA SDK / OutputComplianceShadowJudge judge 통합 / shadow 보고서 인프라 / Chat/Brief shadow + eval_chat.py / 최종 결정 보고서 |
 
 ## 5. PR Blocking Rules (전체 공통)
 

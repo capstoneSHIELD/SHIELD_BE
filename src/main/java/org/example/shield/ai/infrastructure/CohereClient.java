@@ -15,6 +15,7 @@ import org.example.shield.ai.provider.EmbeddingResult;
 import org.example.shield.consultation.exception.AnalysisFailedException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -34,6 +35,7 @@ import java.util.List;
  * - meta.billed_units.{input,output}_tokens: 사용자 청구 기준 토큰
  */
 @Component
+@Primary
 @Slf4j
 public class CohereClient implements AiClient {
 

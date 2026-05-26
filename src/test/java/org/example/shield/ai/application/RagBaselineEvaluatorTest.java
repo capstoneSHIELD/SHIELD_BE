@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class RagBaselineEvaluatorTest {
 
-    private final RagBaselineEvaluator evaluator = new RagBaselineEvaluator();
+    private final RagBaselineEvaluator evaluator = new RagBaselineEvaluator(new CitationCoverageEvaluator(), null);
 
     @Test
     @DisplayName("baseline evaluator calculates recall, MRR, nDCG, and latency percentiles")
@@ -121,6 +121,31 @@ class RagBaselineEvaluatorTest {
         assertThat(result.caseRecallAt5()).isEqualTo(1.0);
         assertThat(result.gradedNdcgQueryCount()).isEqualTo(2);
         assertThat(result.splitMetrics()).containsKeys("dev", "holdout");
+    }
+
+    @Test
+    @DisplayName("baseline evaluator includes reference mention coverage when answers are provided")
+    void evaluateReferenceMentionCoverage() {
+        RagEvalItem q1 = item("V22-Q001", "law-civil:\uC81C18\uC870");
+        RagEvalItem q2 = item("V22-Q002", "law-civil:\uC81C98\uC870");
+
+        RagBaselineEvaluationResult result = evaluator.evaluate(
+                List.of(q1, q2),
+                Map.of(
+                        "V22-Q001", List.of(law("law-civil", "\uC81C18\uC870", 0.9)),
+                        "V22-Q002", List.of(law("law-civil", "\uC81C98\uC870", 0.9))),
+                Map.of(),
+                "weighted",
+                Map.of(
+                        "V22-Q001", "\uBBFC\uBC95 \uC81C18\uC870\uC5D0 \uB530\uB77C \uAC80\uD1A0\uD569\uB2C8\uB2E4.",
+                        "V22-Q002", "No explicit reference in this answer."));
+
+        assertThat(result.expectedReferenceMentionQueryCount()).isEqualTo(2);
+        assertThat(result.expectedReferenceMentionRate()).isEqualTo(0.5);
+        assertThat(result.splitMetrics().get("dev").expectedReferenceMentionRate()).isEqualTo(0.5);
+        assertThat(new RagBaselineReportWriter(new ObjectMapper().findAndRegisterModules()).toMarkdown(result))
+                .contains("Expected Reference Mention Rate")
+                .contains("0.5000");
     }
 
     private RagEvalItem item(String id, String expectedChunkId) {

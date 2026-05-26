@@ -14,53 +14,58 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * HyperCLOVA X Chat Completions HTTP 클라이언트 — Judge 호출용 (Phase P5.5 Commit 1).
+ * HyperCLOVA X Chat Completions HTTP 클라이언트 — Chat/Brief 생성용 (Phase P5.5 Commit 4).
  *
- * <p>저수준 HTTP만 담당. provider-neutral 변환은
- * {@link org.example.shield.ai.provider.hyperclova.HyperClovaJudgeClientAdapter}.
+ * <p>{@link HyperClovaJudgeClient}와 구조는 동일하지만 chat용으로 timeout/temperature 기본값이 다름.
+ * judge는 짧고 결정적인 응답을, chat은 더 긴 자연어 응답이 필요해 별도 클라이언트로 분리.
  *
- * <p>설계 원칙:
- * <ul>
- *   <li>Timeout 짧게 (기본 3s) — judge 호출이 user-facing latency를 막지 않도록</li>
- *   <li>429/5xx 재시도 3회 (exponential backoff)</li>
- *   <li>API key 미설정 시 즉시 throw — 잘못된 sampling 활성을 조기 차단</li>
- * </ul>
+ * <p>본 클라이언트는 raw 응답만 반환. provider-neutral 변환은
+ * {@link org.example.shield.ai.provider.hyperclova.HyperClovaChatClientAdapter} 에서 수행.
+ *
+ * <p>본 phase에서 chat은 항상 shadow only이며 user-facing 경로에 영향을 주지 않음.
  */
 @Component
 @Slf4j
-public class HyperClovaJudgeClient {
+public class HyperClovaChatClient {
 
     private final WebClient hyperClovaWebClient;
     private final HyperClovaApiConfig config;
     private final AiRagOperationalMetrics operationalMetrics;
 
-    public HyperClovaJudgeClient(@Qualifier("hyperClovaWebClient") WebClient hyperClovaWebClient,
-                                 HyperClovaApiConfig config) {
+    public HyperClovaChatClient(@Qualifier("hyperClovaWebClient") WebClient hyperClovaWebClient,
+                                HyperClovaApiConfig config) {
         this(hyperClovaWebClient, config, null);
     }
 
     @Autowired
-    public HyperClovaJudgeClient(@Qualifier("hyperClovaWebClient") WebClient hyperClovaWebClient,
-                                 HyperClovaApiConfig config,
-                                 AiRagOperationalMetrics operationalMetrics) {
+    public HyperClovaChatClient(@Qualifier("hyperClovaWebClient") WebClient hyperClovaWebClient,
+                                HyperClovaApiConfig config,
+                                AiRagOperationalMetrics operationalMetrics) {
         this.hyperClovaWebClient = hyperClovaWebClient;
         this.config = config;
         this.operationalMetrics = operationalMetrics;
     }
 
     /**
-     * Chat Completions API 호출.
+     * Chat Completions API 호출 — chat/brief 생성용.
      *
-     * @param model    모델 ID (예: {@code "HCX-005"})
-     * @param messages system + user 메시지 (judge 프롬프트 포함)
+     * @param model     모델 ID (예: {@code "HCX-005"})
+     * @param messages  system + user 메시지
      * @param maxTokens 응답 토큰 상한
      * @return raw 응답 + latency (ms)
      */
-    public JudgeCallResult callJudge(String model, List<HyperClovaChatRequest.Message> messages, int maxTokens) {
+    public ChatCallResult callChat(String model, List<HyperClovaChatRequest.Message> messages, int maxTokens) {
         if (!config.isApiKeyConfigured()) {
             throw new AnalysisFailedException("HYPERCLOVA_API_KEY is not configured");
         }
-        HyperClovaChatRequest request = HyperClovaChatRequest.forJudge(messages, maxTokens);
+        HyperClovaChatRequest request = HyperClovaChatRequest.builder()
+                .messages(messages)
+                .topP(0.8)
+                .temperature(0.3)
+                .maxTokens(maxTokens)
+                .repetitionPenalty(1.1)
+                .includeAiFilters(false)
+                .build();
         long startNanos = System.nanoTime();
 
         try {
@@ -69,8 +74,8 @@ public class HyperClovaJudgeClient {
                     .bodyValue(request)
                     .retrieve()
                     .bodyToMono(HyperClovaChatResponse.class)
-                    .timeout(Duration.ofMillis(config.getJudgeReadTimeout()))
-                    .retryWhen(Retry.backoff(3, Duration.ofMillis(500))
+                    .timeout(Duration.ofMillis(config.getReadTimeout()))
+                    .retryWhen(Retry.backoff(2, Duration.ofMillis(750))
                             .filter(this::isRetryable))
                     .block();
 
@@ -80,23 +85,23 @@ public class HyperClovaJudgeClient {
                 String code = response == null || response.getStatus() == null
                         ? "null" : response.getStatus().getCode();
                 throw new AnalysisFailedException(
-                        "HyperCLOVA Judge API non-success response (code=" + code + ")");
+                        "HyperCLOVA Chat API non-success response (code=" + code + ")");
             }
-            log.info("HyperCLOVA Judge 호출 성공: model={}, inputLen={}, outputLen={}, latency={}ms",
+            log.debug("HyperCLOVA Chat 호출 성공: model={}, inputLen={}, outputLen={}, latency={}ms",
                     model,
                     response.getResult() == null ? null : response.getResult().getInputLength(),
                     response.getResult() == null ? null : response.getResult().getOutputLength(),
                     latencyMs);
 
-            return new JudgeCallResult(response, latencyMs);
+            return new ChatCallResult(response, latencyMs);
         } catch (AnalysisFailedException e) {
-            recordError("judge", e);
+            recordError("chat", e);
             throw e;
         } catch (Exception e) {
             long latencyMs = (System.nanoTime() - startNanos) / 1_000_000;
-            recordError("judge", e);
-            log.error("HyperCLOVA Judge 호출 실패: latency={}ms, error={}", latencyMs, e.getMessage(), e);
-            throw new AnalysisFailedException("HyperCLOVA Judge 호출 실패: " + e.getMessage(), e);
+            recordError("chat", e);
+            log.warn("HyperCLOVA Chat 호출 실패: latency={}ms, error={}", latencyMs, e.getMessage());
+            throw new AnalysisFailedException("HyperCLOVA Chat 호출 실패: " + e.getMessage(), e);
         }
     }
 
@@ -118,8 +123,5 @@ public class HyperClovaJudgeClient {
         operationalMetrics.recordAiApiError("hyperclova", operation, status);
     }
 
-    /**
-     * API 호출 결과 + latency 묶음.
-     */
-    public record JudgeCallResult(HyperClovaChatResponse response, long latencyMs) { }
+    public record ChatCallResult(HyperClovaChatResponse response, long latencyMs) { }
 }

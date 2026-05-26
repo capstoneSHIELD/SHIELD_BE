@@ -3,6 +3,7 @@ package org.example.shield.ai.infrastructure;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.consultation.exception.AnalysisFailedException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -39,6 +40,7 @@ public class CohereRerankClient {
         this(cohereWebClient, config, null);
     }
 
+    @Autowired
     public CohereRerankClient(@Qualifier("cohereWebClient") WebClient cohereWebClient,
                               CohereApiConfig config,
                               AiRagOperationalMetrics operationalMetrics) {

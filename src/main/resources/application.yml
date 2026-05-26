@@ -283,6 +283,18 @@ app:
       sampling-rate: ${AI_OUTPUT_JUDGE_SAMPLING_RATE:0.0}
       max-p95-latency-increase-ms: ${AI_OUTPUT_JUDGE_MAX_P95_LATENCY_INCREASE_MS:200}
       max-cost-ratio: ${AI_OUTPUT_JUDGE_MAX_COST_RATIO:0.10}
+      # P5.5 Commit 2 — LLM judge provider 선택. 'none' / 'hyperclova'.
+      # 'none'이면 OutputComplianceShadowJudge가 외부 judge 호출 안 함 (regex만).
+      # 현재는 단순 표시용 flag — Spring DI로 AiJudgeClient bean이 실제 결정.
+      judge-provider: ${AI_OUTPUT_JUDGE_PROVIDER:none}
+      # P5.5 Commit 3 — 일일 비용 한도 (USD). 누적치가 한도 초과하면 sampling 자동 중단.
+      # 본 plan은 메트릭만 노출하고 실제 자동 중단은 후속 phase에서 회로 차단기로 구현.
+      max-cost-per-day-usd: ${AI_OUTPUT_JUDGE_MAX_COST_PER_DAY_USD:5.0}
+    # P5.5 Commit 4 — Chat/Brief provider shadow 비교 설정 (offline 또는 sampled shadow).
+    # production chat은 항상 cohere — provider 전환은 별도 phase 결정.
+    chat:
+      provider: ${AI_CHAT_PROVIDER:cohere}                       # cohere | hyperclova | shadow_compare
+      shadow-compare-sampling: ${AI_CHAT_SHADOW_COMPARE_SAMPLING:0.0}  # 0.0 ~ 1.0, deterministic by conversationId
 
 ai:
   classify:
@@ -321,6 +333,16 @@ hyperclova:
     connect: ${HYPERCLOVA_TIMEOUT_CONNECT:5000}
     read: ${HYPERCLOVA_TIMEOUT_READ:30000}
     read-judge: ${HYPERCLOVA_TIMEOUT_READ_JUDGE:3000}
+  # P5.5 Commit 4 — HyperCLOVA X 단가표 (USD per 1M tokens).
+  # 출처: https://www.ncloud.com/product/aiService/clovaStudio (HCX 시리즈는 별도 협의 단가, 본 값은 추정/가이드).
+  # Cohere pricing과 동일한 외부화 패턴 — 단가 변경 시 본 섹션만 수정.
+  pricing:
+    HCX-005:
+      input-per-million: ${HYPERCLOVA_PRICE_HCX005_INPUT:5.00}
+      output-per-million: ${HYPERCLOVA_PRICE_HCX005_OUTPUT:10.00}
+    HCX-DASH-002:
+      input-per-million: ${HYPERCLOVA_PRICE_DASH002_INPUT:0.50}
+      output-per-million: ${HYPERCLOVA_PRICE_DASH002_OUTPUT:1.50}
 
 # RAG 검색 설정
 #

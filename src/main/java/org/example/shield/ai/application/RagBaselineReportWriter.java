@@ -40,6 +40,8 @@ public class RagBaselineReportWriter {
                 | MRR | %.4f |
                 | nDCG@5 | %.4f |
                 | Graded nDCG Query Count | %d |
+                | Expected Reference Mention Rate | %.4f |
+                | Expected Reference Mention Query Count | %d |
                 | Empty Rate | %.4f |
                 | Latency p50 ms | %.1f |
                 | Latency p95 ms | %.1f |
@@ -54,16 +56,18 @@ public class RagBaselineReportWriter {
                 result.mrr(),
                 result.ndcgAt5(),
                 result.gradedNdcgQueryCount(),
+                result.expectedReferenceMentionRate(),
+                result.expectedReferenceMentionQueryCount(),
                 result.emptyRate(),
                 result.latencyP50Ms(),
                 result.latencyP95Ms(),
                 result.falseDropCandidateCount()));
         if (result.splitMetrics() != null && !result.splitMetrics().isEmpty()) {
             sb.append("\n## Split Metrics\n\n");
-            sb.append("| Split | Queries | Statute Q | Case Q | Mixed R@5 | Statute R@5 | Case R@5 | MRR | nDCG@5 | Empty | p95 ms |\n");
-            sb.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n");
+            sb.append("| Split | Queries | Statute Q | Case Q | Mixed R@5 | Statute R@5 | Case R@5 | MRR | nDCG@5 | Ref Mention | Ref Q | Empty | p95 ms |\n");
+            sb.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n");
             result.splitMetrics().values().forEach(metric -> sb.append(
-                    "| %s | %d | %d | %d | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.1f |\n"
+                    "| %s | %d | %d | %d | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %d | %.4f | %.1f |\n"
                             .formatted(
                                     metric.split(),
                                     metric.queryCount(),
@@ -74,6 +78,8 @@ public class RagBaselineReportWriter {
                                     metric.caseRecallAt5(),
                                     metric.mrr(),
                                     metric.ndcgAt5(),
+                                    metric.expectedReferenceMentionRate(),
+                                    metric.expectedReferenceMentionQueryCount(),
                                     metric.emptyRate(),
                                     metric.latencyP95Ms())));
         }

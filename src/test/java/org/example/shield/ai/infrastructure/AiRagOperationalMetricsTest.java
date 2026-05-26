@@ -136,4 +136,20 @@ class AiRagOperationalMetricsTest {
 
         assertThat(registry.find(AiRagOperationalMetrics.COHERE_LATENCY).timers()).isEmpty();
     }
+
+    @Test
+    @DisplayName("recordReferenceMention records hit/miss counters")
+    void referenceMentionCounter() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        AiRagOperationalMetrics metrics = new AiRagOperationalMetrics(registry);
+
+        metrics.recordReferenceMention("expected", "hit", 2);
+        metrics.recordReferenceMention("expected", "miss");
+        metrics.recordReferenceMention("expected", "hit", 0);
+
+        assertThat(registry.counter(AiRagOperationalMetrics.REFERENCE_MENTION,
+                "kind", "expected", "outcome", "hit").count()).isEqualTo(2.0);
+        assertThat(registry.counter(AiRagOperationalMetrics.REFERENCE_MENTION,
+                "kind", "expected", "outcome", "miss").count()).isEqualTo(1.0);
+    }
 }
