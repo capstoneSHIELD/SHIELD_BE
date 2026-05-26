@@ -256,6 +256,28 @@ app:
         # enforce: 본 plan에서 미구현 (호출 시 UnsupportedOperationException)
         mode: ${AI_RAG_CONTEXT_BUDGET_MODE:off}
         tokens: ${AI_RAG_CONTEXT_BUDGET_TOKENS:2000}
+      rrf-offline:
+        # P5.4 Commit 5 — RRF (Reciprocal Rank Fusion) offline 비교.
+        # production은 항상 weighted SQL (AI_RAG_FUSION_MODE=weighted 고정).
+        # 본 flag는 OfflineRrfRetrievalService 직접 호출 가드 — true일 때만 호출 가능.
+        enabled: ${AI_RAG_RRF_OFFLINE_ENABLED:false}
+        candidate-n: ${AI_RAG_RRF_OFFLINE_CANDIDATE_N:40}
+      rerank:
+        # P5.4 Commit 2 — Cohere rerank-v3.5 후단 재정렬.
+        # off (기본): rerank 미적용, weighted topN 그대로
+        # shadow: rerank 호출하고 메트릭 기록, 결과는 weighted 순서 유지
+        # sampled: conversationId 기반 deterministic 비율 (sampling-rate) 적용 — Q6 적극적 0.30 권장
+        # enforce: 모든 요청에 적용
+        mode: ${AI_RAG_RERANK_MODE:off}
+        sampling-rate: ${AI_RAG_RERANK_SAMPLING_RATE:0.0}
+        candidate-n: ${AI_RAG_RERANK_CANDIDATE_N:20}
+        top-n: ${AI_RAG_RERANK_TOP_N:5}
+        # P5.4 Commit 3 — Auto-OFF 회로 차단기
+        # fallback rate > threshold (min-samples 충족 후) → logical OFF (수동 reset 필요)
+        circuit-breaker:
+          fallback-rate-threshold: ${AI_RAG_RERANK_CB_THRESHOLD:0.05}
+          min-samples: ${AI_RAG_RERANK_CB_MIN_SAMPLES:20}
+          window-minutes: ${AI_RAG_RERANK_CB_WINDOW_MINUTES:5}
     output-judge:
       shadow-enabled: ${AI_OUTPUT_JUDGE_SHADOW_ENABLED:false}
       sampling-rate: ${AI_OUTPUT_JUDGE_SAMPLING_RATE:0.0}
@@ -285,6 +307,20 @@ openai:
     model: ${OPENAI_CLASSIFY_MODEL:gpt-5-nano}
     max-tokens: ${OPENAI_CLASSIFY_MAX_TOKENS:1024}
     reasoning-effort: ${OPENAI_CLASSIFY_REASONING_EFFORT:minimal}
+
+# Phase P5.5 — HyperCLOVA X (Naver Clova Studio) 통합.
+# 현재 용도: Output compliance shadow judge (Cohere가 생성한 응답을 다른 벤더로 평가).
+# 향후: Chat/Brief 생성 shadow 비교 (P5.5 Commit 4).
+hyperclova:
+  api-key: ${HYPERCLOVA_API_KEY:}
+  base-url: ${HYPERCLOVA_BASE_URL:https://clovastudio.stream.ntruss.com}
+  model:
+    chat: ${HYPERCLOVA_CHAT_MODEL:HCX-005}
+    judge: ${HYPERCLOVA_JUDGE_MODEL:HCX-005}
+  timeout:
+    connect: ${HYPERCLOVA_TIMEOUT_CONNECT:5000}
+    read: ${HYPERCLOVA_TIMEOUT_READ:30000}
+    read-judge: ${HYPERCLOVA_TIMEOUT_READ_JUDGE:3000}
 
 # RAG 검색 설정
 #

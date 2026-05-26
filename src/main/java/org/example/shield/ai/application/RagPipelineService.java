@@ -12,11 +12,14 @@ import org.example.shield.ai.dto.RetrievalStrategyDecision;
 import org.example.shield.ai.dto.RetrievedDocument;
 import org.example.shield.ai.infrastructure.RagMetrics;
 import org.example.shield.consultation.domain.Message;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @Slf4j
@@ -29,8 +32,10 @@ public class RagPipelineService {
     private final RagMetrics ragMetrics;
     private final IntentAwareRetrievalPolicy intentAwareRetrievalPolicy;
     private final RetrievalScoreGate retrievalScoreGate;
+    private final RerankingService rerankingService;
     private final boolean includeCases;
 
+    /** Legacy 8-arg constructor — RerankingService 미주입 (BC). */
     public RagPipelineService(IntentClassificationService intentClassificationService,
                               CategoryLawMappingService categoryLawMappingService,
                               LegalRetrievalService legalRetrievalService,
@@ -39,6 +44,21 @@ public class RagPipelineService {
                               IntentAwareRetrievalPolicy intentAwareRetrievalPolicy,
                               RetrievalScoreGate retrievalScoreGate,
                               @Value("${rag.retrieval.include-cases:false}") boolean includeCases) {
+        this(intentClassificationService, categoryLawMappingService, legalRetrievalService,
+                ragContextBuilder, ragMetrics, intentAwareRetrievalPolicy, retrievalScoreGate,
+                null, includeCases);
+    }
+
+    @Autowired
+    public RagPipelineService(IntentClassificationService intentClassificationService,
+                              CategoryLawMappingService categoryLawMappingService,
+                              LegalRetrievalService legalRetrievalService,
+                              RagContextBuilder ragContextBuilder,
+                              RagMetrics ragMetrics,
+                              IntentAwareRetrievalPolicy intentAwareRetrievalPolicy,
+                              RetrievalScoreGate retrievalScoreGate,
+                              @Nullable RerankingService rerankingService,
+                              @Value("${rag.retrieval.include-cases:false}") boolean includeCases) {
         this.intentClassificationService = intentClassificationService;
         this.categoryLawMappingService = categoryLawMappingService;
         this.legalRetrievalService = legalRetrievalService;
@@ -46,8 +66,10 @@ public class RagPipelineService {
         this.ragMetrics = ragMetrics;
         this.intentAwareRetrievalPolicy = intentAwareRetrievalPolicy;
         this.retrievalScoreGate = retrievalScoreGate;
+        this.rerankingService = rerankingService;
         this.includeCases = includeCases;
-        log.info("RagPipelineService initialized: include-cases={}", includeCases);
+        log.info("RagPipelineService initialized: include-cases={}, rerank-enabled={}",
+                includeCases, rerankingService != null);
     }
 
     /**
@@ -98,6 +120,7 @@ public class RagPipelineService {
             String ragContext;
             List<RetrievedDocument> retrievalResults;
             int hits;
+            String conversationKey = consultationId == null ? null : consultationId.toString();
             if (includeCases) {
                 MixedRetrievalResult rawMixed = legalRetrievalService.retrieveMixed(
                         vectorQuery,
@@ -111,8 +134,11 @@ public class RagPipelineService {
                         rawMixed.cases(), RetrievalScoreMethod.WEIGHTED);
                 List<RetrievedDocument> filteredMerged = retrievalScoreGate.filter(
                         rawMixed.merged(), RetrievalScoreMethod.WEIGHTED);
-                MixedRetrievalResult mixed = new MixedRetrievalResult(
-                        filteredLaws, filteredCases, filteredMerged);
+                // P5.4 Commit 2: rerank 적용 (mode=off 기본 → no-op).
+                List<RetrievedDocument> rerankedMerged = applyRerank(
+                        vectorQuery, filteredMerged, topK, conversationKey);
+                MixedRetrievalResult mixed = rebuildMixedAfterRerank(
+                        rerankedMerged, filteredLaws, filteredCases);
                 ragContext = ragContextBuilder.build(mixed, classification.intentSummary());
                 retrievalResults = mixed.merged();
                 hits = mixed.size();
@@ -129,9 +155,11 @@ public class RagPipelineService {
                         topK);
                 List<LegalChunk> chunks = retrievalScoreGate.filter(
                         rawChunks, RetrievalScoreMethod.WEIGHTED);
-                ragContext = ragContextBuilder.build(chunks, classification.intentSummary());
-                retrievalResults = new ArrayList<>(chunks);
-                hits = chunks.size();
+                // P5.4 Commit 2: rerank 적용.
+                List<LegalChunk> reranked = applyRerank(vectorQuery, chunks, topK, conversationKey);
+                ragContext = ragContextBuilder.build(reranked, classification.intentSummary());
+                retrievalResults = new ArrayList<>(reranked);
+                hits = reranked.size();
                 if (!ragContext.isEmpty()) {
                     log.info("RAG context built: consultationId={}, chunks={}", consultationId, hits);
                 }
@@ -152,6 +180,67 @@ public class RagPipelineService {
                     ? IntentRouterResponse.fallback(domain)
                     : intent);
         }
+    }
+
+    /**
+     * P5.4 Commit 2 — RerankingService가 있으면 후보를 재정렬, 없으면 원본 그대로.
+     * mode=off (기본)일 때는 RerankingService 내부에서 weighted top만 반환.
+     */
+    private <T extends RetrievedDocument> List<T> applyRerank(
+            String query, List<T> candidates, int topK, String conversationId) {
+        if (rerankingService == null || candidates == null || candidates.isEmpty()) {
+            return candidates == null ? List.of() : candidates;
+        }
+        try {
+            return rerankingService.rerank(query, candidates, topK, conversationId);
+        } catch (Exception e) {
+            // RerankingService 내부에서 fallback 처리하지만 안전망.
+            log.warn("RerankingService threw unexpected exception, returning candidates as-is: {}",
+                    e.getMessage());
+            return candidates;
+        }
+    }
+
+    /**
+     * Reranked merged 순서를 기준으로 MixedRetrievalResult 재구성.
+     * laws/cases 리스트는 reranked merged에서 type별 필터링.
+     */
+    private MixedRetrievalResult rebuildMixedAfterRerank(
+            List<RetrievedDocument> rerankedMerged,
+            List<LegalChunk> originalLaws,
+            List<org.example.shield.ai.dto.Precedent> originalCases) {
+        if (rerankedMerged == null || rerankedMerged.isEmpty()) {
+            return new MixedRetrievalResult(
+                    originalLaws == null ? List.of() : originalLaws,
+                    originalCases == null ? List.of() : originalCases,
+                    List.of());
+        }
+        // reranked merged 순서대로 laws/cases 다시 분리
+        List<LegalChunk> reorderedLaws = new ArrayList<>();
+        List<org.example.shield.ai.dto.Precedent> reorderedCases = new ArrayList<>();
+        for (RetrievedDocument doc : rerankedMerged) {
+            if (doc instanceof LegalChunk law) {
+                reorderedLaws.add(law);
+            } else if (doc instanceof org.example.shield.ai.dto.Precedent pre) {
+                reorderedCases.add(pre);
+            }
+        }
+        // merged에 누락된 항목 (rerank가 일부만 반환한 경우) 은 원본 순서 유지
+        if (Objects.nonNull(originalLaws)) {
+            for (LegalChunk law : originalLaws) {
+                if (!reorderedLaws.contains(law)) {
+                    reorderedLaws.add(law);
+                }
+            }
+        }
+        if (Objects.nonNull(originalCases)) {
+            for (org.example.shield.ai.dto.Precedent pre : originalCases) {
+                if (!reorderedCases.contains(pre)) {
+                    reorderedCases.add(pre);
+                }
+            }
+        }
+        return new MixedRetrievalResult(reorderedLaws, reorderedCases, rerankedMerged);
     }
 
     private String fallbackQuery(String domain) {

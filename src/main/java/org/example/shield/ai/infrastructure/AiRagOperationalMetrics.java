@@ -35,6 +35,15 @@ public class AiRagOperationalMetrics {
     // P5.3 Commit 5 — RAG context budget shadow 측정
     public static final String CONTEXT_BUDGET = "shield.ai.rag.context.budget";
 
+    // P5.4 Commit 2 — Rerank 결과 (latency / fallback / outcome)
+    public static final String RERANK_LATENCY = "shield.ai.rerank.latency";
+    public static final String RERANK_FALLBACK = "shield.ai.rerank.fallback";
+    public static final String RERANK_OUTCOME = "shield.ai.rerank.outcome";
+
+    // P5.5 Commit 2 — LLM Judge outcome
+    public static final String JUDGE_OUTCOME = "shield.ai.judge.outcome";
+    public static final String JUDGE_LATENCY = "shield.ai.judge.latency";
+
     private final MeterRegistry registry;
 
     public AiRagOperationalMetrics(MeterRegistry registry) {
@@ -154,6 +163,73 @@ public class AiRagOperationalMetrics {
                 "model", value(model),
                 "outcome", value(outcome))
                 .increment();
+    }
+
+    /**
+     * P5.4 Commit 2 — Rerank 호출 outcome 기록.
+     *
+     * @param mode    {@code "off" | "shadow" | "sampled" | "enforce"}
+     * @param outcome {@code "skipped" | "shadow_executed" | "applied" | "fallback"}
+     */
+    public void recordRerankOutcome(String mode, String outcome) {
+        counter(RERANK_OUTCOME,
+                "mode", value(mode),
+                "outcome", value(outcome))
+                .increment();
+    }
+
+    /**
+     * P5.4 Commit 2 — Rerank 호출 latency 기록.
+     *
+     * @param model    rerank 모델 ID
+     * @param duration 호출 지연
+     * @param status   {@code "success" | "failure" | "timeout"}
+     */
+    public void recordRerankLatency(String model, Duration duration, String status) {
+        if (duration == null || duration.isNegative()) {
+            return;
+        }
+        registry.timer(RERANK_LATENCY,
+                "model", value(model),
+                "status", value(status))
+                .record(duration);
+    }
+
+    /**
+     * P5.5 Commit 2 — LLM judge outcome 기록.
+     *
+     * @param provider          {@code "hyperclova"} 등
+     * @param verdict           {@code "PASS" | "SOFT_VIOLATION" | "HARD_VIOLATION" | "fallback" | "skipped"}
+     * @param confidenceBucket  {@code "low" (<0.5) | "medium" (<0.85) | "high"}
+     */
+    public void recordJudgeOutcome(String provider, String verdict, String confidenceBucket) {
+        counter(JUDGE_OUTCOME,
+                "provider", value(provider),
+                "verdict", value(verdict),
+                "confidence", value(confidenceBucket))
+                .increment();
+    }
+
+    /**
+     * P5.5 Commit 2 — LLM judge 호출 latency 기록.
+     */
+    public void recordJudgeLatency(String provider, Duration duration, String status) {
+        if (duration == null || duration.isNegative()) {
+            return;
+        }
+        registry.timer(JUDGE_LATENCY,
+                "provider", value(provider),
+                "status", value(status))
+                .record(duration);
+    }
+
+    /**
+     * P5.4 Commit 2 — Rerank fallback 발생 카운트.
+     *
+     * @param reason {@code "timeout" | "api_error" | "invalid_response" | "circuit_breaker"}
+     */
+    public void recordRerankFallback(String reason) {
+        counter(RERANK_FALLBACK, "reason", value(reason)).increment();
     }
 
     /**

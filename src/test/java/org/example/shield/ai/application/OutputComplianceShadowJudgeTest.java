@@ -112,4 +112,103 @@ class OutputComplianceShadowJudgeTest {
 
         assertThat(result.hashedConversationId()).isNull();
     }
+
+    // === P5.5 Commit 2 — LLM judge 호출 통합 ===
+
+    @org.junit.jupiter.api.Nested
+    @DisplayName("P5.5 — LLM judge 호출")
+    class JudgeInvocation {
+
+        @Test
+        @DisplayName("sampled + judgeClient 주입됨 → judge 호출 + 결과를 result.judgeResult에 포함")
+        void sampledInvokesJudge() {
+            org.example.shield.ai.provider.AiJudgeClient mockJudge =
+                    org.mockito.Mockito.mock(org.example.shield.ai.provider.AiJudgeClient.class);
+            org.mockito.Mockito.when(mockJudge.providerKey()).thenReturn("hyperclova");
+            org.example.shield.ai.provider.JudgeResult judgeOut = new org.example.shield.ai.provider.JudgeResult(
+                    org.example.shield.ai.provider.JudgeResult.Verdict.PASS,
+                    0.92, "법령 안내만 포함", java.util.List.of(), 100, 30, 250L);
+            org.mockito.Mockito.when(mockJudge.judge(org.mockito.ArgumentMatchers.anyString(),
+                            org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(judgeOut);
+
+            OutputComplianceShadowJudge svc = new OutputComplianceShadowJudge(
+                    new GuardrailFilter(), new RagMetrics(registry),
+                    new org.example.shield.ai.infrastructure.PiiMasker(),
+                    mockJudge,
+                    new org.example.shield.ai.infrastructure.AiRagOperationalMetrics(registry));
+            ReflectionTestUtils.setField(svc, "shadowEnabled", true);
+            ReflectionTestUtils.setField(svc, "samplingRate", 1.0);
+            ReflectionTestUtils.setField(svc, "maxP95LatencyIncreaseMs", 200);
+            ReflectionTestUtils.setField(svc, "maxCostRatio", 0.10);
+
+            OutputComplianceResult result = svc.evaluate("법령 안내 응답", "conv-1");
+
+            assertThat(result.shadowScheduled()).isTrue();
+            assertThat(result.judgeResult()).isNotNull();
+            assertThat(result.judgeResult().verdict()).isEqualTo(
+                    org.example.shield.ai.provider.JudgeResult.Verdict.PASS);
+            assertThat(result.blockingApplied()).isFalse();  // shadow only
+        }
+
+        @Test
+        @DisplayName("judge 호출 실패 → fail-open (judgeResult=null, request 정상 진행)")
+        void judgeFailureFailsOpen() {
+            org.example.shield.ai.provider.AiJudgeClient mockJudge =
+                    org.mockito.Mockito.mock(org.example.shield.ai.provider.AiJudgeClient.class);
+            org.mockito.Mockito.when(mockJudge.providerKey()).thenReturn("hyperclova");
+            org.mockito.Mockito.when(mockJudge.judge(org.mockito.ArgumentMatchers.anyString(),
+                            org.mockito.ArgumentMatchers.any()))
+                    .thenThrow(new RuntimeException("HyperCLOVA timeout"));
+
+            OutputComplianceShadowJudge svc = new OutputComplianceShadowJudge(
+                    new GuardrailFilter(), new RagMetrics(registry),
+                    new org.example.shield.ai.infrastructure.PiiMasker(),
+                    mockJudge,
+                    new org.example.shield.ai.infrastructure.AiRagOperationalMetrics(registry));
+            ReflectionTestUtils.setField(svc, "shadowEnabled", true);
+            ReflectionTestUtils.setField(svc, "samplingRate", 1.0);
+            ReflectionTestUtils.setField(svc, "maxP95LatencyIncreaseMs", 200);
+            ReflectionTestUtils.setField(svc, "maxCostRatio", 0.10);
+
+            OutputComplianceResult result = svc.evaluate("응답", "conv-1");
+
+            // shadowScheduled은 그대로 true, judgeResult만 null
+            assertThat(result.shadowScheduled()).isTrue();
+            assertThat(result.judgeResult()).isNull();
+            assertThat(result.blockingApplied()).isFalse();
+            // judge_failure 메트릭 발행은 별도 SimpleMeterRegistry로 확인 가능 (생략)
+        }
+
+        @Test
+        @DisplayName("judgeClient 미주입 → shadow는 동작하지만 judgeResult=null")
+        void noJudgeClientStillSamples() {
+            // 기본 setUp 의 judge에는 judgeClient 없음
+            ReflectionTestUtils.setField(judge, "samplingRate", 1.0);
+
+            OutputComplianceResult result = judge.evaluate("응답", "conv-1");
+
+            assertThat(result.shadowScheduled()).isTrue();
+            assertThat(result.judgeResult()).isNull();
+        }
+
+        @Test
+        @DisplayName("not sampled → judge 호출 안 함")
+        void notSampledSkipsJudge() {
+            org.example.shield.ai.provider.AiJudgeClient mockJudge =
+                    org.mockito.Mockito.mock(org.example.shield.ai.provider.AiJudgeClient.class);
+            OutputComplianceShadowJudge svc = new OutputComplianceShadowJudge(
+                    new GuardrailFilter(), new RagMetrics(registry),
+                    new org.example.shield.ai.infrastructure.PiiMasker(),
+                    mockJudge, null);
+            ReflectionTestUtils.setField(svc, "shadowEnabled", false);  // 비활성
+            ReflectionTestUtils.setField(svc, "samplingRate", 1.0);
+
+            OutputComplianceResult result = svc.evaluate("응답", "conv-1");
+
+            assertThat(result.shadowScheduled()).isFalse();
+            assertThat(result.judgeResult()).isNull();
+            org.mockito.Mockito.verifyNoInteractions(mockJudge);
+        }
+    }
 }

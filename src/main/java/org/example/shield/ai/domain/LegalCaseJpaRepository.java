@@ -204,6 +204,84 @@ public interface LegalCaseJpaRepository extends JpaRepository<LegalCaseEntity, L
                                               @Param("trigramWeight") double trigramWeight,
                                               @Param("topK") int topK);
 
+    // === P5.4 Commit 4 — Path-specific 판례 검색 (RRF offline 비교용) ===
+
+    /**
+     * 판례 벡터 경로 단독 ranked list.
+     */
+    @Query(value = """
+            SELECT lc.id              AS id,
+                   lc.case_no         AS caseNo,
+                   lc.court           AS court,
+                   lc.case_name       AS caseName,
+                   to_char(lc.decision_date, 'YYYY-MM-DD') AS decisionDate,
+                   lc.case_type       AS caseType,
+                   lc.headnote        AS headnote,
+                   lc.holding         AS holding,
+                   lc.source_url      AS sourceUrl,
+                   (1 - (lc.embedding <=> CAST(:queryVector AS vector))) AS score
+              FROM legal_cases lc
+             WHERE lc.embedding IS NOT NULL
+               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
+             ORDER BY lc.embedding <=> CAST(:queryVector AS vector)
+             LIMIT :topK
+            """, nativeQuery = true)
+    List<LegalCaseRow> searchCasesVectorOnly(@Param("queryVector") String queryVector,
+                                             @Param("categoryIds") String[] categoryIds,
+                                             @Param("topK") int topK);
+
+    /**
+     * 판례 BM25 경로 단독 ranked list.
+     */
+    @Query(value = """
+            SELECT lc.id              AS id,
+                   lc.case_no         AS caseNo,
+                   lc.court           AS court,
+                   lc.case_name       AS caseName,
+                   to_char(lc.decision_date, 'YYYY-MM-DD') AS decisionDate,
+                   lc.case_type       AS caseType,
+                   lc.headnote        AS headnote,
+                   lc.holding         AS holding,
+                   lc.source_url      AS sourceUrl,
+                   ts_rank(lc.content_tsv, to_tsquery('simple', :keywordQuery), 1) AS score
+              FROM legal_cases lc
+             WHERE lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
+               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
+             ORDER BY score DESC
+             LIMIT :topK
+            """, nativeQuery = true)
+    List<LegalCaseRow> searchCasesBm25Only(@Param("keywordQuery") String keywordQuery,
+                                           @Param("categoryIds") String[] categoryIds,
+                                           @Param("topK") int topK);
+
+    /**
+     * 판례 trigram 경로 단독 ranked list. {@code holding} 컬럼 기준 (법령은 content).
+     */
+    @Query(value = """
+            SELECT lc.id              AS id,
+                   lc.case_no         AS caseNo,
+                   lc.court           AS court,
+                   lc.case_name       AS caseName,
+                   to_char(lc.decision_date, 'YYYY-MM-DD') AS decisionDate,
+                   lc.case_type       AS caseType,
+                   lc.headnote        AS headnote,
+                   lc.holding         AS holding,
+                   lc.source_url      AS sourceUrl,
+                   similarity(lc.holding, CAST(:vectorQuery AS text)) AS score
+              FROM legal_cases lc
+             WHERE lc.holding IS NOT NULL
+               AND lc.holding % CAST(:vectorQuery AS text)
+               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
+             ORDER BY score DESC
+             LIMIT :topK
+            """, nativeQuery = true)
+    List<LegalCaseRow> searchCasesTrigramOnly(@Param("vectorQuery") String vectorQuery,
+                                              @Param("categoryIds") String[] categoryIds,
+                                              @Param("topK") int topK);
+
     /**
      * Spring Data JPA 네이티브 쿼리용 projection 인터페이스.
      * 서비스 레이어에서 Precedent record 로 변환해 반환한다.
