@@ -9,6 +9,9 @@ import org.example.shield.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.Arrays;
@@ -66,14 +69,17 @@ public class GoogleOAuthClient implements OAuthClient {
 
     private String exchangeCodeForToken(String authorizationCode, String redirectUri) {
         try {
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+            form.add("grant_type", "authorization_code");
+            form.add("client_id", clientId);
+            form.add("client_secret", clientSecret);
+            form.add("redirect_uri", redirectUri);
+            form.add("code", authorizationCode);
+
             GoogleTokenResponse response = webClient.post()
                     .uri("https://oauth2.googleapis.com/token")
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .bodyValue("code=" + authorizationCode
-                            + "&client_id=" + clientId
-                            + "&client_secret=" + clientSecret
-                            + "&redirect_uri=" + redirectUri
-                            + "&grant_type=authorization_code")
+                    .body(BodyInserters.fromFormData(form))
                     .retrieve()
                     .bodyToMono(GoogleTokenResponse.class)
                     .block();
