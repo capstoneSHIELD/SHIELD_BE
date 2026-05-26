@@ -120,7 +120,8 @@ public class RagEvalSetValidator {
         if (isBlank(item.reviewer())) {
             warnings.add(label + " reviewer is blank");
         }
-        if (!hasExpectedDocument(item)) {
+        if (!hasExpectedDocument(item) && !item.lowEvidence()) {
+            // P5.2 Commit 2: low-evidence 항목은 expected 문서 부재가 의도된 상태이므로 허용.
             failures.add(label + " has no expected document reference");
         }
         for (RagEvalLawRef ref : item.expectedLawRefs()) {

@@ -8,16 +8,16 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.CaseTypeResult;
-import org.example.shield.ai.dto.CohereChatRequest;
 import org.example.shield.ai.dto.DialogueIntent;
 import org.example.shield.ai.dto.ExtractedSlot;
 import org.example.shield.ai.dto.IntentClassificationResult;
 import org.example.shield.ai.dto.IntentClassificationResult.Keywords;
 import org.example.shield.ai.dto.IntentClassificationResult.MatchedNode;
 import org.example.shield.ai.dto.IntentRouterResponse;
-import org.example.shield.ai.infrastructure.OpenAiClassifyClient;
 import org.example.shield.ai.infrastructure.AiRagOperationalMetrics;
 import org.example.shield.ai.infrastructure.RagMetrics;
+import org.example.shield.ai.provider.AiClassificationClient;
+import org.example.shield.ai.provider.ChatMessage;
 import org.example.shield.consultation.domain.Message;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,6 +29,7 @@ import org.springframework.util.StreamUtils;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,13 +38,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class IntentClassificationService {
 
-    private final CohereService cohereService;
     private final ObjectMapper objectMapper;
     private final String slimOntologyJson;
     private final ResourceLoader resourceLoader;
     private final int contextWindowMessages;
     private final RagMetrics ragMetrics;
-    private final OpenAiClassifyClient openAiClassifyClient;
+    private final Map<String, AiClassificationClient> classificationClientsByProvider;
     private final String classifyProvider;
     private final AiRagOperationalMetrics operationalMetrics;
 
@@ -54,38 +54,56 @@ public class IntentClassificationService {
 
     /**
      * Test-friendly constructor for parser/prompt unit tests.
+     *
+     * <p>P5.1 Commit 2: 첫 번째 파라미터가 {@code CohereService}에서
+     * {@code List<AiClassificationClient>}로 변경됨. parse-only 테스트는 {@code List.of()} 전달.
      */
     public IntentClassificationService(
-            CohereService cohereService,
+            List<AiClassificationClient> classificationClients,
             ObjectMapper objectMapper,
             @Qualifier("slimOntologyJson") String slimOntologyJson,
             ResourceLoader resourceLoader,
             @Value("${cohere.classify.context-window-messages:4}") int contextWindowMessages,
             RagMetrics ragMetrics) {
-        this(cohereService, objectMapper, slimOntologyJson, resourceLoader,
-                contextWindowMessages, ragMetrics, null, "cohere", null);
+        this(classificationClients, objectMapper, slimOntologyJson, resourceLoader,
+                contextWindowMessages, ragMetrics, "cohere", null);
     }
 
     @Autowired
     public IntentClassificationService(
-            CohereService cohereService,
+            List<AiClassificationClient> classificationClients,
             ObjectMapper objectMapper,
             @Qualifier("slimOntologyJson") String slimOntologyJson,
             ResourceLoader resourceLoader,
             @Value("${cohere.classify.context-window-messages:4}") int contextWindowMessages,
             RagMetrics ragMetrics,
-            OpenAiClassifyClient openAiClassifyClient,
             @Value("${ai.classify.provider:cohere}") String classifyProvider,
             AiRagOperationalMetrics operationalMetrics) {
-        this.cohereService = cohereService;
         this.objectMapper = objectMapper;
         this.slimOntologyJson = slimOntologyJson;
         this.resourceLoader = resourceLoader;
         this.contextWindowMessages = contextWindowMessages;
         this.ragMetrics = ragMetrics;
-        this.openAiClassifyClient = openAiClassifyClient;
+        this.classificationClientsByProvider = indexByProvider(classificationClients);
         this.classifyProvider = classifyProvider == null ? "cohere" : classifyProvider.trim().toLowerCase();
         this.operationalMetrics = operationalMetrics;
+    }
+
+    private static Map<String, AiClassificationClient> indexByProvider(List<AiClassificationClient> clients) {
+        if (clients == null || clients.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, AiClassificationClient> map = new HashMap<>();
+        for (AiClassificationClient client : clients) {
+            String key = client.providerKey();
+            AiClassificationClient previous = map.put(key, client);
+            if (previous != null) {
+                // 같은 provider key를 두 adapter가 주장하면 의도치 않은 라우팅 위험.
+                log.warn("Duplicate AiClassificationClient providerKey='{}' — '{}' replaced '{}'",
+                        key, client.getClass().getSimpleName(), previous.getClass().getSimpleName());
+            }
+        }
+        return Map.copyOf(map);
     }
 
     @PostConstruct
@@ -110,9 +128,9 @@ public class IntentClassificationService {
             String conversationHistory = buildConversationHistory(recentMessages);
             String systemPrompt = buildSystemPrompt(domain);
 
-            List<CohereChatRequest.Message> messages = List.of(
-                    CohereChatRequest.Message.system(systemPrompt),
-                    CohereChatRequest.Message.user(buildConversationPrompt(conversationHistory))
+            List<ChatMessage> messages = List.of(
+                    ChatMessage.system(systemPrompt),
+                    ChatMessage.user(buildConversationPrompt(conversationHistory))
             );
 
             AiCallResult<String> result = ragMetrics.timeClassify(
@@ -126,14 +144,18 @@ public class IntentClassificationService {
         }
     }
 
-    private AiCallResult<String> callConfiguredClassifier(List<CohereChatRequest.Message> messages) {
-        if ("openai".equals(classifyProvider)) {
-            if (openAiClassifyClient == null) {
-                throw new RuntimeException("OpenAI classify provider is selected but client is not configured");
+    private AiCallResult<String> callConfiguredClassifier(List<ChatMessage> messages) {
+        AiClassificationClient client = classificationClientsByProvider.get(classifyProvider);
+        if (client == null) {
+            // Fallback to Cohere if requested provider unavailable (e.g. OpenAI key missing).
+            client = classificationClientsByProvider.get("cohere");
+            if (client == null) {
+                throw new RuntimeException("No AiClassificationClient available (requested provider: "
+                        + classifyProvider + ")");
             }
-            return openAiClassifyClient.callRawJson(messages);
+            log.warn("Requested classify provider '{}' not registered, falling back to cohere", classifyProvider);
         }
-        return cohereService.callClassify(messages);
+        return client.classify(messages);
     }
 
     String buildSystemPrompt() {

@@ -20,9 +20,16 @@ class IntentAwareRetrieverTest {
     @BeforeEach
     void setUp() {
         policy = new IntentAwareRetrievalPolicy();
-        ReflectionTestUtils.setField(policy, "enabled", true);
+        // P5.3 Commit 3: 'enabled' → 'legacyEnabled' 이름 변경 (BC 위해 동작은 동일).
+        // legacyEnabled=true는 ENFORCE 모드로 마이그레이션됨.
+        ReflectionTestUtils.setField(policy, "legacyEnabled", true);
+        ReflectionTestUtils.setField(policy, "modeRaw", "off");  // legacy가 우선
         ReflectionTestUtils.setField(policy, "highConfidenceThreshold", 0.85);
         ReflectionTestUtils.setField(policy, "mediumConfidenceThreshold", 0.65);
+        // P5.3 Commit 4: GREETING skip enable (이 테스트는 GREETING/IRRELEVANT/ASK_LEGAL_ADVICE skip
+        // 동작을 검증함 — 기존 의도 유지를 위해 enable 시킴)
+        ReflectionTestUtils.setField(policy, "enableGreetingSkip", true);
+        ReflectionTestUtils.setField(policy, "greetingMinConfidence", 0.85);  // 일반 high threshold 동일
     }
 
     @Test
@@ -47,12 +54,14 @@ class IntentAwareRetrieverTest {
     }
 
     @Test
-    @DisplayName("high confidence legal advice skips RAG")
-    void decide_highConfidenceLegalAdviceSkips() {
+    @DisplayName("[P5.3 C4 안전 정책] ASK_LEGAL_ADVICE는 high confidence에도 절대 RAG skip 안 됨")
+    void decide_askLegalAdviceNeverSkipsRag() {
+        // P5.3 Commit 4: 법률 조언 요청은 항상 법령/판례 근거 필요.
+        // 이전 동작(high confidence skip)은 안전성 위반으로 금지됨.
         RetrievalStrategyDecision decision = policy.decide(response(DialogueIntent.ASK_LEGAL_ADVICE, 0.91), 3);
 
-        assertThat(decision.skipRag()).isTrue();
-        assertThat(decision.applyIntentStrategy()).isTrue();
+        assertThat(decision.skipRag()).isFalse();
+        assertThat(decision.reason()).isEqualTo("ask_legal_advice_force_rag");
     }
 
     @Test

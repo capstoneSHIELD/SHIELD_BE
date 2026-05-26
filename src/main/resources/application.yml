@@ -176,6 +176,22 @@ cohere:
     temperature: 0.1
     max-tokens: ${COHERE_CLASSIFY_MAX_TOKENS:384}
     context-window-messages: ${COHERE_CLASSIFY_CONTEXT_WINDOW_MESSAGES:4}
+  # P5.1 Commit 4 — Cohere 단가표 (USD per 1M tokens).
+  # 출처: https://cohere.com/pricing (Phase P5.1 작성 시점 기준).
+  # 단가가 바뀌면 본 섹션만 수정하면 됨 (코드 재배포 없이 환경변수로 override 가능).
+  pricing:
+    command-a-03-2025:
+      input-per-million: ${COHERE_PRICE_COMMAND_A_INPUT:2.50}
+      output-per-million: ${COHERE_PRICE_COMMAND_A_OUTPUT:10.00}
+    command-r7b-12-2024:
+      input-per-million: ${COHERE_PRICE_COMMAND_R7B_INPUT:0.0375}
+      output-per-million: ${COHERE_PRICE_COMMAND_R7B_OUTPUT:0.15}
+    embed-v4.0:
+      input-per-million: ${COHERE_PRICE_EMBED_V4_INPUT:0.10}
+      output-per-million: 0.0
+    rerank-v3.5:
+      input-per-million: ${COHERE_PRICE_RERANK_V35_INPUT:2.00}
+      output-per-million: 0.0
 
 # LLM provider selection for lightweight intent classification.
 # - cohere: existing Cohere /v2/chat classifier path
@@ -201,6 +217,8 @@ app:
         include-raw-text: ${AI_INTENT_ROUTER_SHADOW_EXPORT_INCLUDE_RAW_TEXT:false}
       enable-ask-legal-advice-skip: ${AI_INTENT_ROUTER_ENABLE_ASK_LEGAL_ADVICE_SKIP:false}
       enable-greeting-skip: ${AI_INTENT_ROUTER_ENABLE_GREETING_SKIP:false}
+      # P5.3 Commit 4 — GREETING skip에 더 엄격한 confidence threshold (기본 high보다 높게).
+      greeting-min-confidence: ${AI_INTENT_ROUTER_GREETING_MIN_CONFIDENCE:0.90}
       enable-irrelevant-skip: ${AI_INTENT_ROUTER_ENABLE_IRRELEVANT_SKIP:false}
       enable-confirm: ${AI_INTENT_ROUTER_ENABLE_CONFIRM:false}
       enable-slot-auto-update: ${AI_INTENT_ROUTER_ENABLE_SLOT_AUTO_UPDATE:false}
@@ -219,21 +237,77 @@ app:
       fusion-mode: ${AI_RAG_FUSION_MODE:weighted}
       rrf-k: ${AI_RAG_RRF_K:60}
       retrieval-gate:
+        # P5.1 Commit 5 — mode 기반 분기 (off|shadow|enforce).
+        # legacy 'enabled' flag는 BC를 위해 유지: true면 ENFORCE로 마이그레이션됨.
+        mode: ${AI_RAG_RETRIEVAL_GATE_MODE:off}
         enabled: ${AI_RAG_RETRIEVAL_GATE_ENABLED:false}
         weighted-threshold: ${AI_RAG_RETRIEVAL_GATE_WEIGHTED_THRESHOLD:}
         rrf-threshold: ${AI_RAG_RETRIEVAL_GATE_RRF_THRESHOLD:}
         rerank-threshold: ${AI_RAG_RETRIEVAL_GATE_RERANK_THRESHOLD:}
       intent-aware:
+        # P5.3 Commit 3 — mode 분기 (off|shadow|enforce).
+        # legacy 'enabled' flag는 BC를 위해 유지: true면 ENFORCE로 마이그레이션됨.
+        mode: ${AI_RAG_INTENT_AWARE_MODE:off}
         enabled: ${AI_RAG_INTENT_AWARE_ENABLED:false}
+      context-budget:
+        # P5.3 Commit 5 — RAG context token budget shadow.
+        # off (기본): budget 미동작
+        # shadow: budget 초과 시 trim/drop 추정값을 메트릭으로 기록, 실제 prompt context는 baseline
+        # enforce: 본 plan에서 미구현 (호출 시 UnsupportedOperationException)
+        mode: ${AI_RAG_CONTEXT_BUDGET_MODE:off}
+        tokens: ${AI_RAG_CONTEXT_BUDGET_TOKENS:2000}
+      rrf-offline:
+        # P5.4 Commit 5 — RRF (Reciprocal Rank Fusion) offline 비교.
+        # production은 항상 weighted SQL (AI_RAG_FUSION_MODE=weighted 고정).
+        # 본 flag는 OfflineRrfRetrievalService 직접 호출 가드 — true일 때만 호출 가능.
+        enabled: ${AI_RAG_RRF_OFFLINE_ENABLED:false}
+        candidate-n: ${AI_RAG_RRF_OFFLINE_CANDIDATE_N:40}
+      rerank:
+        # P5.4 Commit 2 — Cohere rerank-v3.5 후단 재정렬.
+        # off (기본): rerank 미적용, weighted topN 그대로
+        # shadow: rerank 호출하고 메트릭 기록, 결과는 weighted 순서 유지
+        # sampled: conversationId 기반 deterministic 비율 (sampling-rate) 적용 — Q6 적극적 0.30 권장
+        # enforce: 모든 요청에 적용
+        mode: ${AI_RAG_RERANK_MODE:off}
+        sampling-rate: ${AI_RAG_RERANK_SAMPLING_RATE:0.0}
+        candidate-n: ${AI_RAG_RERANK_CANDIDATE_N:20}
+        top-n: ${AI_RAG_RERANK_TOP_N:5}
+        # P5.4 Commit 3 — Auto-OFF 회로 차단기
+        # fallback rate > threshold (min-samples 충족 후) → logical OFF (수동 reset 필요)
+        circuit-breaker:
+          fallback-rate-threshold: ${AI_RAG_RERANK_CB_THRESHOLD:0.05}
+          min-samples: ${AI_RAG_RERANK_CB_MIN_SAMPLES:20}
+          window-minutes: ${AI_RAG_RERANK_CB_WINDOW_MINUTES:5}
     output-judge:
       shadow-enabled: ${AI_OUTPUT_JUDGE_SHADOW_ENABLED:false}
       sampling-rate: ${AI_OUTPUT_JUDGE_SAMPLING_RATE:0.0}
       max-p95-latency-increase-ms: ${AI_OUTPUT_JUDGE_MAX_P95_LATENCY_INCREASE_MS:200}
       max-cost-ratio: ${AI_OUTPUT_JUDGE_MAX_COST_RATIO:0.10}
+      # P5.5 Commit 2 — LLM judge provider 선택. 'none' / 'hyperclova'.
+      # 'none'이면 OutputComplianceShadowJudge가 외부 judge 호출 안 함 (regex만).
+      # 현재는 단순 표시용 flag — Spring DI로 AiJudgeClient bean이 실제 결정.
+      judge-provider: ${AI_OUTPUT_JUDGE_PROVIDER:none}
+      # P5.5 Commit 3 — 일일 비용 한도 (USD). 누적치가 한도 초과하면 sampling 자동 중단.
+      # 본 plan은 메트릭만 노출하고 실제 자동 중단은 후속 phase에서 회로 차단기로 구현.
+      max-cost-per-day-usd: ${AI_OUTPUT_JUDGE_MAX_COST_PER_DAY_USD:5.0}
+    # P5.5 Commit 4 — Chat/Brief provider shadow 비교 설정 (offline 또는 sampled shadow).
+    # production chat은 항상 cohere — provider 전환은 별도 phase 결정.
+    chat:
+      provider: ${AI_CHAT_PROVIDER:cohere}                       # cohere | hyperclova | shadow_compare
+      shadow-compare-sampling: ${AI_CHAT_SHADOW_COMPARE_SAMPLING:0.0}  # 0.0 ~ 1.0, deterministic by conversationId
 
 ai:
   classify:
     provider: ${AI_CLASSIFY_PROVIDER:cohere}
+  embedding:
+    cache:
+      # P5.3 Commit 1 — query embedding cache mode.
+      # off (기본): 매 요청마다 provider 호출 (Issue #38 이전 상태)
+      # l1: Caffeine in-process LRU cache (P5.3 Commit 2)
+      mode: ${AI_EMBEDDING_CACHE_MODE:off}
+      # P5.3 Commit 2 — Caffeine 캐시 파라미터
+      max-size: ${AI_EMBEDDING_CACHE_MAX_SIZE:5000}
+      expire-after-write-minutes: ${AI_EMBEDDING_CACHE_EXPIRE_AFTER_WRITE_MINUTES:60}
 
 openai:
   api-key: ${OPENAI_API_KEY:}
@@ -245,6 +319,30 @@ openai:
     model: ${OPENAI_CLASSIFY_MODEL:gpt-5-nano}
     max-tokens: ${OPENAI_CLASSIFY_MAX_TOKENS:1024}
     reasoning-effort: ${OPENAI_CLASSIFY_REASONING_EFFORT:minimal}
+
+# Phase P5.5 — HyperCLOVA X (Naver Clova Studio) 통합.
+# 현재 용도: Output compliance shadow judge (Cohere가 생성한 응답을 다른 벤더로 평가).
+# 향후: Chat/Brief 생성 shadow 비교 (P5.5 Commit 4).
+hyperclova:
+  api-key: ${HYPERCLOVA_API_KEY:}
+  base-url: ${HYPERCLOVA_BASE_URL:https://clovastudio.stream.ntruss.com}
+  model:
+    chat: ${HYPERCLOVA_CHAT_MODEL:HCX-005}
+    judge: ${HYPERCLOVA_JUDGE_MODEL:HCX-005}
+  timeout:
+    connect: ${HYPERCLOVA_TIMEOUT_CONNECT:5000}
+    read: ${HYPERCLOVA_TIMEOUT_READ:30000}
+    read-judge: ${HYPERCLOVA_TIMEOUT_READ_JUDGE:3000}
+  # P5.5 Commit 4 — HyperCLOVA X 단가표 (USD per 1M tokens).
+  # 출처: https://www.ncloud.com/product/aiService/clovaStudio (HCX 시리즈는 별도 협의 단가, 본 값은 추정/가이드).
+  # Cohere pricing과 동일한 외부화 패턴 — 단가 변경 시 본 섹션만 수정.
+  pricing:
+    HCX-005:
+      input-per-million: ${HYPERCLOVA_PRICE_HCX005_INPUT:5.00}
+      output-per-million: ${HYPERCLOVA_PRICE_HCX005_OUTPUT:10.00}
+    HCX-DASH-002:
+      input-per-million: ${HYPERCLOVA_PRICE_DASH002_INPUT:0.50}
+      output-per-million: ${HYPERCLOVA_PRICE_DASH002_OUTPUT:1.50}
 
 # RAG 검색 설정
 #

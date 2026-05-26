@@ -8,6 +8,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -17,8 +19,10 @@ class IntentClassificationServiceTest {
 
     @BeforeEach
     void setUp() {
+        // P5.1 Commit 2: 첫 번째 파라미터가 CohereService → List<AiClassificationClient>로 변경.
+        // 본 테스트는 parser/prompt unit이므로 빈 리스트 전달.
         service = new IntentClassificationService(
-                null, new ObjectMapper(), "{\"id\":\"law-000\"}", null, 4, null);
+                List.of(), new ObjectMapper(), "{\"id\":\"law-000\"}", null, 4, null);
     }
 
     @Test

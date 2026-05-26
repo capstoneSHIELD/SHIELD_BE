@@ -15,6 +15,7 @@ public class RagOptimizationAcceptancePolicy {
     private static final double MAX_LATENCY_P95_INCREASE_MS = 200.0d;
     private static final double MAX_COST_INCREASE_RATIO = 0.10d;
     private static final double MAX_FALSE_DROP_RATE = 0.02d;
+    private static final double MAX_REFERENCE_MENTION_DROP = 0.05d;
 
     public RagOptimizationAcceptanceDecision evaluate(
             RagBaselineEvaluationResult baseline,
@@ -49,6 +50,11 @@ public class RagOptimizationAcceptancePolicy {
         if (candidate.emptyRate() > baseline.emptyRate()) {
             failures.add("empty_rate_regressed");
         }
+        if (hasComparableReferenceMentionBaseline(baseline, candidate)
+                && candidate.expectedReferenceMentionRate()
+                < baseline.expectedReferenceMentionRate() - MAX_REFERENCE_MENTION_DROP) {
+            failures.add("reference_mention_rate_regressed");
+        }
         if (candidate.latencyP95Ms() - baseline.latencyP95Ms() > MAX_LATENCY_P95_INCREASE_MS) {
             failures.add("p95_latency_budget_exceeded");
         }
@@ -60,6 +66,14 @@ public class RagOptimizationAcceptancePolicy {
             failures.add("holdout_false_drop_rate_exceeded");
         }
         return new RagOptimizationAcceptanceDecision(failures.isEmpty(), failures, warnings);
+    }
+
+    private boolean hasComparableReferenceMentionBaseline(
+            RagBaselineEvaluationResult baseline,
+            RagBaselineEvaluationResult candidate
+    ) {
+        return baseline.expectedReferenceMentionQueryCount() > 0
+                && candidate.expectedReferenceMentionQueryCount() > 0;
     }
 
     private void validateCost(

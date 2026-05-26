@@ -66,6 +66,13 @@ public class CohereApiConfig {
     @Value("${cohere.timeout.read-embed:30000}")
     private int embedReadTimeout;
 
+    // P5.4 Commit 1 — Cohere rerank-v3.5
+    @Value("${cohere.model.rerank:rerank-v3.5}")
+    private String rerankModel;
+
+    @Value("${cohere.timeout.read-rerank:2000}")
+    private int rerankReadTimeout;
+
     @Value("${cohere.embed.batch-size:96}")
     private int embedBatchSize;
 

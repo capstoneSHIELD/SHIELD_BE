@@ -63,6 +63,21 @@ class RagOptimizationAcceptancePolicyTest {
                 "calibration_false_drop_rate_exceeded");
     }
 
+    @Test
+    @DisplayName("rejects reference mention coverage regression after baseline is available")
+    void evaluate_rejectsReferenceMentionRegression() {
+        RagOptimizationAcceptanceDecision decision = policy.evaluate(
+                metric(0.90, 0.90, 0.80, 0.70, 0.60, 1000, 0.90, 10),
+                metric(0.91, 0.90, 0.80, 0.72, 0.61, 1000, 0.84, 10),
+                new RagOptimizationCostSnapshot(100, 0.10),
+                new RagOptimizationCostSnapshot(100, 0.10),
+                0.0,
+                0.0);
+
+        assertThat(decision.accepted()).isFalse();
+        assertThat(decision.failures()).contains("reference_mention_rate_regressed");
+    }
+
     private RagBaselineEvaluationResult metric(
             double mixedRecall,
             double statuteRecall,
@@ -70,6 +85,19 @@ class RagOptimizationAcceptancePolicyTest {
             double mrr,
             double ndcg,
             double p95
+    ) {
+        return metric(mixedRecall, statuteRecall, caseRecall, mrr, ndcg, p95, 0.0, 0);
+    }
+
+    private RagBaselineEvaluationResult metric(
+            double mixedRecall,
+            double statuteRecall,
+            double caseRecall,
+            double mrr,
+            double ndcg,
+            double p95,
+            double referenceMentionRate,
+            int referenceMentionQueries
     ) {
         return new RagBaselineEvaluationResult(
                 LocalDate.now(),
@@ -84,10 +112,12 @@ class RagOptimizationAcceptancePolicyTest {
                 mrr,
                 ndcg,
                 20,
-                0.05,
-                500,
-                p95,
-                0,
+                referenceMentionRate,
+                referenceMentionQueries,
+                0.05,                 // emptyRate
+                500,                  // latencyP50Ms
+                p95,                  // latencyP95Ms
+                0,                    // falseDropCandidateCount
                 java.util.Map.of());
     }
 }

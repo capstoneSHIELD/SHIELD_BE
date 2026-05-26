@@ -11,6 +11,8 @@ public record RagBaselineSplitMetrics(
         double mrr,
         double ndcgAt5,
         int gradedNdcgQueryCount,
+        double expectedReferenceMentionRate,
+        int expectedReferenceMentionQueryCount,
         double emptyRate,
         double latencyP50Ms,
         double latencyP95Ms

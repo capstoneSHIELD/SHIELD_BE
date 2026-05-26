@@ -11,9 +11,11 @@ import org.example.shield.ai.dto.CohereChatRequest;
 import org.example.shield.ai.dto.CohereChatResponse;
 import org.example.shield.ai.dto.CohereEmbedRequest;
 import org.example.shield.ai.dto.CohereEmbedResponse;
+import org.example.shield.ai.provider.EmbeddingResult;
 import org.example.shield.consultation.exception.AnalysisFailedException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -33,6 +35,7 @@ import java.util.List;
  * - meta.billed_units.{input,output}_tokens: 사용자 청구 기준 토큰
  */
 @Component
+@Primary
 @Slf4j
 public class CohereClient implements AiClient {
 
@@ -82,27 +85,44 @@ public class CohereClient implements AiClient {
      * Cohere Embed API v2 호출 — 문서(조문) 배치 임베딩 생성.
      * B-2 인제스트 파이프라인이 사용.
      *
-     * @param model    임베딩 모델 ID (예: "embed-v4.0")
-     * @param texts    임베딩 대상 텍스트 리스트 (최대 96개 권장)
+     * @param model 임베딩 모델 ID (예: "embed-v4.0")
+     * @param texts 임베딩 대상 텍스트 리스트 (최대 96개 권장)
      * @return float 벡터 배열 리스트 (texts와 동일 순서)
      */
     public List<float[]> embedDocuments(String model, List<String> texts) {
-        CohereEmbedRequest req = CohereEmbedRequest.forDocument(model, texts, config.getEmbedDimension());
-        CohereEmbedResponse resp = callEmbed(req);
-        return resp.extractAllFloatVectors();
+        return embedDocumentsWithMetadata(model, texts).vectors();
     }
 
     /**
      * Cohere Embed API v2 호출 — 단일 쿼리 임베딩.
-     * Layer 2 벡터 검색 시점에 사용. B-4에서 Redis 캐시와 결합 예정.
+     * Layer 2 벡터 검색 시점에 사용.
      */
     public float[] embedQuery(String model, String query) {
-        CohereEmbedRequest req = CohereEmbedRequest.forQuery(model, query, config.getEmbedDimension());
-        CohereEmbedResponse resp = callEmbed(req);
-        return resp.extractFirstFloatVector();
+        return embedQueryWithMetadata(model, query).firstVector();
     }
 
-    private CohereEmbedResponse callEmbed(CohereEmbedRequest request) {
+    /**
+     * Embed (배치) — provider 응답 메타데이터 포함.
+     *
+     * <p>P5.1 Commit 3에서 도입. {@link EmbeddingResult#inputTokens()}는 Cohere
+     * {@code meta.billed_units.input_tokens}에서, {@link EmbeddingResult#latencyMs()}는
+     * 실제 호출 지연으로 채워진다. 이후 토큰/비용 메트릭(P5.1 Commit 4)에 활용된다.
+     */
+    public EmbeddingResult embedDocumentsWithMetadata(String model, List<String> texts) {
+        CohereEmbedRequest req = CohereEmbedRequest.forDocument(model, texts, config.getEmbedDimension());
+        return callEmbedWithMetadata(req);
+    }
+
+    /**
+     * Embed (단일 쿼리) — provider 응답 메타데이터 포함. 자세한 내용은
+     * {@link #embedDocumentsWithMetadata(String, List)} 참조.
+     */
+    public EmbeddingResult embedQueryWithMetadata(String model, String query) {
+        CohereEmbedRequest req = CohereEmbedRequest.forQuery(model, query, config.getEmbedDimension());
+        return callEmbedWithMetadata(req);
+    }
+
+    private EmbeddingResult callEmbedWithMetadata(CohereEmbedRequest request) {
         long startNanos = System.nanoTime();
         try {
             CohereEmbedResponse resp = cohereWebClient.post()
@@ -119,18 +139,18 @@ public class CohereClient implements AiClient {
                 throw new AnalysisFailedException("Cohere Embed API 응답이 null입니다");
             }
 
-            int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000);
+            long latencyMs = (System.nanoTime() - startNanos) / 1_000_000;
             Integer inputTokens = (resp.getMeta() != null && resp.getMeta().getBilledUnits() != null)
                     ? resp.getMeta().getBilledUnits().getInputTokens() : null;
-            int vectorCount = resp.extractAllFloatVectors().size();
+            List<float[]> vectors = resp.extractAllFloatVectors();
             log.info("Cohere Embed API 호출 성공: id={}, model={}, vectors={}, inputTokens={}, latency={}ms",
-                    resp.getId(), request.getModel(), vectorCount, inputTokens, latencyMs);
+                    resp.getId(), request.getModel(), vectors.size(), inputTokens, latencyMs);
 
-            return resp;
+            return new EmbeddingResult(resp.getId(), vectors, inputTokens, latencyMs);
         } catch (AnalysisFailedException e) {
             throw e;
         } catch (Exception e) {
-            int latencyMs = (int) ((System.nanoTime() - startNanos) / 1_000_000);
+            long latencyMs = (System.nanoTime() - startNanos) / 1_000_000;
             recordAiApiError("embed", e);
             log.error("Cohere Embed API 호출 실패: latency={}ms, error={}", latencyMs, e.getMessage(), e);
             throw new AnalysisFailedException("Cohere Embed API 호출 실패: " + e.getMessage(), e);

@@ -258,6 +258,84 @@ public interface LegalChunkJpaRepository extends JpaRepository<LegalChunkEntity,
                                            @Param("trigramWeight") double trigramWeight,
                                            @Param("topK") int topK);
 
+    // === P5.4 Commit 4 — Path-specific 검색 (RRF offline 비교용) ===
+
+    /**
+     * 벡터 경로 단독 ranked list. RRF offline 비교용.
+     *
+     * <p>score = {@code 1 - cosine_distance}. 다른 두 path는 별도 쿼리로 호출.
+     * 운영 가중합({@code search3Way})과 동일한 카테고리/abolition_date 필터 적용.
+     */
+    @Query(value = """
+            SELECT lc.law_name        AS lawName,
+                   lc.article_no      AS articleNo,
+                   lc.article_title   AS articleTitle,
+                   lc.content         AS content,
+                   to_char(lc.effective_date, 'YYYY-MM-DD') AS effectiveDate,
+                   lc.source_url      AS sourceUrl,
+                   (1 - (lc.embedding <=> CAST(:queryVector AS vector))) AS score
+              FROM legal_chunks lc
+             WHERE lc.abolition_date IS NULL
+               AND lc.embedding IS NOT NULL
+               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
+             ORDER BY lc.embedding <=> CAST(:queryVector AS vector)
+             LIMIT :topK
+            """, nativeQuery = true)
+    List<LegalChunkRow> searchVectorOnly(@Param("queryVector") String queryVector,
+                                         @Param("categoryIds") String[] categoryIds,
+                                         @Param("topK") int topK);
+
+    /**
+     * BM25 경로 단독 ranked list. RRF offline 비교용.
+     *
+     * <p>score = {@code ts_rank(content_tsv, query, 1)}.
+     */
+    @Query(value = """
+            SELECT lc.law_name        AS lawName,
+                   lc.article_no      AS articleNo,
+                   lc.article_title   AS articleTitle,
+                   lc.content         AS content,
+                   to_char(lc.effective_date, 'YYYY-MM-DD') AS effectiveDate,
+                   lc.source_url      AS sourceUrl,
+                   ts_rank(lc.content_tsv, to_tsquery('simple', :keywordQuery), 1) AS score
+              FROM legal_chunks lc
+             WHERE lc.abolition_date IS NULL
+               AND lc.content_tsv @@ to_tsquery('simple', :keywordQuery)
+               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
+             ORDER BY score DESC
+             LIMIT :topK
+            """, nativeQuery = true)
+    List<LegalChunkRow> searchBm25Only(@Param("keywordQuery") String keywordQuery,
+                                       @Param("categoryIds") String[] categoryIds,
+                                       @Param("topK") int topK);
+
+    /**
+     * Trigram 경로 단독 ranked list. RRF offline 비교용.
+     *
+     * <p>score = {@code similarity(content, query)}. pg_trgm extension 필요.
+     */
+    @Query(value = """
+            SELECT lc.law_name        AS lawName,
+                   lc.article_no      AS articleNo,
+                   lc.article_title   AS articleTitle,
+                   lc.content         AS content,
+                   to_char(lc.effective_date, 'YYYY-MM-DD') AS effectiveDate,
+                   lc.source_url      AS sourceUrl,
+                   similarity(lc.content, CAST(:vectorQuery AS text)) AS score
+              FROM legal_chunks lc
+             WHERE lc.abolition_date IS NULL
+               AND lc.content % CAST(:vectorQuery AS text)
+               AND ( COALESCE(CARDINALITY(CAST(:categoryIds AS text[])), 0) = 0
+                     OR lc.category_ids && CAST(:categoryIds AS text[]) )
+             ORDER BY score DESC
+             LIMIT :topK
+            """, nativeQuery = true)
+    List<LegalChunkRow> searchTrigramOnly(@Param("vectorQuery") String vectorQuery,
+                                          @Param("categoryIds") String[] categoryIds,
+                                          @Param("topK") int topK);
+
     /**
      * Spring Data JPA 네이티브 쿼리용 projection 인터페이스.
      * 서비스 레이어에서 LegalChunk record 로 변환해 반환한다.
