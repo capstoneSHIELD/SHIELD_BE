@@ -92,10 +92,14 @@ jwt:
   refresh-token-expiry: 1209600000
 
 # Google OAuth
+# - allowed-redirect-uris: 클라이언트가 보낸 redirect_uri 화이트리스트 (Issue #116).
+#   모바일 native 앱은 https 의 `-mobile` suffix URL 사용. mobile callback 페이지가
+#   받은 code 를 shield:// scheme 으로 native 앱에 전달.
 google:
   client-id: ${GOOGLE_CLIENT_ID}
   client-secret: ${GOOGLE_CLIENT_SECRET}
   redirect-uri: ${GOOGLE_REDIRECT_URI}
+  allowed-redirect-uris: ${GOOGLE_ALLOWED_REDIRECT_URIS:https://shieldai.kr/auth/google/callback,https://shieldai.kr/auth/google/callback-mobile,https://localhost:5174/auth/google/callback}
 
 # Naver OAuth (Issue #83)
 # 테스트/로컬에서 env 미설정 시에도 컨텍스트 로드되도록 기본값 제공.
