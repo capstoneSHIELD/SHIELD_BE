@@ -26,6 +26,15 @@ public class AiRagOperationalMetrics {
     public static final String COHERE_COST_ESTIMATED_USD = "shield.ai.cohere.cost.estimated.usd";
     public static final String COHERE_LATENCY = "shield.ai.cohere.latency";
 
+    // P5.3 Commit 2 — 임베딩 캐시 hit/miss
+    public static final String EMBEDDING_CACHE = "shield.ai.embedding.cache";
+
+    // P5.3 Commit 3 — Intent-aware routing 결정
+    public static final String INTENT_ROUTING = "shield.ai.intent.routing";
+
+    // P5.3 Commit 5 — RAG context budget shadow 측정
+    public static final String CONTEXT_BUDGET = "shield.ai.rag.context.budget";
+
     private final MeterRegistry registry;
 
     public AiRagOperationalMetrics(MeterRegistry registry) {
@@ -132,6 +141,60 @@ public class AiRagOperationalMetrics {
                 "operation", value(operation),
                 "status", value(status))
                 .record(duration);
+    }
+
+    /**
+     * P5.3 Commit 2 — 임베딩 캐시 hit/miss 기록.
+     *
+     * @param model   provider 모델 ID
+     * @param outcome {@code "hit"} / {@code "miss"} / {@code "store"} / {@code "error"}
+     */
+    public void recordEmbeddingCache(String model, String outcome) {
+        counter(EMBEDDING_CACHE,
+                "model", value(model),
+                "outcome", value(outcome))
+                .increment();
+    }
+
+    /**
+     * P5.3 Commit 5 — RAG context budget shadow 측정값 기록.
+     *
+     * <p>shadow mode에서 token 예산을 초과한 chunk가 얼마나 trim/drop될 수 있었는지 추정값을
+     * 메트릭으로 기록한다. 실제 prompt context는 변경되지 않음 (enforce는 본 plan 범위 밖).
+     *
+     * @param kind   {@code "statute"} / {@code "case"} / {@code "total"}
+     * @param action {@code "estimated"} / {@code "trimmed"} / {@code "dropped"} / {@code "kept"}
+     * @param value  토큰 수 / 청크 수 등 (음수는 무시)
+     */
+    public void recordContextBudget(String kind, String action, long value) {
+        if (value <= 0) {
+            return;
+        }
+        counter(CONTEXT_BUDGET,
+                "kind", value(kind),
+                "action", value(action))
+                .increment(value);
+    }
+
+    /**
+     * P5.3 Commit 3 — Intent-aware retrieval 라우팅 결정 기록.
+     *
+     * <p>shadow mode에서는 결정만 기록하고 실제 라우팅은 baseline 유지.
+     * enforce mode에서는 결정이 라우팅에 반영됨.
+     *
+     * @param mode             {@code "off" | "shadow" | "enforce"}
+     * @param intent           {@code DialogueIntent.name()} 또는 {@code "UNKNOWN"}
+     * @param decision         라우팅 결정 (예: {@code "high_confidence_rag_skip"},
+     *                         {@code "baseline"}, {@code "broad_search"})
+     * @param confidenceBucket 신뢰도 bucket (예: {@code "low"}, {@code "medium"}, {@code "high"})
+     */
+    public void recordIntentRouting(String mode, String intent, String decision, String confidenceBucket) {
+        counter(INTENT_ROUTING,
+                "mode", value(mode),
+                "intent", value(intent),
+                "decision", value(decision),
+                "confidence", value(confidenceBucket))
+                .increment();
     }
 
     private Counter counter(String name, String... tags) {

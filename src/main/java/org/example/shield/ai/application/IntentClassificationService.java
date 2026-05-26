@@ -95,7 +95,13 @@ public class IntentClassificationService {
         }
         Map<String, AiClassificationClient> map = new HashMap<>();
         for (AiClassificationClient client : clients) {
-            map.put(client.providerKey(), client);
+            String key = client.providerKey();
+            AiClassificationClient previous = map.put(key, client);
+            if (previous != null) {
+                // 같은 provider key를 두 adapter가 주장하면 의도치 않은 라우팅 위험.
+                log.warn("Duplicate AiClassificationClient providerKey='{}' — '{}' replaced '{}'",
+                        key, client.getClass().getSimpleName(), previous.getClass().getSimpleName());
+            }
         }
         return Map.copyOf(map);
     }

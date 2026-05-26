@@ -1,5 +1,17 @@
 # Phase P5.2 — 평가 인프라 + Baseline
 
+> **구현 노트 (2026-05-26 refine)**: 5개 commit 모두 구현 완료.
+> 명세 대비 일부 조정:
+> - **Commit 2**: 평가셋 jsonl은 50건 신규만 (`eval/eval-set.v1.6.jsonl`).
+>   기존 `eval/eval-set.v1.5.jsonl` 40건은 schema가 RagEvalItem과 호환 안 됨 (`gold_articles` vs
+>   `expectedLawRefs`). v1.5 conversion은 별도 작업으로 분리 — 본 plan 범위 밖.
+> - **Commit 4**: PII masking에서 NAME/ADDRESS 패턴은 의도적 제외.
+>   regex로는 false positive가 너무 큼 ("제618조에" → "조에"가 한글 이름으로 잘못 매칭).
+>   기존 5개 결정적 패턴(RRN/CARD/ACCOUNT/PHONE/EMAIL)만 유지.
+>   이름/주소 마스킹은 후속 작업으로 NER 모델 또는 LLM redactor 검토.
+> - **Commit 4 refine**: `PiiMasker` 별도 컴포넌트로 추출 (이전엔 Judge 내부 inline).
+>   `ConversationDeterministicSampler`는 P5.1 Commit 5 명세에 있었으나 여기서 완성됨.
+
 ## 메타
 - 기간: ~3-4일 (Sprint 1B)
 - 의존: P5.1 완료 (메트릭 노출 + mode enum)

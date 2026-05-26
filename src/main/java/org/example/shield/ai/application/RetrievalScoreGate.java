@@ -1,5 +1,6 @@
 package org.example.shield.ai.application;
 
+import org.example.shield.ai.config.RagFeatureMode;
 import org.example.shield.ai.dto.RetrievalScoreCandidate;
 import org.example.shield.ai.dto.RetrievalScoreGateDecision;
 import org.example.shield.ai.dto.RetrievalScoreMethod;
@@ -12,13 +13,31 @@ import java.util.List;
 import java.util.Locale;
 import java.util.OptionalDouble;
 
+/**
+ * Retrieval 결과의 점수가 임계값 미만이면 drop하는 gate.
+ *
+ * <p>P5.1 Commit 5: 기존 boolean {@code enabled}를 {@link RagFeatureMode} 분기로 확장.
+ * <ul>
+ *   <li>{@link RagFeatureMode#OFF} — gate 미작동 (기본값)</li>
+ *   <li>{@link RagFeatureMode#SHADOW} — pass/drop 결정만 메트릭 기록, 실제 filter 안 함</li>
+ *   <li>{@link RagFeatureMode#ENFORCE} — threshold 미만 후보 drop</li>
+ *   <li>{@link RagFeatureMode#SAMPLED} — gate에 무의미하므로 {@code OFF}와 동일</li>
+ * </ul>
+ *
+ * <p>임계값은 점수 산정 방식 별로 별도 설정 (weighted/rrf/rerank 점수는 분포가 다름).
+ */
 @Component
 public class RetrievalScoreGate {
 
     private final RagMetrics ragMetrics;
 
+    /** Legacy boolean flag — 하위 호환을 위해 유지. {@code true}면 ENFORCE로 강제. */
     @Value("${app.ai.rag.retrieval-gate.enabled:false}")
-    private boolean enabled;
+    private boolean legacyEnabled;
+
+    /** P5.1 Commit 5 — 신규 mode 분기. legacy enabled=true면 무시되고 ENFORCE 강제. */
+    @Value("${app.ai.rag.retrieval-gate.mode:off}")
+    private String modeRaw;
 
     @Value("${app.ai.rag.retrieval-gate.weighted-threshold:}")
     private String weightedThreshold;
@@ -33,11 +52,22 @@ public class RetrievalScoreGate {
         this.ragMetrics = ragMetrics;
     }
 
+    /**
+     * 현재 mode 계산. legacy {@code enabled=true}는 {@code ENFORCE}로 마이그레이션.
+     */
+    RagFeatureMode currentMode() {
+        if (legacyEnabled) {
+            return RagFeatureMode.ENFORCE;
+        }
+        return RagFeatureMode.fromOrThrow(modeRaw, "AI_RAG_RETRIEVAL_GATE_MODE");
+    }
+
     public RetrievalScoreGateDecision evaluate(RetrievalScoreCandidate candidate) {
         if (candidate == null) {
             return RetrievalScoreGateDecision.allowed("empty_candidate", null);
         }
-        if (!enabled) {
+        RagFeatureMode mode = currentMode();
+        if (mode == RagFeatureMode.OFF || mode == RagFeatureMode.SAMPLED) {
             return RetrievalScoreGateDecision.allowed("disabled", null);
         }
 
@@ -47,10 +77,22 @@ public class RetrievalScoreGate {
         }
 
         double thresholdValue = threshold.getAsDouble();
-        if (candidate.score() >= thresholdValue) {
+        boolean passed = candidate.score() >= thresholdValue;
+        String method = candidate.method().name().toLowerCase(Locale.ROOT);
+
+        // SHADOW: pass/drop 모두 기록, 실제 filter는 OFF처럼 동작
+        if (mode == RagFeatureMode.SHADOW) {
+            ragMetrics.recordRetrievalGate(method, passed ? "shadow_pass" : "shadow_drop");
+            return RetrievalScoreGateDecision.allowed(
+                    passed ? "shadow_pass" : "shadow_drop",
+                    thresholdValue);
+        }
+
+        // ENFORCE
+        if (passed) {
             return RetrievalScoreGateDecision.allowed("passed", thresholdValue);
         }
-        ragMetrics.recordRetrievalGate(candidate.method().name().toLowerCase(Locale.ROOT), "dropped");
+        ragMetrics.recordRetrievalGate(method, "dropped");
         return RetrievalScoreGateDecision.blocked("below_calibrated_threshold", thresholdValue);
     }
 
@@ -58,14 +100,25 @@ public class RetrievalScoreGate {
         if (documents == null || documents.isEmpty()) {
             return List.of();
         }
-        if (!enabled || thresholdFor(method).isEmpty()) {
+        RagFeatureMode mode = currentMode();
+        if (mode == RagFeatureMode.OFF || mode == RagFeatureMode.SAMPLED) {
             return documents;
         }
+        if (thresholdFor(method).isEmpty()) {
+            return documents;
+        }
+
+        // SHADOW: 결정만 기록, 모두 통과시킴 (user-facing 변화 0)
+        if (mode == RagFeatureMode.SHADOW) {
+            documents.forEach(document -> evaluate(new RetrievalScoreCandidate(
+                    document.kind(), method, document.score())));
+            return documents;
+        }
+
+        // ENFORCE: 실제 filter
         return documents.stream()
                 .filter(document -> evaluate(new RetrievalScoreCandidate(
-                        document.kind(),
-                        method,
-                        document.score())).allowed())
+                        document.kind(), method, document.score())).allowed())
                 .toList();
     }
 

@@ -176,6 +176,22 @@ cohere:
     temperature: 0.1
     max-tokens: ${COHERE_CLASSIFY_MAX_TOKENS:384}
     context-window-messages: ${COHERE_CLASSIFY_CONTEXT_WINDOW_MESSAGES:4}
+  # P5.1 Commit 4 — Cohere 단가표 (USD per 1M tokens).
+  # 출처: https://cohere.com/pricing (Phase P5.1 작성 시점 기준).
+  # 단가가 바뀌면 본 섹션만 수정하면 됨 (코드 재배포 없이 환경변수로 override 가능).
+  pricing:
+    command-a-03-2025:
+      input-per-million: ${COHERE_PRICE_COMMAND_A_INPUT:2.50}
+      output-per-million: ${COHERE_PRICE_COMMAND_A_OUTPUT:10.00}
+    command-r7b-12-2024:
+      input-per-million: ${COHERE_PRICE_COMMAND_R7B_INPUT:0.0375}
+      output-per-million: ${COHERE_PRICE_COMMAND_R7B_OUTPUT:0.15}
+    embed-v4.0:
+      input-per-million: ${COHERE_PRICE_EMBED_V4_INPUT:0.10}
+      output-per-million: 0.0
+    rerank-v3.5:
+      input-per-million: ${COHERE_PRICE_RERANK_V35_INPUT:2.00}
+      output-per-million: 0.0
 
 # LLM provider selection for lightweight intent classification.
 # - cohere: existing Cohere /v2/chat classifier path
@@ -201,6 +217,8 @@ app:
         include-raw-text: ${AI_INTENT_ROUTER_SHADOW_EXPORT_INCLUDE_RAW_TEXT:false}
       enable-ask-legal-advice-skip: ${AI_INTENT_ROUTER_ENABLE_ASK_LEGAL_ADVICE_SKIP:false}
       enable-greeting-skip: ${AI_INTENT_ROUTER_ENABLE_GREETING_SKIP:false}
+      # P5.3 Commit 4 — GREETING skip에 더 엄격한 confidence threshold (기본 high보다 높게).
+      greeting-min-confidence: ${AI_INTENT_ROUTER_GREETING_MIN_CONFIDENCE:0.90}
       enable-irrelevant-skip: ${AI_INTENT_ROUTER_ENABLE_IRRELEVANT_SKIP:false}
       enable-confirm: ${AI_INTENT_ROUTER_ENABLE_CONFIRM:false}
       enable-slot-auto-update: ${AI_INTENT_ROUTER_ENABLE_SLOT_AUTO_UPDATE:false}
@@ -219,12 +237,25 @@ app:
       fusion-mode: ${AI_RAG_FUSION_MODE:weighted}
       rrf-k: ${AI_RAG_RRF_K:60}
       retrieval-gate:
+        # P5.1 Commit 5 — mode 기반 분기 (off|shadow|enforce).
+        # legacy 'enabled' flag는 BC를 위해 유지: true면 ENFORCE로 마이그레이션됨.
+        mode: ${AI_RAG_RETRIEVAL_GATE_MODE:off}
         enabled: ${AI_RAG_RETRIEVAL_GATE_ENABLED:false}
         weighted-threshold: ${AI_RAG_RETRIEVAL_GATE_WEIGHTED_THRESHOLD:}
         rrf-threshold: ${AI_RAG_RETRIEVAL_GATE_RRF_THRESHOLD:}
         rerank-threshold: ${AI_RAG_RETRIEVAL_GATE_RERANK_THRESHOLD:}
       intent-aware:
+        # P5.3 Commit 3 — mode 분기 (off|shadow|enforce).
+        # legacy 'enabled' flag는 BC를 위해 유지: true면 ENFORCE로 마이그레이션됨.
+        mode: ${AI_RAG_INTENT_AWARE_MODE:off}
         enabled: ${AI_RAG_INTENT_AWARE_ENABLED:false}
+      context-budget:
+        # P5.3 Commit 5 — RAG context token budget shadow.
+        # off (기본): budget 미동작
+        # shadow: budget 초과 시 trim/drop 추정값을 메트릭으로 기록, 실제 prompt context는 baseline
+        # enforce: 본 plan에서 미구현 (호출 시 UnsupportedOperationException)
+        mode: ${AI_RAG_CONTEXT_BUDGET_MODE:off}
+        tokens: ${AI_RAG_CONTEXT_BUDGET_TOKENS:2000}
     output-judge:
       shadow-enabled: ${AI_OUTPUT_JUDGE_SHADOW_ENABLED:false}
       sampling-rate: ${AI_OUTPUT_JUDGE_SAMPLING_RATE:0.0}
@@ -234,6 +265,15 @@ app:
 ai:
   classify:
     provider: ${AI_CLASSIFY_PROVIDER:cohere}
+  embedding:
+    cache:
+      # P5.3 Commit 1 — query embedding cache mode.
+      # off (기본): 매 요청마다 provider 호출 (Issue #38 이전 상태)
+      # l1: Caffeine in-process LRU cache (P5.3 Commit 2)
+      mode: ${AI_EMBEDDING_CACHE_MODE:off}
+      # P5.3 Commit 2 — Caffeine 캐시 파라미터
+      max-size: ${AI_EMBEDDING_CACHE_MAX_SIZE:5000}
+      expire-after-write-minutes: ${AI_EMBEDDING_CACHE_EXPIRE_AFTER_WRITE_MINUTES:60}
 
 openai:
   api-key: ${OPENAI_API_KEY:}

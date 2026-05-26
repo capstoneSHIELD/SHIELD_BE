@@ -26,12 +26,20 @@
 
 ## 3. Sub-Phase 목록
 
-| ID | 제목 | 문서 | 산출물 |
-|---|---|---|---|
-| P5.1 | Observability + 측정 인프라 | [ai-rag-phase-p5_1-observability-baseline.md](./ai-rag-phase-p5_1-observability-baseline.md) | 메트릭 노출, mode enum, gate shadow, provider interface |
-| P5.2 | 평가 인프라 + Baseline | [ai-rag-phase-p5_2-evaluation-baseline.md](./ai-rag-phase-p5_2-evaluation-baseline.md) | 평가셋 v1.6, citation metric, PII masking, baseline 보고서 |
-| P5.3 | 비용/성능 Quick Wins | [ai-rag-phase-p5_3-cost-routing.md](./ai-rag-phase-p5_3-cost-routing.md) | Caffeine cache, GREETING skip, context budget shadow |
-| P5.4 | 품질 실험 | [ai-rag-phase-p5_4-quality-experiments.md](./ai-rag-phase-p5_4-quality-experiments.md) | Rerank shadow/sampled, RRF offline 비교 |
+| ID | 제목 | 문서 | 진행 | 산출물 |
+|---|---|---|---|---|
+| **P5.1** | Observability + 측정 인프라 | [ai-rag-phase-p5_1-observability-baseline.md](./ai-rag-phase-p5_1-observability-baseline.md) | ✅ 6/6 commits | mode enum + Converter, provider interface 4개, embed token plumbing, Cohere metric (token/cost/latency) + emitter 추출 + pricing yaml 외부화, Gate shadow mode, PR template + Grafana JSON + Prometheus snippets |
+| **P5.2** | 평가 인프라 + Baseline | [ai-rag-phase-p5_2-evaluation-baseline.md](./ai-rag-phase-p5_2-evaluation-baseline.md) | ✅ 5/5 commits | RagEvalItem v1.6 (3개 신규 필드), Validator low_evidence 허용, eval-set.v1.6 50건, CitationCoverageEvaluator (reference mention coverage), PiiMasker 추출 + Sampler, baseline 인프라 보고서 |
+| **P5.3** | 비용/성능 Quick Wins | [ai-rag-phase-p5_3-cost-routing.md](./ai-rag-phase-p5_3-cost-routing.md) | ✅ 5/5 commits | EmbeddingCache 인터페이스 + Noop + Caffeine, QueryEmbeddingService 캐시 통합, IntentAwareRetrievalPolicy shadow mode, **ASK_LEGAL_ADVICE skip 절대 금지 + GREETING-only enforce**, RagContextBuilder budget shadow |
+| P5.4 | 품질 실험 (RAG 검색 레이어) | [ai-rag-phase-p5_4-quality-experiments.md](./ai-rag-phase-p5_4-quality-experiments.md) | ⏸️ 미시작 | Rerank shadow/sampled, RRF offline 비교 |
+| **P5.5** | **Cohere × HyperCLOVA X 하이브리드** (생성·판정 레이어) | [ai-rag-phase-p5_5-hyperclova-hybrid.md](./ai-rag-phase-p5_5-hyperclova-hybrid.md) | ⏸️ 미시작 (분석 문서만) | AiJudgeClient → OutputComplianceShadowJudge judge 본체 (HyperCLOVA) → Chat/Brief shadow 비교 → 최종 결정 |
+
+**구현 노트 (2026-05-26 refine)**: P5.1/P5.2 모두 명세 부합. 일부 구현은 명세보다 보수적으로 조정:
+- P5.1-C3: Breaking 시그니처 변경 → Non-breaking 신규 메서드 추가 (ingest 서비스 blast radius 회피)
+- P5.1-C4: pricing 외부화 + CohereMetricEmitter 추출 (중복 제거)
+- P5.2-C2: jsonl 50건 (v1.5 schema 비호환으로 변환 보류)
+- P5.2-C4: PiiMasker NAME/ADDRESS 제외 (regex false positive)
+- P5.2-C5: 실측 baseline 수치는 production DB 의존 — 인프라만 완성
 
 ## 4. Commit 분해 요약 (22개)
 
@@ -59,6 +67,7 @@ rerank fallback rate > 5% -> force rerank mode=off (자동)
 이전 v3 plan의 결정사항은 모두 유지:
 - **3주 목표는 production 전환이 아님**: 측정 가능 상태 + 일부 rollout + 근거 기반 판단
 - **Cohere 유지, lock-in만 완화**: Provider interface (`AiChatClient`, `AiEmbeddingClient`, `AiRerankClient`, `AiClassificationClient`)
+- **(P5.5 신설) Cohere × HyperCLOVA X 하이브리드**: RAG 백본은 Cohere 유지, 생성·판정 레이어만 HyperCLOVA X 후보 평가 (역할 분리). Judge 우선 → Chat/Brief는 데이터 축적 후 결정.
 - **Mode-based flag (`off|shadow|sampled|enforce`)**: enum + startup fail-fast
 - **Conversation-id deterministic sampling**
 - **Context budget enforcement는 본 plan에서 제외** (shadow까지만)

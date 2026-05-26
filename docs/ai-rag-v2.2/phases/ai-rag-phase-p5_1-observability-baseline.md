@@ -1,5 +1,14 @@
 # Phase P5.1 — Observability + 측정 인프라
 
+> **구현 노트 (2026-05-26 refine)**: 본 phase의 6개 commit 모두 구현 완료.
+> 명세 대비 일부 조정:
+> - **Commit 3**: 명세는 `CohereClient.embedQuery/embedDocuments` 반환 타입 변경(Breaking)이었으나,
+>   실제로는 `embedQueryWithMetadata`/`embedDocumentsWithMetadata` 신규 메서드 추가(Non-breaking).
+>   사유: 4개 ingest 서비스 호출처를 동시에 변경하면 blast radius가 크므로, 신규 메서드만 도입하고
+>   adapter가 이를 사용하도록 했음. 토큰/지연 plumbing 효과는 동일.
+> - **Commit 4 refine**: pricing 테이블 외부화 + `CohereMetricEmitter` 컴포넌트 추출
+>   (중복 제거 — CohereService와 CohereEmbeddingClientAdapter가 같은 emit 로직 공유).
+
 ## 메타
 - 기간: ~3-4일 (Sprint 1A)
 - 의존: Phase C-5, P4 기준선

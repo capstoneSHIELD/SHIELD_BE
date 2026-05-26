@@ -1,19 +1,46 @@
 package org.example.shield.ai.infrastructure;
 
+import org.example.shield.ai.config.CoherePricingProperties;
+import org.example.shield.ai.config.CoherePricingProperties.ModelPricing;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * {@link CohereCostCalculator} 단가 계산 검증.
  *
- * <p>단가는 코드 내 정적 매핑이므로 테스트는 (1) 알려진 모델의 정확한 계산,
- * (2) 알 수 없는 모델은 0.0, (3) null/음수 토큰 안전 처리를 검증한다.
+ * <p>P5.1 Commit 4 refine: 단가표가 {@link CoherePricingProperties}로 외부화됨.
+ * 본 테스트는 (1) properties 주입 시 정확한 계산, (2) 알 수 없는 모델은 0.0,
+ * (3) null/음수 토큰 안전 처리, (4) properties 미주입 시 fallback을 검증한다.
  */
 class CohereCostCalculatorTest {
 
-    private final CohereCostCalculator calc = new CohereCostCalculator();
+    private CohereCostCalculator calc;
+
+    @BeforeEach
+    void setUp() {
+        // application.yml과 동일한 단가표 (테스트용)
+        CoherePricingProperties props = new CoherePricingProperties();
+        Map<String, ModelPricing> pricing = new HashMap<>();
+        pricing.put("command-a-03-2025", pricing(2.50, 10.00));
+        pricing.put("command-r7b-12-2024", pricing(0.0375, 0.15));
+        pricing.put("embed-v4.0", pricing(0.10, 0.0));
+        pricing.put("rerank-v3.5", pricing(2.00, 0.0));
+        props.setPricing(pricing);
+        calc = new CohereCostCalculator(props);
+    }
+
+    private static ModelPricing pricing(double in, double out) {
+        ModelPricing p = new ModelPricing();
+        p.setInputPerMillion(in);
+        p.setOutputPerMillion(out);
+        return p;
+    }
 
     @Test
     @DisplayName("command-a-03-2025: input $2.50/M + output $10.00/M 정확 계산")
@@ -26,9 +53,6 @@ class CohereCostCalculatorTest {
     @Test
     @DisplayName("command-r7b-12-2024: classify 단가 정확 계산")
     void classifyModelPricing() {
-        // 100K input × $0.0375/M = $0.00375
-        // 50K output × $0.15/M = $0.0075
-        // 합계 ~$0.01125
         double cost = calc.estimate("command-r7b-12-2024", 100_000, 50_000);
         assertThat(cost).isCloseTo(0.01125, org.assertj.core.data.Offset.offset(1e-6));
     }
@@ -36,13 +60,12 @@ class CohereCostCalculatorTest {
     @Test
     @DisplayName("embed-v4.0: input만 청구, output은 무시")
     void embedModelOutputIgnored() {
-        // 1M input × $0.10/M = $0.10. output은 단가가 0이라 영향 없음.
         double cost = calc.estimate("embed-v4.0", 1_000_000, 999_999);
         assertThat(cost).isCloseTo(0.10, org.assertj.core.data.Offset.offset(1e-6));
     }
 
     @Test
-    @DisplayName("알 수 없는 모델은 0.0 반환 (silent fallback)")
+    @DisplayName("알 수 없는 모델은 0.0 반환")
     void unknownModelReturnsZero() {
         double cost = calc.estimate("not-a-real-model", 1_000_000, 1_000_000);
         assertThat(cost).isZero();
@@ -65,8 +88,23 @@ class CohereCostCalculatorTest {
     @Test
     @DisplayName("일부만 null인 경우 — 다른 한쪽만 계산")
     void mixedNullTokens() {
-        // input만 있음: 1M × $2.50/M = $2.50
         double cost = calc.estimate("command-a-03-2025", 1_000_000, null);
         assertThat(cost).isCloseTo(2.50, org.assertj.core.data.Offset.offset(1e-6));
+    }
+
+    @Test
+    @DisplayName("Properties 미주입(no-arg constructor) → 모든 모델 0.0 (안전 default)")
+    void noPropertiesFallback() {
+        CohereCostCalculator emptyCalc = new CohereCostCalculator();
+        assertThat(emptyCalc.estimate("command-a-03-2025", 1_000_000, 1_000_000)).isZero();
+    }
+
+    @Test
+    @DisplayName("Properties.pricing이 null이면 안전 default")
+    void nullPricingMapFallback() {
+        CoherePricingProperties props = new CoherePricingProperties();
+        props.setPricing(null);
+        CohereCostCalculator c = new CohereCostCalculator(props);
+        assertThat(c.estimate("command-a-03-2025", 1_000_000, 1_000_000)).isZero();
     }
 }

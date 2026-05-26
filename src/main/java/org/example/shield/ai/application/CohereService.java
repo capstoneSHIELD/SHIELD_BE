@@ -9,9 +9,8 @@ import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.CohereChatRequest;
 import org.example.shield.ai.dto.slot.SlotLedger;
 import org.example.shield.ai.dto.slot.SlotStateItem;
-import org.example.shield.ai.infrastructure.AiRagOperationalMetrics;
 import org.example.shield.ai.infrastructure.CohereClient;
-import org.example.shield.ai.infrastructure.CohereCostCalculator;
+import org.example.shield.ai.infrastructure.CohereMetricEmitter;
 import org.example.shield.ai.infrastructure.GuardrailFilter;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
@@ -26,7 +25,6 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * AI 서비스 — AiClient를 활용한 AI 기능.
@@ -62,8 +60,7 @@ public class CohereService {
     private final SlotStatusBlockBuilder slotStatusBlockBuilder;
     private final StaticQuestionSelector staticQuestionSelector;
     private final OutputComplianceShadowJudge outputComplianceShadowJudge;
-    private final AiRagOperationalMetrics operationalMetrics;
-    private final CohereCostCalculator costCalculator;
+    private final CohereMetricEmitter cohereMetricEmitter;
 
     @Value("${app.ai.slot-ledger.enabled:true}")
     private boolean slotLedgerEnabled;
@@ -83,7 +80,7 @@ public class CohereService {
         List<CohereChatRequest.Message> messages = buildChatMessages(consultation, sanitizedUserText, ragContext, chatHistory);
         AiCallResult<ChatParsedResponse> result = aiClient.callChat(
                 config.getChatModel(), messages);
-        emitCohereMetrics(config.getChatModel(), "chat", result);
+        cohereMetricEmitter.emit(config.getChatModel(), "chat", result);
 
         // Layer 2 가드레일: 금칙어 필터
         ChatParsedResponse filtered = guardrailFilter.filterChatResponse(result.data());
@@ -114,7 +111,7 @@ public class CohereService {
         List<CohereChatRequest.Message> messages = buildBriefMessages(consultation);
         AiCallResult<BriefParsedResponse> result = aiClient.callBrief(
                 config.getBriefModel(), messages);
-        emitCohereMetrics(config.getBriefModel(), "brief", result);
+        cohereMetricEmitter.emit(config.getBriefModel(), "brief", result);
 
         // Layer 2 가드레일: 의뢰서 금칙어 필터
         BriefParsedResponse filtered = guardrailFilter.filterBriefResponse(result.data());
@@ -143,39 +140,8 @@ public class CohereService {
                 config.isStructuredOutputEnabled());
         AiCallResult<String> result = cohereClient.callRawJson(
                 request, Duration.ofMillis(config.getClassifyReadTimeout()));
-        emitCohereMetrics(config.getClassifyModel(), "classify", result);
+        cohereMetricEmitter.emit(config.getClassifyModel(), "classify", result);
         return result;
-    }
-
-    /**
-     * Cohere 호출 결과를 받아 token/cost/latency 메트릭을 best-effort로 emit.
-     *
-     * <p>P5.1 Commit 4 도입. metric 발행 중 예외가 발생해도 호출 결과에는 영향 없음
-     * — 운영 관측은 사용자 응답을 절대 막지 않는다.
-     */
-    private void emitCohereMetrics(String model, String operation, AiCallResult<?> result) {
-        if (operationalMetrics == null || result == null) {
-            return;
-        }
-        try {
-            operationalMetrics.recordCohereTokens(model, operation, "input",
-                    result.tokensInput(), /*estimated=*/false);
-            operationalMetrics.recordCohereTokens(model, operation, "output",
-                    result.tokensOutput(), /*estimated=*/false);
-            if (costCalculator != null) {
-                double cost = costCalculator.estimate(model,
-                        result.tokensInput(), result.tokensOutput());
-                operationalMetrics.recordCohereEstimatedCost(model, operation, cost);
-            }
-            Integer latencyMsBoxed = result.latencyMs();
-            if (latencyMsBoxed != null && latencyMsBoxed >= 0) {
-                operationalMetrics.recordCohereLatency(model, operation,
-                        Duration.ofMillis(latencyMsBoxed), "success");
-            }
-        } catch (Exception e) {
-            log.warn("Cohere metric emit 실패 (operation={}, model={}): {}",
-                    operation, model, Objects.toString(e.getMessage(), e.getClass().getSimpleName()));
-        }
     }
 
     /**

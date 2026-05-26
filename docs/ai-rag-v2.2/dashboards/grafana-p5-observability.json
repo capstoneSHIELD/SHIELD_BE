@@ -1,0 +1,138 @@
+{
+  "annotations": {"list": []},
+  "title": "SHIELD AI — Phase P5 Observability",
+  "description": "Phase P5.1 Commit 6 산출물. Cohere 호출 token/cost/latency + Retrieval Gate + Shadow Judge.",
+  "uid": "shield-p5-observability",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["shield", "ai", "p5"],
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Cohere tokens (분당, operation × direction)",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum by (operation, direction) (rate(shield_ai_cohere_tokens_total[1m]))",
+          "legendFormat": "{{operation}} / {{direction}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Cohere 추정 비용 (USD / 1m)",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum by (operation) (rate(shield_ai_cohere_cost_estimated_usd_sum[1m]))",
+          "legendFormat": "{{operation}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Cohere p50 / p95 latency (5m, operation별)",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (operation, le) (rate(shield_ai_cohere_latency_seconds_bucket[5m])))",
+          "legendFormat": "p50 {{operation}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (operation, le) (rate(shield_ai_cohere_latency_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{operation}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Retrieval Gate (shadow pass/drop + enforce drop)",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum by (method, outcome) (rate(shield_rag_retrieval_gate_total[5m]))",
+          "legendFormat": "{{method}} / {{outcome}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Output Judge Shadow outcome",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(shield_ai_output_judge_shadow_total[5m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "RAG pipeline fallback / vector degrade",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "rate(shield_rag_pipeline_fallback_total[5m])",
+          "legendFormat": "pipeline fallback"
+        },
+        {
+          "expr": "sum by (reason) (rate(shield_rag_vector_degrade_total[5m]))",
+          "legendFormat": "vector degrade {{reason}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Cohere 비용 (지난 1일, USD)",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum(increase(shield_ai_cohere_cost_estimated_usd_sum[1d]))",
+          "legendFormat": "1일 누적"
+        }
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 24}
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Cohere 토큰 (지난 1일)",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum(increase(shield_ai_cohere_tokens_total[1d]))",
+          "legendFormat": "1일 누적"
+        }
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 24}
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {"text": "prometheus", "value": "prometheus"}
+      }
+    ]
+  }
+}

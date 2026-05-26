@@ -1,7 +1,15 @@
 # Phase P5.2 — Baseline 측정 보고서
 
-> **상태**: 인프라 baseline (메트릭 정의 + 평가셋 통계 + 구성 정보).
-> **실제 Recall@5 / nDCG@5 / latency 수치**는 production 환경에서 [`OfflineQualityReportJob`](../../src/main/java/org/example/shield/ai/application/OfflineQualityReportJob.java) 실행 후 추가 기재 예정 (P5.2 Commit 5 후속).
+> **상태 (2026-05-26 refine)**: 인프라 baseline (메트릭 정의 + 평가셋 통계 + 구성 정보).
+> **실제 Recall@5 / nDCG@5 / latency 수치**는 production 환경에서 [`OfflineQualityReportJob`](../../src/main/java/org/example/shield/ai/application/OfflineQualityReportJob.java) 실행 후 추가 기재 예정.
+>
+> **Shadow judge 활성화 가이드** (production-safe default는 OFF):
+> ```bash
+> # 1주일 sampling 데이터 수집 시작:
+> AI_OUTPUT_JUDGE_SHADOW_ENABLED=true
+> AI_OUTPUT_JUDGE_SAMPLING_RATE=0.1
+> ```
+> conversation-deterministic sampling이라 같은 상담은 항상 같은 결정 (분석 일관성).
 
 ## 1. 측정 모드 (production default)
 

@@ -1,5 +1,9 @@
 # Phase P5.4 — 품질 실험 (Rerank + RRF)
 
+> **범위 명확화 (2026-05-26)**: 본 phase는 **RAG 검색 레이어**(Rerank / RRF) 실험.
+> 생성·판정 레이어(Chat / Brief / Judge)의 HyperCLOVA X 도입은 [P5.5](./ai-rag-phase-p5_5-hyperclova-hybrid.md)로 분리.
+> P5.4와 P5.5는 독립 레이어이므로 병행 진행 가능.
+
 ## 메타
 - 기간: ~1주 (Sprint 3)
 - 의존: P5.1 (mode enum, metric), P5.2 (평가셋 v1.6), P5.3 (cache 안정화)
