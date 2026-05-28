@@ -154,7 +154,7 @@ public class MessageService {
                     classificationResolver.candidateForCollection(consultation);
             slotLedgerService.ensureInitialized(consultation, collectionCandidate, chatHistory);
             SendMessageResponse.Checklist promptChecklist = buildPromptChecklist(collectionCandidate);
-            String domainForRag = collectionCandidate.firstDomain();
+            String domainForRag = collectionCandidate != null ? collectionCandidate.firstDomain() : null;
             IntentRouterResponse intentResult = intentClassificationService.route(chatHistory, domainForRag);
             IntentRouteDecision routeDecision = backendIntentRouter.route(
                     consultation, intentResult, chatHistory, sanitizedText);
