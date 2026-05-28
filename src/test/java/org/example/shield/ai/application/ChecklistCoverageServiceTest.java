@@ -11,7 +11,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.UUID;
@@ -36,11 +35,11 @@ class ChecklistCoverageServiceTest {
 
     @BeforeEach
     void setUp() {
+        // application.yml 기본값(0.5) 과 동일한 임계를 생성자 인자로 직접 주입.
         service = new ChecklistCoverageService(
                 messageReader,
-                new ChecklistScopeResolver(new ChecklistLoader(), null, null));
-        // @Value 는 단위 테스트 컨테이너 없이 주입되지 않으므로 application.yml 기본값과 일치시킨다.
-        ReflectionTestUtils.setField(service, "coverageThreshold", 0.5);
+                new ChecklistScopeResolver(new ChecklistLoader(), null, null),
+                0.5);
     }
 
     // ----- L1 기본 케이스 -----

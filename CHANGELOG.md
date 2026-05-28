@@ -12,6 +12,7 @@
 - 이 경우 `content` (`nextQuestion`) 는 LLM 이 생성한 자연스러운 후속 질문 그대로 유지됩니다 (10턴 도달 시의 강제 안내 멘트 치환과는 다름).
 - FE 동작 권장: `allCompleted=true` 이면 "의뢰서 생성" 버튼을 노출하되, 사용자가 더 답하고 싶다면 이어서 메시지를 보낼 수 있도록 입력창도 함께 유지.
 - 10턴 도달 시점의 강제 종료(`content` 가 "필요한 정보를 충분히 수집했습니다..." 로 치환되는 케이스) 동작은 기존과 동일.
+- **FE 수정 가이드**: [docs/fe-guide-early-completion.md](docs/fe-guide-early-completion.md) — 입력창 잠금 조건, 진행률 바 라벨 분기, 테스트 시나리오 정리.
 
 ---
 

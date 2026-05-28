@@ -90,7 +90,7 @@ class ChecklistScopeResolverTest {
     void promptAndCoverage_useSameScopeItems() {
         ChecklistScopeResolver resolver = new ChecklistScopeResolver(new ChecklistLoader(), null, null);
         ChecklistPromptBuilder promptBuilder = new ChecklistPromptBuilder(resolver);
-        ChecklistCoverageService coverageService = new ChecklistCoverageService(mock(MessageReader.class), resolver);
+        ChecklistCoverageService coverageService = new ChecklistCoverageService(mock(MessageReader.class), resolver, 0.5);
 
         String prompt = promptBuilder.build("부동산 거래", "부동산 임대차", "보증금 및 차임");
         List<String> coverageLabels = coverageService

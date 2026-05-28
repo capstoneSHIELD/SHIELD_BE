@@ -1,6 +1,5 @@
 package org.example.shield.ai.application;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.checklist.ChecklistScope;
 import org.example.shield.ai.dto.checklist.ChecklistScopeItem;
@@ -18,15 +17,22 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ChecklistCoverageService {
 
     private final MessageReader messageReader;
     private final ChecklistScopeResolver checklistScopeResolver;
+    private final double coverageThreshold;
 
-    @Value("${shield.consultation.completion.coverage-threshold:0.5}")
-    private double coverageThreshold;
+    public ChecklistCoverageService(
+            MessageReader messageReader,
+            ChecklistScopeResolver checklistScopeResolver,
+            @Value("${shield.consultation.completion.coverage-threshold:0.5}") double coverageThreshold
+    ) {
+        this.messageReader = messageReader;
+        this.checklistScopeResolver = checklistScopeResolver;
+        this.coverageThreshold = coverageThreshold;
+    }
 
     private static final Pattern TIME_EXPRESSION_PATTERN = Pattern.compile(
             "(\\d+\\s*(\\uB144|\\uC6D4|\\uC77C|\\uAC1C\\uC6D4|\\uC8FC|\\uC2DC\\uAC04)"
