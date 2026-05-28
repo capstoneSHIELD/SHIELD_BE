@@ -68,6 +68,10 @@ class PromptServiceTest {
     void loadRouterChatPrompt_success() {
         String prompt = service.loadRouterChatPrompt();
         assertThat(prompt).isNotNull().isNotEmpty();
+        assertThat(prompt).contains("개인정보 최소 수집");
+        assertThat(prompt).contains("실명/성명");
+        assertThat(prompt).contains("실명 대신 A씨처럼 지칭해도 됩니다");
+        assertThat(prompt).contains("연락처/실명/신분증 번호를 요구하지 마세요");
     }
 
     @Test

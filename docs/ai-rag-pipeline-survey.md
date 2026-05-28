@@ -136,9 +136,10 @@
 - 위치: [SanitizeService.java](../src/main/java/org/example/shield/ai/infrastructure/SanitizeService.java)
 - 동작 (3단계):
   1. NFC 유니코드 정규화
-  2. PII 패턴(주민번호/계좌/카드) 감지 시 `PiiDetectedException` → 입력 거부
+  2. PII 패턴(주민번호/외국인등록번호/계좌/카드/전화번호/이메일/여권번호/운전면허번호/인증번호/비밀번호/API key·token) 감지 시 `PiiDetectedException` → 입력 거부
   3. 역할 구분자("AI:", "USER:", "SYSTEM:")에 zero-width space 삽입 → 프롬프트 인젝션 방지
 - 호출: [MessageService.java](../src/main/java/org/example/shield/consultation/application/MessageService.java) `sendMessage()` 진입점. PII 감지 시 안내 메시지만 저장 후 조기 반환
+- 이름/주소는 정규식 오탐 위험 때문에 입력 hard-block 대상에서 제외한다.
 
 ### 3.2 출력 GuardrailFilter (결정론적 대체)
 
