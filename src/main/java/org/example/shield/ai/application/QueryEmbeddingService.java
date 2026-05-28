@@ -88,7 +88,8 @@ public class QueryEmbeddingService {
                 embeddingCache.put(key, vector);
                 recordCache(model, "store");
             } catch (Exception e) {
-                log.warn("Embedding cache put 실패 (model={}): {}", model, e.getMessage());
+                log.warn("Embedding cache put 실패 (model={}, errorType={}): {}",
+                        model, e.getClass().getName(), e.getMessage(), e);
                 recordCache(model, "error");
             }
         }
@@ -115,7 +116,8 @@ public class QueryEmbeddingService {
             recordCache(model, cached.isPresent() ? "hit" : "miss");
             return cached;
         } catch (Exception e) {
-            log.warn("Embedding cache get 실패 (model={}): {}", model, e.getMessage());
+            log.warn("Embedding cache get 실패 (model={}, errorType={}): {}",
+                    model, e.getClass().getName(), e.getMessage(), e);
             recordCache(model, "error");
             return Optional.empty();
         }

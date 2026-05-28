@@ -44,6 +44,11 @@ public class RagMetrics {
     public static final String METRIC_PIPELINE_TOTAL = "shield.rag.pipeline.total";
     public static final String METRIC_RETRIEVAL_GATE = "shield.rag.retrieval_gate";
     public static final String METRIC_OUTPUT_JUDGE_SHADOW = "shield.ai.output_judge.shadow";
+    /** RAG circuit breaker — tag {@code outcome=trip|skipped|trial|closed} */
+    public static final String METRIC_CIRCUIT_BREAKER = "shield.rag.circuit_breaker";
+    /** Retrieve 재시도 (필터 완화) — tag {@code level=loose|broad}, {@code outcome=hit|empty}.
+     *  level: loose = lawIds 제거, broad = lawIds+categoryIds 모두 제거. */
+    public static final String METRIC_RETRIEVE_RETRY = "shield.rag.retrieve.retry";
 
     private final MeterRegistry registry;
 
@@ -167,6 +172,36 @@ public class RagMetrics {
 
     public void stopPipelineFailure(Timer.Sample sample) {
         sample.stop(registry.timer(METRIC_PIPELINE_TOTAL, Tags.of("outcome", "failure")));
+    }
+
+    // === RAG Circuit Breaker ===
+
+    /**
+     * RAG circuit breaker 상태 전이 / 호출 차단 이벤트 기록.
+     *
+     * @param outcome {@code trip} — CLOSED→OPEN trip,
+     *                {@code skipped} — OPEN 중 차단된 호출,
+     *                {@code trial} — OPEN 만료 후 HALF_OPEN 1회 시도 허용,
+     *                {@code closed} — HALF_OPEN→CLOSED 복귀
+     */
+    public void recordCircuitBreaker(String outcome) {
+        counter(METRIC_CIRCUIT_BREAKER, Tags.of("outcome", outcome == null ? "unknown" : outcome))
+                .increment();
+    }
+
+    // === Retrieve Retry (filter loosening fallback) ===
+
+    /**
+     * 1차 검색이 0건일 때 필터를 완화해 재시도한 경우 기록.
+     *
+     * @param level   {@code loose} = lawIds 제거, {@code broad} = lawIds+categoryIds 모두 제거
+     * @param outcome {@code hit} = 재시도가 1건 이상 회수, {@code empty} = 여전히 0건
+     */
+    public void recordRetrieveRetry(String level, String outcome) {
+        counter(METRIC_RETRIEVE_RETRY, Tags.of(
+                "level", level == null ? "unknown" : level,
+                "outcome", outcome == null ? "unknown" : outcome
+        )).increment();
     }
 
     private Counter counter(String name, Iterable<Tag> tags) {

@@ -181,6 +181,14 @@ public class MessageService {
                 RagPipelineResult ragResult = ragPipelineService.executeDetailed(
                         chatHistory, domainForRag, consultationId, intentResult);
                 ragContext = ragResult.ragContext();
+                if (ragContext == null || ragContext.isEmpty()) {
+                    // RAG 파이프라인은 실패해도 빈 컨텍스트로 응답하므로(graceful degrade),
+                    // 어떤 의뢰가 RAG-less 경로로 빠졌는지 추적 가능하도록 한 줄 남긴다.
+                    // 상세 실패 원인은 RagPipelineService 의 warn 로그에 stage/스택과 함께 기록됨.
+                    log.info("Proceeding without RAG context: consultationId={}, domain={}, retrieved={}",
+                            consultationId, domainForRag,
+                            ragResult.retrievalResults() == null ? 0 : ragResult.retrievalResults().size());
+                }
             }
 
             // 3. Cohere Chat v2 호출 — 트랜잭션 밖 + Micrometer 타이밍

@@ -1,5 +1,6 @@
 package org.example.shield.ai.application;
 
+import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.config.RagFeatureMode;
 import org.example.shield.ai.dto.RetrievalScoreCandidate;
 import org.example.shield.ai.dto.RetrievalScoreGateDecision;
@@ -27,6 +28,7 @@ import java.util.OptionalDouble;
  * <p>임계값은 점수 산정 방식 별로 별도 설정 (weighted/rrf/rerank 점수는 분포가 다름).
  */
 @Component
+@Slf4j
 public class RetrievalScoreGate {
 
     private final RagMetrics ragMetrics;
@@ -135,6 +137,8 @@ public class RetrievalScoreGate {
         try {
             return OptionalDouble.of(Double.parseDouble(raw.trim()));
         } catch (NumberFormatException e) {
+            log.warn("RetrievalScoreGate threshold 파싱 실패 — method={}, raw='{}', errorMsg={}",
+                    safeMethod, raw, e.getMessage());
             return OptionalDouble.empty();
         }
     }
