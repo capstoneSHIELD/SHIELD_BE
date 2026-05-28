@@ -6,6 +6,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.example.shield.ai.application.ChecklistCoverageService;
 import org.example.shield.ai.application.CohereService;
 import org.example.shield.ai.application.BackendIntentRouter;
+import org.example.shield.ai.application.ChecklistScopeResolver;
 import org.example.shield.ai.application.IntentClassificationService;
 import org.example.shield.ai.application.IntentRouteDecision;
 import org.example.shield.ai.application.OntologyService;
@@ -17,6 +18,10 @@ import org.example.shield.ai.dto.ChatParsedResponse;
 import org.example.shield.ai.dto.CorrectedSlot;
 import org.example.shield.ai.dto.IntentRouterResponse;
 import org.example.shield.ai.dto.RagPipelineResult;
+import org.example.shield.ai.dto.checklist.ChecklistScope;
+import org.example.shield.ai.dto.checklist.ChecklistScopeItem;
+import org.example.shield.ai.dto.checklist.ChecklistScopeLevel;
+import org.example.shield.ai.dto.slot.SlotValueType;
 import org.example.shield.ai.infrastructure.SanitizeService;
 import org.example.shield.common.enums.MessageRole;
 import org.example.shield.common.exception.ChatAiException;
@@ -76,6 +81,7 @@ class MessageServiceTest {
     @Mock private CohereApiConfig cohereApiConfig;
     @Mock private SanitizeService sanitizeService;
     @Mock private ChecklistCoverageService checklistCoverageService;
+    @Mock private ChecklistScopeResolver checklistScopeResolver;
     @Mock private RagPipelineService ragPipelineService;
     @Mock private Consultation consultation;
     @Mock private ChatTransactionalBoundary chatTxBoundary;
@@ -217,6 +223,69 @@ class MessageServiceTest {
                 .isEqualTo(1L);
         assertThat(meterRegistry.timer(ChatMetrics.METRIC_COHERE_CALL, "outcome", "success").count())
                 .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("sendMessage response includes current L1/L2/L3 prompt checklist")
+    void sendMessage_responseIncludesCurrentPromptChecklist() {
+        given(consultation.getUserDomains()).willReturn(List.of("real estate"));
+        given(consultation.getUserSubDomains()).willReturn(List.of("lease"));
+        given(consultation.getUserTags()).willReturn(List.of("deposit"));
+        given(checklistScopeResolver.resolve("real estate", "lease", "deposit"))
+                .willReturn(new ChecklistScope(
+                        "real estate",
+                        "lease",
+                        "deposit",
+                        "2",
+                        List.of(
+                                new ChecklistScopeItem(
+                                        "static:real-estate:root:root:a1",
+                                        "party information",
+                                        ChecklistScopeLevel.L1,
+                                        true,
+                                        1,
+                                        "l1_checklist.required[0]",
+                                        null,
+                                        SlotValueType.TEXT),
+                                new ChecklistScopeItem(
+                                        "static:real-estate:lease:root:b2",
+                                        "lease period",
+                                        ChecklistScopeLevel.L2,
+                                        true,
+                                        2,
+                                        "nodes/law-001-02.focus[0]",
+                                        "law-001-02",
+                                        SlotValueType.DATE),
+                                new ChecklistScopeItem(
+                                        "static:real-estate:lease:deposit:c3",
+                                        "deposit amount",
+                                        ChecklistScopeLevel.L3,
+                                        true,
+                                        3,
+                                        "nodes/law-001-02-02.items[0]",
+                                        "law-001-02-02",
+                                        SlotValueType.MONEY)),
+                        List.of()));
+
+        ChatParsedResponse parsed = new ChatParsedResponse();
+        parsed.setNextQuestion("When did the lease begin?");
+        parsed.setAiDomains(List.of());
+        parsed.setAiSubDomains(List.of());
+        parsed.setAiTags(List.of());
+        given(cohereService.chat(any(), anyString(), anyString(), any()))
+                .willReturn(new AiCallResult<>("resp-checklist-1", parsed, 100, 42, 250));
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "The deposit was 50 million won.");
+
+        assertThat(response.checklist()).isNotNull();
+        assertThat(response.checklist().caseType().l1()).isEqualTo("real estate");
+        assertThat(response.checklist().caseType().l2()).isEqualTo("lease");
+        assertThat(response.checklist().caseType().l3()).isEqualTo("deposit");
+        assertThat(response.checklist().sourceVersion()).isEqualTo("2");
+        assertThat(response.checklist().items()).extracting(SendMessageResponse.Item::level)
+                .containsExactly(ChecklistScopeLevel.L1, ChecklistScopeLevel.L2, ChecklistScopeLevel.L3);
+        assertThat(response.checklist().items()).extracting(SendMessageResponse.Item::label)
+                .containsExactly("party information", "lease period", "deposit amount");
     }
 
     @Test
@@ -702,5 +771,9 @@ class MessageServiceTest {
                 .isEqualTo(3);
         assertThat(response.progress().maxTurns()).isEqualTo(10);
         assertThat(response.progress().progressPercent()).isEqualTo(30);
+        assertThat(response.checklist()).isNotNull();
+        assertThat(response.checklist().caseType()).isEqualTo(SendMessageResponse.CaseType.empty());
+        assertThat(response.checklist().items()).isEmpty();
+        assertThat(response.checklist().warnings()).isEmpty();
     }
 }
