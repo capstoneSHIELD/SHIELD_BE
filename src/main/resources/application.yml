@@ -93,7 +93,7 @@ shield:
 # JWT
 jwt:
   secret: ${JWT_SECRET}
-  access-token-expiry: 1800000
+  access-token-expiry: 86400000
   refresh-token-expiry: 1209600000
 
 # Google OAuth
