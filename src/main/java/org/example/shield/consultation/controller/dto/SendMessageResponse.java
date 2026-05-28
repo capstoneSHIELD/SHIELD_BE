@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import org.example.shield.ai.dto.checklist.ChecklistScope;
 import org.example.shield.ai.dto.checklist.ChecklistScopeItem;
 import org.example.shield.ai.dto.checklist.ChecklistScopeLevel;
-import org.example.shield.ai.dto.slot.SlotValueType;
 import org.example.shield.consultation.application.ClassificationCandidate;
 import org.example.shield.consultation.application.ClassificationResolution;
 import org.example.shield.consultation.domain.Message;
@@ -95,67 +94,33 @@ public record SendMessageResponse(
         return checklist == null ? Checklist.empty() : checklist;
     }
 
-    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Checklist(
-            CaseType caseType,
-            String sourceVersion,
-            List<Item> items,
-            List<String> warnings
+            List<Item> items
     ) {
         public Checklist {
-            caseType = caseType == null ? CaseType.empty() : caseType;
             items = items == null ? List.of() : List.copyOf(items);
-            warnings = warnings == null ? List.of() : List.copyOf(warnings);
         }
 
         public static Checklist empty() {
-            return new Checklist(CaseType.empty(), null, List.of(), List.of());
+            return new Checklist(List.of());
         }
 
         public static Checklist from(ChecklistScope scope) {
             if (scope == null) {
                 return empty();
             }
-            return new Checklist(
-                    new CaseType(scope.l1Name(), scope.l2Name(), scope.l3Name()),
-                    scope.sourceVersion(),
-                    scope.items() == null ? List.of() : scope.items().stream().map(Item::from).toList(),
-                    scope.warnings()
-            );
-        }
-    }
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record CaseType(
-            String l1,
-            String l2,
-            String l3
-    ) {
-        public static CaseType empty() {
-            return new CaseType(null, null, null);
+            return new Checklist(scope.items().stream().map(Item::from).toList());
         }
     }
 
     public record Item(
-            String slotId,
-            String label,
             ChecklistScopeLevel level,
-            boolean required,
-            int priority,
-            String sourcePath,
-            String nodeId,
-            SlotValueType valueType
+            String label
     ) {
         private static Item from(ChecklistScopeItem item) {
             return new Item(
-                    item.slotId(),
-                    item.label(),
                     item.level(),
-                    item.required(),
-                    item.priority(),
-                    item.sourcePath(),
-                    item.nodeId(),
-                    item.valueType()
+                    item.label()
             );
         }
     }
