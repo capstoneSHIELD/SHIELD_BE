@@ -116,6 +116,10 @@ public class PgLegalRetrievalService implements LegalRetrievalService {
             return result;
         } catch (RuntimeException e) {
             ragMetrics.stopRetrieveFailure(sample);
+            log.error("RAG retrieve 실패 — vectorQuery='{}', bm25Keywords={}, categoryIds={}, "
+                            + "lawIds={}, topK={}, errorType={}, errorMsg={}",
+                    vectorQuery, bm25Keywords, categoryIds, lawIds, topK,
+                    e.getClass().getName(), e.getMessage(), e);
             throw e;
         }
     }
@@ -145,6 +149,10 @@ public class PgLegalRetrievalService implements LegalRetrievalService {
             return result;
         } catch (RuntimeException e) {
             ragMetrics.stopRetrieveFailure(sample);
+            log.error("RAG retrieveMixed 실패 — vectorQuery='{}', bm25Keywords={}, categoryIds={}, "
+                            + "lawIds={}, topK={}, errorType={}, errorMsg={}",
+                    vectorQuery, bm25Keywords, categoryIds, lawIds, topK,
+                    e.getClass().getName(), e.getMessage(), e);
             throw e;
         }
     }
@@ -295,14 +303,16 @@ public class PgLegalRetrievalService implements LegalRetrievalService {
         try {
             float[] vec = queryEmbeddingService.embedQuery(vectorQuery);
             if (vec == null || vec.length == 0) {
-                log.warn("쿼리 임베딩 응답이 비어 영벡터로 degrade: query='{}'", vectorQuery);
+                log.warn("쿼리 임베딩 응답이 비어 영벡터로 degrade: query='{}', vectorLength={}",
+                        vectorQuery, vec == null ? -1 : 0);
                 ragMetrics.recordVectorDegrade("empty_response");
                 return zeroVectorLiteral;
             }
             return floatArrayToPgVector(vec);
         } catch (Exception e) {
-            log.warn("쿼리 임베딩 실패, 2-way(BM25+trigram)로 degrade: query='{}', error={}",
-                    vectorQuery, e.getMessage());
+            log.warn("쿼리 임베딩 실패, 2-way(BM25+trigram)로 degrade: "
+                            + "query='{}', errorType={}, errorMsg={}",
+                    vectorQuery, e.getClass().getName(), e.getMessage(), e);
             ragMetrics.recordVectorDegrade("cohere_error");
             return zeroVectorLiteral;
         }
