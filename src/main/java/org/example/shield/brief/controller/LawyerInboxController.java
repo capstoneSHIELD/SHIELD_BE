@@ -37,15 +37,15 @@ public class LawyerInboxController {
 
     private final DeliveryService deliveryService;
 
-    @Operation(summary = "수신 의뢰서 목록", description = "filter=ALL|NEW|REVIEWING|RESPONDED 로 필터링")
+    @Operation(summary = "수신 의뢰서 목록", description = "status=ALL|DELIVERED|CONFIRMED|REJECTED|NEW|REVIEWING|RESPONDED 로 필터링")
     @GetMapping
     public ApiResponse<PageResponse<InboxResponse>> getInbox(
             @AuthenticationPrincipal UUID lawyerId,
-            @RequestParam(defaultValue = "ALL") InboxFilter filter,
+            @RequestParam(name = "status", defaultValue = "ALL") InboxFilter status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, Math.min(size, 100), Sort.by(Sort.Direction.DESC, "sentAt"));
-        PageResponse<InboxResponse> result = deliveryService.getInbox(lawyerId, filter, pageable);
+        PageResponse<InboxResponse> result = deliveryService.getInbox(lawyerId, status, pageable);
         return ApiResponse.success("조회 성공", result);
     }
 
