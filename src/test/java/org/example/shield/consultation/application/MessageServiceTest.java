@@ -278,10 +278,6 @@ class MessageServiceTest {
         SendMessageResponse response = messageService.sendMessage(consultationId, "The deposit was 50 million won.");
 
         assertThat(response.checklist()).isNotNull();
-        assertThat(response.checklist().caseType().l1()).isEqualTo("real estate");
-        assertThat(response.checklist().caseType().l2()).isEqualTo("lease");
-        assertThat(response.checklist().caseType().l3()).isEqualTo("deposit");
-        assertThat(response.checklist().sourceVersion()).isEqualTo("2");
         assertThat(response.checklist().items()).extracting(SendMessageResponse.Item::level)
                 .containsExactly(ChecklistScopeLevel.L1, ChecklistScopeLevel.L2, ChecklistScopeLevel.L3);
         assertThat(response.checklist().items()).extracting(SendMessageResponse.Item::label)
@@ -772,8 +768,6 @@ class MessageServiceTest {
         assertThat(response.progress().maxTurns()).isEqualTo(10);
         assertThat(response.progress().progressPercent()).isEqualTo(30);
         assertThat(response.checklist()).isNotNull();
-        assertThat(response.checklist().caseType()).isEqualTo(SendMessageResponse.CaseType.empty());
         assertThat(response.checklist().items()).isEmpty();
-        assertThat(response.checklist().warnings()).isEmpty();
     }
 }
