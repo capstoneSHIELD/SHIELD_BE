@@ -236,6 +236,14 @@ app:
     rag:
       fusion-mode: ${AI_RAG_FUSION_MODE:weighted}
       rrf-k: ${AI_RAG_RRF_K:60}
+      # RAG 파이프라인 회로 차단기 — Cohere/DB 연속 장애 시 RAG 호출 즉시 스킵.
+      # CLOSED → (failure-threshold 도달) → OPEN → (open-duration 경과) → HALF_OPEN → (성공) → CLOSED
+      # 실패가 누적되면 응답 지연 폭증·timeout 누수를 막기 위해 일시적으로 RAG-less 경로로 전환.
+      circuit-breaker:
+        enabled: ${AI_RAG_CB_ENABLED:true}
+        failure-threshold: ${AI_RAG_CB_FAILURE_THRESHOLD:5}
+        window-seconds: ${AI_RAG_CB_WINDOW_SECONDS:60}
+        open-duration-seconds: ${AI_RAG_CB_OPEN_DURATION_SECONDS:60}
       retrieval-gate:
         # P5.1 Commit 5 — mode 기반 분기 (off|shadow|enforce).
         # legacy 'enabled' flag는 BC를 위해 유지: true면 ENFORCE로 마이그레이션됨.
