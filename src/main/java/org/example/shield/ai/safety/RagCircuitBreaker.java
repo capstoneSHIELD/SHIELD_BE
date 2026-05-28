@@ -121,6 +121,9 @@ public class RagCircuitBreaker {
         if (!enabled) {
             return;
         }
+        if (state == State.OPEN) {
+            return;
+        }
         Instant now = Instant.now();
         if (state == State.HALF_OPEN) {
             state = State.OPEN;
