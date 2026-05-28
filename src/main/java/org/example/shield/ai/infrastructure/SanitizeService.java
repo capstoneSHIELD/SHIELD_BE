@@ -45,7 +45,7 @@ public class SanitizeService {
     private static final Pattern OTP_PATTERN = Pattern.compile(
             "(?iu)(?:인증\\s*번호|OTP|one[- ]?time\\s*password|verification\\s*code|확인\\s*코드)\\s*(?:[:：=]|은|는)?\\s*\\d{4,8}\\b");
     private static final Pattern PASSWORD_PATTERN = Pattern.compile(
-            "(?iu)(?:비밀\\s*번호|비번|패스워드|password|passcode|pwd)\\s*(?:[:：=]|은|는|is)\\s*\\S{4,64}");
+            "(?iu)(?:비밀\\s*번호|비번|패스워드|password|passcode|pwd)\\s*(?:[:：=]|은|는|is)\\s*[\\x21-\\x7E]{4,64}");
     private static final Pattern TOKEN_PATTERN = Pattern.compile(
             "(?i)(?:\\bsk-[A-Za-z0-9_-]{12,}\\b|\\bghp_[A-Za-z0-9]{20,}\\b|\\bgithub_pat_[A-Za-z0-9_]{20,}\\b|\\bAKIA[0-9A-Z]{16}\\b|\\bBearer\\s+[A-Za-z0-9._~+/=-]{10,}\\b|\\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret[_-]?key|client[_-]?secret)\\s*[:=]\\s*[A-Za-z0-9._~+/=-]{8,}\\b)");
 
