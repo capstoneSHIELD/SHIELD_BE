@@ -81,9 +81,14 @@ spring:
 # 상담 (대화) 정책
 # - max-user-turns: 사용자 메시지 상한. 도달 시 서버가 allCompleted=true 를 강제 반환해
 #   FE 가 자연스럽게 /analyze (의뢰서 생성) 로 전환. 초과 호출(N+1 번째)은 400 거부.
+# - completion.coverage-threshold: LLM 자율 종료 게이트의 체크리스트 커버리지 임계.
+#   `LLM allCompleted=true AND coverage >= threshold` 면 10턴 이전이라도 allCompleted=true 응답.
+#   기본 0.5 — 운영에서 SHIELD_COMPLETION_COVERAGE_THRESHOLD 로 즉시 조정 가능.
 shield:
   consultation:
     max-user-turns: 10
+    completion:
+      coverage-threshold: ${SHIELD_COMPLETION_COVERAGE_THRESHOLD:0.5}
 
 # JWT
 jwt:

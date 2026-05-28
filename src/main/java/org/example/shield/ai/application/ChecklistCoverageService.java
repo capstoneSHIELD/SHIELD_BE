@@ -8,6 +8,7 @@ import org.example.shield.ai.dto.slot.SlotValueType;
 import org.example.shield.common.enums.MessageRole;
 import org.example.shield.consultation.domain.Message;
 import org.example.shield.consultation.domain.MessageReader;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -24,7 +25,9 @@ public class ChecklistCoverageService {
     private final MessageReader messageReader;
     private final ChecklistScopeResolver checklistScopeResolver;
 
-    private static final double COVERAGE_THRESHOLD = 0.85;
+    @Value("${shield.consultation.completion.coverage-threshold:0.5}")
+    private double coverageThreshold;
+
     private static final Pattern TIME_EXPRESSION_PATTERN = Pattern.compile(
             "(\\d+\\s*(\\uB144|\\uC6D4|\\uC77C|\\uAC1C\\uC6D4|\\uC8FC|\\uC2DC\\uAC04)"
                     + "|\\uC791\\uB144|\\uC62C\\uD574|\\uCD5C\\uADFC"
@@ -64,11 +67,11 @@ public class ChecklistCoverageService {
     }
 
     public boolean isEffectivelyCompleted(boolean llmAllCompleted, double coverageRatio) {
-        return llmAllCompleted && coverageRatio >= COVERAGE_THRESHOLD;
+        return llmAllCompleted && coverageRatio >= coverageThreshold;
     }
 
     public double getThreshold() {
-        return COVERAGE_THRESHOLD;
+        return coverageThreshold;
     }
 
     public List<CoverageItem> buildCoverageItems(

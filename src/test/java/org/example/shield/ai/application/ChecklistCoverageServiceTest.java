@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.UUID;
@@ -38,6 +39,8 @@ class ChecklistCoverageServiceTest {
         service = new ChecklistCoverageService(
                 messageReader,
                 new ChecklistScopeResolver(new ChecklistLoader(), null, null));
+        // @Value 는 단위 테스트 컨테이너 없이 주입되지 않으므로 application.yml 기본값과 일치시킨다.
+        ReflectionTestUtils.setField(service, "coverageThreshold", 0.5);
     }
 
     // ----- L1 기본 케이스 -----
@@ -127,16 +130,16 @@ class ChecklistCoverageServiceTest {
     // ----- AND gate -----
 
     @Test
-    @DisplayName("AND gate — allCompleted true + 커버리지 >= 0.85 → true")
+    @DisplayName("AND gate — allCompleted true + 커버리지 >= 임계(0.5) → true")
     void andGatePass() {
         assertThat(service.isEffectivelyCompleted(true, 0.90)).isTrue();
-        assertThat(service.isEffectivelyCompleted(true, 0.85)).isTrue();
+        assertThat(service.isEffectivelyCompleted(true, 0.50)).isTrue();
     }
 
     @Test
-    @DisplayName("AND gate — allCompleted true + 커버리지 < 0.85 → false")
+    @DisplayName("AND gate — allCompleted true + 커버리지 < 임계(0.5) → false")
     void andGateFail() {
-        assertThat(service.isEffectivelyCompleted(true, 0.80)).isFalse();
+        assertThat(service.isEffectivelyCompleted(true, 0.40)).isFalse();
         assertThat(service.isEffectivelyCompleted(true, 0.0)).isFalse();
     }
 
@@ -147,9 +150,9 @@ class ChecklistCoverageServiceTest {
     }
 
     @Test
-    @DisplayName("getThreshold — 0.85")
-    void thresholdIs085() {
-        assertThat(service.getThreshold()).isEqualTo(0.85);
+    @DisplayName("getThreshold — 기본값 0.5")
+    void thresholdIs05() {
+        assertThat(service.getThreshold()).isEqualTo(0.5);
     }
 
     // ----- buildMissingSlotsGuidance -----

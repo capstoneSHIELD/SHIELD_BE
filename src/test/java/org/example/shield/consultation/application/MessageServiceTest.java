@@ -556,6 +556,76 @@ class MessageServiceTest {
                 .isEqualTo(1L);
     }
 
+    /**
+     * 조기 종료 경로 — 5턴째에 LLM allCompleted=true 이고 커버리지가 임계 이상이면
+     * 서버가 effectiveAllCompleted=true 를 반환하고 nextQuestion 은 LLM 원본 유지.
+     * (옵션 제공만 — 강제 종료 안 함, FE 가 사용자 선택을 받음)
+     */
+    @Test
+    @DisplayName("조기 종료 — 5턴째 LLM true + 커버리지 임계 이상이면 allCompleted=true, nextQuestion 유지")
+    void sendMessage_earlyTurn_llmTrueAndCoverageMeetsThreshold_returnsAllCompletedTrue() {
+        given(messageReader.countByConsultationIdAndRole(consultationId, MessageRole.USER))
+                .willReturn(4L); // 새 메시지 저장 후 5 — 상한 미달
+
+        ChatParsedResponse parsed = new ChatParsedResponse();
+        parsed.setNextQuestion("추가로 확인하고 싶은 부분이 있을까요?");
+        parsed.setAllCompleted(true); // LLM 자율 종료 신호
+        parsed.setAiDomains(List.of());
+        parsed.setAiSubDomains(List.of());
+        parsed.setAiTags(List.of());
+        given(cohereService.chat(any(), anyString(), anyString(), any()))
+                .willReturn(new AiCallResult<>("resp-early-true", parsed, 100, 42, 250));
+        given(checklistCoverageService.compute(eq(consultationId), any(), any(), any()))
+                .willReturn(0.7);
+        given(checklistCoverageService.isEffectivelyCompleted(true, 0.7)).willReturn(true);
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "5번째 입력");
+
+        assertThat(response.allCompleted())
+                .as("LLM true + 커버리지 임계 이상이면 10턴 이전이라도 effectiveAllCompleted=true")
+                .isTrue();
+        assertThat(response.content())
+                .as("조기 종료 경로에서는 nextQuestion 을 덮어쓰지 않음 — 사용자가 더 답할 수 있는 옵션 유지")
+                .isEqualTo("추가로 확인하고 싶은 부분이 있을까요?")
+                .doesNotContain("의뢰서 생성");
+
+        // 영구 저장(Issue #100) — 재진입 복원용
+        verify(chatTxBoundary, times(1)).markConsultationAllCompleted(consultationId);
+
+        // 메트릭 outcome=success (turn_limit_reached 가 아님)
+        assertThat(meterRegistry.timer(ChatMetrics.METRIC_SEND_MESSAGE, "outcome", "success").count())
+                .isEqualTo(1L);
+        assertThat(meterRegistry.timer(ChatMetrics.METRIC_SEND_MESSAGE, "outcome", "turn_limit_reached").count())
+                .isEqualTo(0L);
+    }
+
+    /**
+     * 조기 종료 경로 — LLM 이 false 면 커버리지 무관하게 effective=false (게이트 통과 안 함).
+     */
+    @Test
+    @DisplayName("조기 종료 — LLM allCompleted=false 면 커버리지 높아도 false 유지")
+    void sendMessage_earlyTurn_llmFalse_remainsIncomplete() {
+        given(messageReader.countByConsultationIdAndRole(consultationId, MessageRole.USER))
+                .willReturn(4L);
+
+        ChatParsedResponse parsed = new ChatParsedResponse();
+        parsed.setNextQuestion("어떤 증거가 있으세요?");
+        parsed.setAllCompleted(false);
+        parsed.setAiDomains(List.of());
+        parsed.setAiSubDomains(List.of());
+        parsed.setAiTags(List.of());
+        given(cohereService.chat(any(), anyString(), anyString(), any()))
+                .willReturn(new AiCallResult<>("resp-early-false", parsed, 100, 42, 250));
+
+        SendMessageResponse response = messageService.sendMessage(consultationId, "5번째 입력");
+
+        assertThat(response.allCompleted()).isFalse();
+        // LLM false 이면 checklistCoverageService.compute() 자체가 호출되지 않아야 함
+        // (evaluateAllCompletedGate 가 isAllCompleted=false 에서 바로 false 반환)
+        verify(checklistCoverageService, never()).compute(any(), any(), any(), any());
+        verify(chatTxBoundary, never()).markConsultationAllCompleted(any());
+    }
+
     // ── Issue #88 — 상담 진행률 응답 필드 ─────────────────────────────────
 
     /**
