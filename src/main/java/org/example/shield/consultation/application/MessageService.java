@@ -9,10 +9,12 @@ import org.example.shield.ai.application.BackendIntentRouter;
 import org.example.shield.ai.application.IntentClassificationService;
 import org.example.shield.ai.application.IntentRouteDecision;
 import org.example.shield.ai.application.RagPipelineService;
+import org.example.shield.ai.application.ChecklistScopeResolver;
 import org.example.shield.ai.application.SlotLedgerService;
 import org.example.shield.ai.config.CohereApiConfig;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.ChatParsedResponse;
+import org.example.shield.ai.dto.checklist.ChecklistScope;
 import org.example.shield.ai.dto.IntentRouterResponse;
 import org.example.shield.ai.dto.RagPipelineResult;
 import org.example.shield.ai.infrastructure.SanitizeService;
@@ -70,6 +72,7 @@ public class MessageService {
     private final CohereApiConfig cohereApiConfig;
     private final SanitizeService sanitizeService;
     private final ChecklistCoverageService checklistCoverageService;
+    private final ChecklistScopeResolver checklistScopeResolver;
     private final RagPipelineService ragPipelineService;
     private final ChatTransactionalBoundary chatTxBoundary;
     private final ChatMetrics chatMetrics;
@@ -130,7 +133,7 @@ public class MessageService {
                 // PII 거부 시 USER 메시지는 저장되지 않으므로 진행률 증가 없음
                 SendMessageResponse.Progress piiProgress =
                         SendMessageResponse.Progress.of((int) existingUserTurns, maxUserTurns);
-                return SendMessageResponse.from(savedPii, false, piiProgress);
+                return SendMessageResponse.from(savedPii, false, piiProgress, null);
             }
 
             // 1. USER 메시지 저장 (독립 트랜잭션 — 후속 실패와 무관하게 보존)
@@ -150,7 +153,8 @@ public class MessageService {
             ClassificationCandidate collectionCandidate =
                     classificationResolver.candidateForCollection(consultation);
             slotLedgerService.ensureInitialized(consultation, collectionCandidate, chatHistory);
-            String domainForRag = collectionCandidate.firstDomain();
+            SendMessageResponse.Checklist promptChecklist = buildPromptChecklist(collectionCandidate);
+            String domainForRag = collectionCandidate != null ? collectionCandidate.firstDomain() : null;
             IntentRouterResponse intentResult = intentClassificationService.route(chatHistory, domainForRag);
             IntentRouteDecision routeDecision = backendIntentRouter.route(
                     consultation, intentResult, chatHistory, sanitizedText);
@@ -175,7 +179,8 @@ public class MessageService {
                         savedAi,
                         false,
                         classificationResolver.resolve(consultation),
-                        progress);
+                        progress,
+                        promptChecklist);
             }
             if (domainForRag != null) {
                 RagPipelineResult ragResult = ragPipelineService.executeDetailed(
@@ -265,7 +270,8 @@ public class MessageService {
                     savedAi,
                     effectiveAllCompleted,
                     classificationResolver.resolve(consultation),
-                    progress);
+                    progress,
+                    promptChecklist);
         } catch (ChatAiException | ConsultationTurnLimitExceededException e) {
             throw e; // already metered
         } catch (RuntimeException e) {
@@ -309,6 +315,17 @@ public class MessageService {
             log.info("Cohere correctedSlots staged as pending confirmation: consultationId={}",
                     consultation.getId());
         }
+    }
+
+    private SendMessageResponse.Checklist buildPromptChecklist(ClassificationCandidate candidate) {
+        if (candidate == null || candidate.firstDomain() == null) {
+            return SendMessageResponse.Checklist.empty();
+        }
+        ChecklistScope scope = checklistScopeResolver.resolve(
+                candidate.firstDomain(),
+                candidate.firstSubDomain(),
+                candidate.firstTag());
+        return SendMessageResponse.Checklist.from(scope);
     }
 
     /**

@@ -63,25 +63,84 @@ class SanitizeServiceTest {
     @Test
     @DisplayName("주민등록번호 패턴 검출 시 PiiDetectedException")
     void rrnDetection() {
-        assertThatThrownBy(() ->
-                sanitizeService.sanitizeUserText("제 주민번호는 901215-1234567입니다"))
-                .isInstanceOf(SanitizeService.PiiDetectedException.class);
+        assertBlocked("제 주민번호는 901215-1234567입니다");
     }
 
     @Test
     @DisplayName("카드번호 패턴 검출 시 PiiDetectedException")
     void cardNumberDetection() {
-        assertThatThrownBy(() ->
-                sanitizeService.sanitizeUserText("카드번호 1234-5678-9012-3456"))
-                .isInstanceOf(SanitizeService.PiiDetectedException.class);
+        assertBlocked("카드번호 1234-5678-9012-3456");
     }
 
     @Test
     @DisplayName("계좌번호 패턴 검출 시 PiiDetectedException")
     void accountNumberDetection() {
-        assertThatThrownBy(() ->
-                sanitizeService.sanitizeUserText("계좌번호 110-123-456789"))
-                .isInstanceOf(SanitizeService.PiiDetectedException.class);
+        assertBlocked("계좌번호 110-123-456789");
+    }
+
+    @Test
+    @DisplayName("전화번호 패턴 검출 시 PiiDetectedException")
+    void phoneNumberDetection() {
+        assertBlocked("휴대전화 010-1234-5678");
+        assertBlocked("연락처 01012345678");
+        assertBlocked("전화번호 010 1234 5678");
+        assertBlocked("사무실 02-123-4567");
+        assertBlocked("유선번호 031-1234-5678");
+        assertBlocked("인터넷전화 070-1234-5678");
+    }
+
+    @Test
+    @DisplayName("이메일 패턴 검출 시 PiiDetectedException")
+    void emailDetection() {
+        assertBlocked("이메일은 user@example.com 입니다");
+    }
+
+    @Test
+    @DisplayName("외국인등록번호 패턴 검출 시 PiiDetectedException")
+    void foreignRegistrationDetection() {
+        assertBlocked("외국인등록번호 900101-5123456");
+        assertBlocked("외국인등록번호 9001018123456");
+    }
+
+    @Test
+    @DisplayName("여권번호 패턴 검출 시 PiiDetectedException")
+    void passportDetection() {
+        assertBlocked("여권번호 M12345678");
+        assertBlocked("passport no. M12345678");
+    }
+
+    @Test
+    @DisplayName("운전면허번호 패턴 검출 시 PiiDetectedException")
+    void driverLicenseDetection() {
+        assertBlocked("운전면허번호 12-34-567890-12");
+        assertBlocked("driver license no. 123456789012");
+    }
+
+    @Test
+    @DisplayName("인증번호와 OTP 패턴 검출 시 PiiDetectedException")
+    void otpDetection() {
+        assertBlocked("인증번호 123456");
+        assertBlocked("OTP: 123456");
+        assertBlocked("verification code 123456");
+    }
+
+    @Test
+    @DisplayName("비밀번호 패턴 검출 시 PiiDetectedException")
+    void passwordDetection() {
+        assertBlocked("비밀번호는 hunter2");
+        assertBlocked("비번=1234");
+        assertBlocked("password is hunter2");
+    }
+
+    @Test
+    @DisplayName("API key/token 패턴 검출 시 PiiDetectedException")
+    void tokenDetection() {
+        assertBlocked("api_key=abcd1234abcd");
+        assertBlocked("access_token=abcd1234abcd");
+        assertBlocked("Bearer eyJhbGciOiJIUzI1NiJ9");
+        assertBlocked("sk-abcdefghijklmnop");
+        assertBlocked("ghp_abcdefghijklmnopqrstuvwxyz");
+        assertBlocked("AKIAABCDEFGHIJKLMNOP");
     }
 
     @Test
@@ -92,10 +151,41 @@ class SanitizeServiceTest {
     }
 
     @Test
+    @DisplayName("사건번호는 PII로 검출하지 않음")
+    void caseNumberNotDetected() {
+        String input = "사건번호 2023가단123456으로 진행 중입니다";
+        String result = sanitizeService.sanitizeUserText(input);
+        assertThat(result).isEqualTo(input);
+    }
+
+    @Test
+    @DisplayName("민감정보 키워드만 있고 실제 값이 없으면 PII로 검출하지 않음")
+    void sensitiveKeywordWithoutValueNotDetected() {
+        String passwordRequest = "상대방이 비밀번호를 요구했습니다";
+        String passportLoss = "여권을 분실했습니다";
+
+        assertThat(sanitizeService.sanitizeUserText(passwordRequest)).isEqualTo(passwordRequest);
+        assertThat(sanitizeService.sanitizeUserText(passportLoss)).isEqualTo(passportLoss);
+    }
+
+    @Test
+    @DisplayName("이름과 주소는 현재 hard-block 대상에서 제외")
+    void nameAndAddressNotDetected() {
+        String input = "김철수 씨는 서울 강남구 역삼동에 거주합니다";
+        String result = sanitizeService.sanitizeUserText(input);
+        assertThat(result).isEqualTo(input);
+    }
+
+    @Test
     @DisplayName("문장 중간의 역할 구분자는 무력화하지 않음")
     void midSentenceRoleNotAffected() {
         String input = "저는 AI 관련 사기를 당했습니다";
         String result = sanitizeService.sanitizeUserText(input);
         assertThat(result).isEqualTo(input);
+    }
+
+    private void assertBlocked(String input) {
+        assertThatThrownBy(() -> sanitizeService.sanitizeUserText(input))
+                .isInstanceOf(SanitizeService.PiiDetectedException.class);
     }
 }
