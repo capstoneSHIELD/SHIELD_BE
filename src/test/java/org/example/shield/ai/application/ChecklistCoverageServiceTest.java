@@ -35,9 +35,11 @@ class ChecklistCoverageServiceTest {
 
     @BeforeEach
     void setUp() {
+        // application.yml 기본값(0.5) 과 동일한 임계를 생성자 인자로 직접 주입.
         service = new ChecklistCoverageService(
                 messageReader,
-                new ChecklistScopeResolver(new ChecklistLoader(), null, null));
+                new ChecklistScopeResolver(new ChecklistLoader(), null, null),
+                0.5);
     }
 
     // ----- L1 기본 케이스 -----
@@ -127,16 +129,16 @@ class ChecklistCoverageServiceTest {
     // ----- AND gate -----
 
     @Test
-    @DisplayName("AND gate — allCompleted true + 커버리지 >= 0.85 → true")
+    @DisplayName("AND gate — allCompleted true + 커버리지 >= 임계(0.5) → true")
     void andGatePass() {
         assertThat(service.isEffectivelyCompleted(true, 0.90)).isTrue();
-        assertThat(service.isEffectivelyCompleted(true, 0.85)).isTrue();
+        assertThat(service.isEffectivelyCompleted(true, 0.50)).isTrue();
     }
 
     @Test
-    @DisplayName("AND gate — allCompleted true + 커버리지 < 0.85 → false")
+    @DisplayName("AND gate — allCompleted true + 커버리지 < 임계(0.5) → false")
     void andGateFail() {
-        assertThat(service.isEffectivelyCompleted(true, 0.80)).isFalse();
+        assertThat(service.isEffectivelyCompleted(true, 0.40)).isFalse();
         assertThat(service.isEffectivelyCompleted(true, 0.0)).isFalse();
     }
 
@@ -147,9 +149,9 @@ class ChecklistCoverageServiceTest {
     }
 
     @Test
-    @DisplayName("getThreshold — 0.85")
-    void thresholdIs085() {
-        assertThat(service.getThreshold()).isEqualTo(0.85);
+    @DisplayName("getThreshold — 기본값 0.5")
+    void thresholdIs05() {
+        assertThat(service.getThreshold()).isEqualTo(0.5);
     }
 
     // ----- buildMissingSlotsGuidance -----

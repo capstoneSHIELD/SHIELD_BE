@@ -4,6 +4,18 @@
 
 ---
 
+## 동작 변경 — 의뢰서 생성 조기 활성화 (2026-05-28)
+
+`POST /api/consultations/{id}/messages` 응답의 `allCompleted` 가 **10턴 도달 전에도 true 로 내려올 수 있습니다.**
+
+- LLM 이 의뢰서 작성에 충분한 사실관계가 모였다고 판단하고 체크리스트 커버리지가 임계치(기본 0.5)를 넘으면 effective `allCompleted=true` 반환.
+- 이 경우 `content` (`nextQuestion`) 는 LLM 이 생성한 자연스러운 후속 질문 그대로 유지됩니다 (10턴 도달 시의 강제 안내 멘트 치환과는 다름).
+- FE 동작 권장: `allCompleted=true` 이면 "의뢰서 생성" 버튼을 노출하되, 사용자가 더 답하고 싶다면 이어서 메시지를 보낼 수 있도록 입력창도 함께 유지.
+- 10턴 도달 시점의 강제 종료(`content` 가 "필요한 정보를 충분히 수집했습니다..." 로 치환되는 케이스) 동작은 기존과 동일.
+- **FE 수정 가이드**: [docs/fe-guide-early-completion.md](docs/fe-guide-early-completion.md) — 입력창 잠금 조건, 진행률 바 라벨 분기, 테스트 시나리오 정리.
+
+---
+
 ## 신규 API (2개)
 
 ### 1. 분류 직접 수정

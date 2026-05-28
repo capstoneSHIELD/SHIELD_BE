@@ -1,6 +1,5 @@
 package org.example.shield.ai.application;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.checklist.ChecklistScope;
 import org.example.shield.ai.dto.checklist.ChecklistScopeItem;
@@ -8,6 +7,7 @@ import org.example.shield.ai.dto.slot.SlotValueType;
 import org.example.shield.common.enums.MessageRole;
 import org.example.shield.consultation.domain.Message;
 import org.example.shield.consultation.domain.MessageReader;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -17,14 +17,23 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ChecklistCoverageService {
 
     private final MessageReader messageReader;
     private final ChecklistScopeResolver checklistScopeResolver;
+    private final double coverageThreshold;
 
-    private static final double COVERAGE_THRESHOLD = 0.85;
+    public ChecklistCoverageService(
+            MessageReader messageReader,
+            ChecklistScopeResolver checklistScopeResolver,
+            @Value("${shield.consultation.completion.coverage-threshold:0.5}") double coverageThreshold
+    ) {
+        this.messageReader = messageReader;
+        this.checklistScopeResolver = checklistScopeResolver;
+        this.coverageThreshold = coverageThreshold;
+    }
+
     private static final Pattern TIME_EXPRESSION_PATTERN = Pattern.compile(
             "(\\d+\\s*(\\uB144|\\uC6D4|\\uC77C|\\uAC1C\\uC6D4|\\uC8FC|\\uC2DC\\uAC04)"
                     + "|\\uC791\\uB144|\\uC62C\\uD574|\\uCD5C\\uADFC"
@@ -64,11 +73,11 @@ public class ChecklistCoverageService {
     }
 
     public boolean isEffectivelyCompleted(boolean llmAllCompleted, double coverageRatio) {
-        return llmAllCompleted && coverageRatio >= COVERAGE_THRESHOLD;
+        return llmAllCompleted && coverageRatio >= coverageThreshold;
     }
 
     public double getThreshold() {
-        return COVERAGE_THRESHOLD;
+        return coverageThreshold;
     }
 
     public List<CoverageItem> buildCoverageItems(
