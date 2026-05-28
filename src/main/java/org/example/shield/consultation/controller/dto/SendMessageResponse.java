@@ -119,7 +119,7 @@ public record SendMessageResponse(
             return new Checklist(
                     new CaseType(scope.l1Name(), scope.l2Name(), scope.l3Name()),
                     scope.sourceVersion(),
-                    scope.items().stream().map(Item::from).toList(),
+                    scope.items() == null ? List.of() : scope.items().stream().map(Item::from).toList(),
                     scope.warnings()
             );
         }
