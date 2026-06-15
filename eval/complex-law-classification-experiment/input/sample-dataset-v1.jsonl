@@ -1,0 +1,1 @@
+{"id":"SGL-001-V01","conversation_id":"SGL-001-V01","group":"single","archetype_id":"SGL-001","variant":"V01_short_colloquial","messages":[{"role":"USER","content":"전세계약이 끝났는데 보증금을 돌려받지 못했습니다."}],"gold_node_ids":["law-007-01-05"],"gold_primary_node_id":"law-007-01-05","expected_complex":false}

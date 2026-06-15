@@ -2,7 +2,14 @@
 
 기준 문서: [ai-complex-law-classification-experiment.md](../ai-complex-law-classification-experiment.md)
 
-이 다이어그램은 `runner`가 담당하는 orchestration과 BE local/test adapter가 담당하는 실제 classifier/matching 호출 경계를 분리해서 표현한다. `IntentRouteAdapter`와 `LawyerMatchAdapter`는 SHIELD BE 안의 local/test profile 전용 adapter이고, 나머지는 `EXPERIMENT/runner`의 Python 모듈이다.
+이 다이어그램은 실험 runner를 GoF/GRASP 관점에 맞춰 나눈 구현 후보 구조다. 핵심 원칙은 다음과 같다.
+
+- `RunExperiment`는 composition root이자 thin controller로만 둔다.
+- 큰 실행 흐름은 facade 성격의 pipeline 객체가 맡는다.
+- classification mode와 matching mode는 Strategy로 분리한다.
+- ontology path 해석은 `OntologyMapper`가 맡아 Information Expert 책임을 지킨다.
+- metric 계산은 evaluator별로 나누어 High Cohesion을 유지한다.
+- 파일 저장은 `ResultSink` 뒤로 숨겨 runner와 저장 방식의 결합을 낮춘다.
 
 ```mermaid
 classDiagram
@@ -10,11 +17,44 @@ direction LR
 
 class RunExperiment {
   +main(args)
-  +loadConfig()
-  +createRunContext()
+  +bootstrap()
+  +execute()
+}
+
+class ExperimentPipelineFacade {
+  +run()
   +runPreflight()
-  +runClassification()
-  +runMatching()
+  +runClassificationTrack()
+  +runMatchingTrack()
+  +runEvaluation()
+  +runReporting()
+}
+
+class PreflightPipeline {
+  +checkConfig()
+  +checkProviders()
+  +checkDataset()
+  +checkLawyerCorpus()
+  +checkAdapters()
+}
+
+class ClassificationExperimentPipeline {
+  +run(turns, providers)
+  +executeMode(turn, provider, mode)
+}
+
+class MatchingExperimentPipeline {
+  +run(finalTurns, selectedClassifierArm)
+  +executeMode(caseContext, mode)
+}
+
+class EvaluationPipeline {
+  +evaluateClassification()
+  +evaluateMatching()
+  +evaluateBenchmarkValidity()
+}
+
+class ReportingPipeline {
   +writeReports()
 }
 
@@ -40,11 +80,22 @@ class RunContext {
   +Path outputDir
 }
 
-class DatasetBuilder {
+class RunContextFactory {
+  +create(config)
+  +captureGitMetadata()
+}
+
+class DatasetRepository {
   +loadArchetypes()
-  +expandCaseVariants()
-  +buildClassificationTurns()
-  +writeDatasetJsonl()
+  +loadCaseVariants()
+  +loadClassificationTurns()
+  +saveCaseVariants()
+  +saveClassificationTurns()
+}
+
+class DatasetBuilder {
+  +expandCaseVariants(archetypes)
+  +buildClassificationTurns(caseVariants)
 }
 
 class Archetype {
@@ -75,16 +126,28 @@ class ClassificationTurn {
 
 class OntologySnapshot {
   +Set nodeIds
-  +nodePath(nodeId)
   +parentOf(nodeId)
-  +validate(nodeIds)
+  +exists(nodeId)
 }
 
-class LawyerCorpusLoader {
+class OntologyMapper {
+  +validate(nodeIds)
+  +toDomain(nodeId)
+  +toSubDomain(nodeId)
+  +toTag(nodeId)
+  +toHierarchyScore(pred, gold)
+}
+
+class LawyerCorpusRepository {
   +loadLawyers()
   +loadMatchingLabels()
-  +validateCoverage()
-  +validateHardNegatives()
+  +saveGeneratedCorpus()
+}
+
+class LawyerCorpusValidator {
+  +validateCoverage(lawyers)
+  +validateHardNegatives(lawyers)
+  +validateLabels(labels, lawyers)
 }
 
 class LawyerFixture {
@@ -106,52 +169,96 @@ class MatchingLabelSet {
 }
 
 class ExperimentClient {
-  +preflightProviders()
   +intentRoute(request)
   +lawyerMatch(request)
 }
 
-class IntentRouteAdapter {
-  <<BEAdapter>>
+class IntentRouteGateway {
+  <<Adapter>>
   +preflight()
   +route(messages, domain, provider)
-  +returnRawAndParsed()
 }
 
-class LawyerMatchAdapter {
-  <<BEAdapter>>
+class LawyerMatchGateway {
+  <<Adapter>>
   +preflight()
   +loadSyntheticCorpus()
   +match(query, matchingMode, topK)
 }
 
-class ClassificationModeRunner {
-  +runAFull(turn)
-  +runBScopedGold(turn)
-  +runBScopedRuntime(turn)
-  +runCHybridRuntime(turn)
+class ClassificationModeStrategy {
+  <<interface>>
+  +modeName()
+  +execute(turn, provider)
+}
+
+class AFullClassificationStrategy {
+  +execute(turn, provider)
+}
+
+class BScopedGoldStrategy {
+  +execute(turn, provider)
+}
+
+class BScopedRuntimeStrategy {
+  +execute(turn, provider)
+}
+
+class CHybridRuntimeStrategy {
+  +execute(turn, provider)
+}
+
+class ClassificationModeRegistry {
+  +get(modeName)
+  +allEnabled()
+}
+
+class RuntimeScopeResolver {
+  +resolveFromConsultationState()
+  +resolveFromFullResult()
 }
 
 class HybridClassificationPolicy {
-  +inferRuntimeScope(turn, fullResult)
   +shouldRerunFull(scopedResult, turn)
   +choose(scopedResult, fullResult)
 }
 
-class MatchingRunner {
-  +runCurrentServiceCosine(case)
-  +runOracleCosine(case)
-  +runPredictedHybrid(case)
-  +runOracleHybrid(case)
-  +runNoLabelCosine(case)
+class MatchingModeStrategy {
+  <<interface>>
+  +modeName()
+  +execute(caseContext)
+}
+
+class CurrentServiceCosineStrategy {
+  +execute(caseContext)
+}
+
+class OracleCosineStrategy {
+  +execute(caseContext)
+}
+
+class PredictedHybridStrategy {
+  +execute(caseContext)
+}
+
+class OracleHybridStrategy {
+  +execute(caseContext)
+}
+
+class NoLabelCosineStrategy {
+  +execute(caseContext)
+}
+
+class MatchingModeRegistry {
+  +get(modeName)
+  +allEnabled()
 }
 
 class CurrentServiceQueryBuilder {
-  +nodeIdsToDomains(nodeIds)
-  +nodeIdsToSubDomains(nodeIds)
-  +nodeIdsToTags(nodeIds)
-  +buildLikeLawyerEmbeddingText()
-  +hashQueryText()
+  +buildPredictedLabelQuery(caseContext)
+  +buildOracleLabelQuery(caseContext)
+  +buildContentOnlyQuery(caseContext)
+  +hashQueryText(queryText)
 }
 
 class HybridMatchScorer {
@@ -160,18 +267,57 @@ class HybridMatchScorer {
   +score(cosine, fieldOverlap, keywordOverlap)
 }
 
-class ResultStore {
-  +writeRawResult()
-  +writeParsedResult()
-  +writeMatchingResult()
-  +writeRunMeta()
+class ResultSink {
+  <<interface>>
+  +writeRawResult(row)
+  +writeParsedResult(row)
+  +writeMatchingResult(row)
+  +writeRunMeta(meta)
 }
 
-class Evaluator {
-  +classificationMetrics()
-  +matchingMetrics()
-  +scopeLossMetrics()
-  +corpusCoverageMetrics()
+class JsonlResultSink {
+  +writeRawResult(row)
+  +writeParsedResult(row)
+  +writeMatchingResult(row)
+  +writeRunMeta(meta)
+}
+
+class ResultRepository {
+  +readClassificationRows()
+  +readMatchingRows()
+  +readRunMeta()
+}
+
+class ClassificationEvaluator {
+  +parseSuccessRate()
+  +microF1()
+  +complexRecall()
+  +driftRate()
+}
+
+class ScopeLossEvaluator {
+  +scopedOntologyLoss()
+  +underClassificationRate()
+}
+
+class MatchingEvaluator {
+  +hitAtK()
+  +recallAtK()
+  +ndcgAtK()
+  +mrr()
+}
+
+class BenchmarkValidityEvaluator {
+  +configErrorCount()
+  +providerFallbackRate()
+  +corpusCoverage()
+  +splitLeakage()
+}
+
+class MetricAggregator {
+  +stressScore()
+  +productionWeightedScore()
+  +groupMacroAverage()
 }
 
 class ReportWriter {
@@ -183,55 +329,118 @@ class ReportWriter {
   +writeFailureCases()
 }
 
-RunExperiment --> ExperimentConfig : reads
-RunExperiment --> RunContext : creates
-RunExperiment --> DatasetBuilder : builds input rows
-RunExperiment --> LawyerCorpusLoader : loads fixtures
-RunExperiment --> ClassificationModeRunner : executes T1/B1/B2
-RunExperiment --> MatchingRunner : executes T2/B3/B4
-RunExperiment --> Evaluator : calculates metrics
-RunExperiment --> ReportWriter : writes reports
-RunExperiment --> ResultStore : persists outputs
+RunExperiment --> ExperimentConfig : loads
+RunExperiment --> RunContextFactory : creates context
+RunExperiment --> ExperimentPipelineFacade : delegates
 
+RunContextFactory --> RunContext : creates
+
+ExperimentPipelineFacade --> PreflightPipeline : orchestrates
+ExperimentPipelineFacade --> ClassificationExperimentPipeline : orchestrates
+ExperimentPipelineFacade --> MatchingExperimentPipeline : orchestrates
+ExperimentPipelineFacade --> EvaluationPipeline : orchestrates
+ExperimentPipelineFacade --> ReportingPipeline : orchestrates
+
+PreflightPipeline --> ExperimentConfig : checks
+PreflightPipeline --> DatasetRepository : validates input files
+PreflightPipeline --> LawyerCorpusValidator : validates corpus
+PreflightPipeline --> ExperimentClient : checks adapters
+
+DatasetRepository --> Archetype : loads
+DatasetRepository --> CaseVariant : loads/saves
+DatasetRepository --> ClassificationTurn : loads/saves
 DatasetBuilder --> Archetype : reads
-DatasetBuilder --> CaseVariant : expands
-DatasetBuilder --> ClassificationTurn : emits
-DatasetBuilder --> OntologySnapshot : validates labels
+DatasetBuilder --> CaseVariant : creates
+DatasetBuilder --> ClassificationTurn : creates
+DatasetBuilder --> OntologyMapper : validates labels
 
-LawyerCorpusLoader --> LawyerFixture : loads
-LawyerCorpusLoader --> MatchingLabelSet : loads
-LawyerCorpusLoader --> OntologySnapshot : validates practice nodes
+OntologyMapper --> OntologySnapshot : uses hierarchy
 
-ClassificationModeRunner --> ClassificationTurn : consumes
-ClassificationModeRunner --> ExperimentClient : calls route
-ClassificationModeRunner --> HybridClassificationPolicy : applies hybrid rules
-ClassificationModeRunner --> ResultStore : writes parsed/raw rows
+LawyerCorpusRepository --> LawyerFixture : loads/saves
+LawyerCorpusRepository --> MatchingLabelSet : loads
+LawyerCorpusValidator --> LawyerFixture : validates
+LawyerCorpusValidator --> MatchingLabelSet : validates
+LawyerCorpusValidator --> OntologyMapper : validates practice nodes
 
-HybridClassificationPolicy --> OntologySnapshot : checks hierarchy
+ExperimentClient --> IntentRouteGateway : delegates route
+ExperimentClient --> LawyerMatchGateway : delegates match
 
-MatchingRunner --> ClassificationTurn : consumes final turns
-MatchingRunner --> LawyerFixture : ranks
-MatchingRunner --> MatchingLabelSet : attaches relevance
-MatchingRunner --> CurrentServiceQueryBuilder : reproduces baseline query
-MatchingRunner --> HybridMatchScorer : scores hybrid modes
-MatchingRunner --> ExperimentClient : calls match adapter
-MatchingRunner --> ResultStore : writes matching rows
+ClassificationExperimentPipeline --> DatasetRepository : reads turns
+ClassificationExperimentPipeline --> ClassificationModeRegistry : selects strategy
+ClassificationExperimentPipeline --> ResultSink : writes results
+ClassificationModeRegistry --> ClassificationModeStrategy : returns
+ClassificationModeStrategy <|.. AFullClassificationStrategy
+ClassificationModeStrategy <|.. BScopedGoldStrategy
+ClassificationModeStrategy <|.. BScopedRuntimeStrategy
+ClassificationModeStrategy <|.. CHybridRuntimeStrategy
 
-ExperimentClient --> IntentRouteAdapter : HTTP /internal/experiments/intent-route
-ExperimentClient --> LawyerMatchAdapter : HTTP /internal/experiments/lawyer-match
+AFullClassificationStrategy --> ExperimentClient : calls full route
+BScopedGoldStrategy --> ExperimentClient : calls scoped route
+BScopedGoldStrategy --> OntologyMapper : resolves gold L1
+BScopedRuntimeStrategy --> RuntimeScopeResolver : resolves runtime L1
+BScopedRuntimeStrategy --> ExperimentClient : calls scoped route
+CHybridRuntimeStrategy --> RuntimeScopeResolver : resolves runtime L1
+CHybridRuntimeStrategy --> HybridClassificationPolicy : applies policy
+CHybridRuntimeStrategy --> ExperimentClient : calls scoped/full route
 
-Evaluator --> OntologySnapshot : validates node predictions
-Evaluator --> MatchingLabelSet : computes ranking metrics
-Evaluator --> ResultStore : reads outputs
+MatchingExperimentPipeline --> DatasetRepository : reads final turns
+MatchingExperimentPipeline --> LawyerCorpusRepository : reads lawyers/labels
+MatchingExperimentPipeline --> MatchingModeRegistry : selects strategy
+MatchingExperimentPipeline --> ResultSink : writes results
+MatchingModeRegistry --> MatchingModeStrategy : returns
+MatchingModeStrategy <|.. CurrentServiceCosineStrategy
+MatchingModeStrategy <|.. OracleCosineStrategy
+MatchingModeStrategy <|.. PredictedHybridStrategy
+MatchingModeStrategy <|.. OracleHybridStrategy
+MatchingModeStrategy <|.. NoLabelCosineStrategy
 
-ReportWriter --> Evaluator : consumes metric tables
-ReportWriter --> ResultStore : reads run artifacts
+CurrentServiceCosineStrategy --> CurrentServiceQueryBuilder : builds predicted-label query
+CurrentServiceCosineStrategy --> ExperimentClient : calls match
+OracleCosineStrategy --> CurrentServiceQueryBuilder : builds oracle-label query
+OracleCosineStrategy --> ExperimentClient : calls match
+NoLabelCosineStrategy --> CurrentServiceQueryBuilder : builds content-only query
+NoLabelCosineStrategy --> ExperimentClient : calls match
+PredictedHybridStrategy --> HybridMatchScorer : scores
+PredictedHybridStrategy --> ExperimentClient : gets cosine candidates
+OracleHybridStrategy --> HybridMatchScorer : scores
+OracleHybridStrategy --> ExperimentClient : gets cosine candidates
+CurrentServiceQueryBuilder --> OntologyMapper : maps node ids
+
+ResultSink <|.. JsonlResultSink
+ResultRepository --> ResultSink : reads artifacts written by
+
+EvaluationPipeline --> ResultRepository : reads rows
+EvaluationPipeline --> ClassificationEvaluator : computes
+EvaluationPipeline --> ScopeLossEvaluator : computes
+EvaluationPipeline --> MatchingEvaluator : computes
+EvaluationPipeline --> BenchmarkValidityEvaluator : computes
+EvaluationPipeline --> MetricAggregator : aggregates
+
+ClassificationEvaluator --> OntologyMapper : hierarchy scoring
+ScopeLossEvaluator --> OntologyMapper : scope analysis
+MatchingEvaluator --> MatchingLabelSet : relevance grades
+BenchmarkValidityEvaluator --> LawyerCorpusValidator : coverage evidence
+MetricAggregator --> ExperimentConfig : production weights
+
+ReportingPipeline --> ReportWriter : writes reports
+ReportWriter --> ResultRepository : reads artifacts
+ReportWriter --> MetricAggregator : reads scores
 ```
 
-## 해석 기준
+## GoF / GRASP 적용 기준
 
-- `RunExperiment`는 orchestration만 담당한다. classifier prompt, ontology scoping, provider client, parser, 운영 cosine query 생성은 직접 재구현하지 않는다.
-- `ClassificationModeRunner`는 Layer 1 분류 benchmark인 `B1_LAYER1_TURN_CLASSIFICATION`, `B2_SCOPE_LOSS`를 실행한다.
-- `MatchingRunner`는 final turn만 기본 입력으로 사용해 `B3_CURRENT_MATCHING_BASELINE`, `B4_MATCHING_ABLATION`을 실행한다.
-- `CurrentServiceQueryBuilder`는 `PREDICTED_LABELS_COSINE_ONLY`가 현재 `LawyerMatchingService`와 같은 query text를 쓰는지 검증하기 위한 runner-side mirror다. 실제 운영 경로 검증은 `LawyerMatchAdapter` preflight에서 한 번 더 수행한다.
+- Controller: `RunExperiment`는 CLI entrypoint 역할만 맡고, 실제 use case 흐름은 `ExperimentPipelineFacade`에 위임한다.
+- Facade: `ExperimentPipelineFacade`는 preflight, classification, matching, evaluation, reporting 하위 pipeline을 감싼다.
+- Strategy: `ClassificationModeStrategy`와 `MatchingModeStrategy`가 mode별 변화를 캡슐화한다. 새 mode 추가 시 runner 본문이 아니라 registry와 strategy 구현만 확장한다.
+- Adapter: `IntentRouteGateway`, `LawyerMatchGateway`는 BE local/test adapter HTTP 계약을 runner 내부 포트로 감싼다.
+- Protected Variations: provider, classification mode, matching mode, result sink 변경 가능성을 interface/registry 뒤로 숨긴다.
+- Information Expert: ontology hierarchy와 node label path 해석은 `OntologyMapper`가 담당한다.
+- High Cohesion: classification metric, scope loss, matching metric, benchmark validity metric을 evaluator별로 분리한다.
+- Low Coupling: pipeline은 `ResultSink`, `ExperimentClient`, strategy registry 같은 추상 경계에 의존한다.
+- Pure Fabrication: `DatasetBuilder`, `LawyerCorpusValidator`, `MetricAggregator`, `ReportWriter`는 실험 실행을 위해 만든 서비스 객체로 도메인 모델을 오염시키지 않는다.
+
+## 구현 메모
+
+- `CurrentServiceQueryBuilder`는 runner-side mirror다. 실제 current-service baseline 재현 여부는 `LawyerMatchGateway.preflight()`에서 BE adapter와 한 번 더 대조한다.
 - `HybridMatchScorer`는 운영 코드가 아니라 실험 비교군이다. final test 실행 전 `ExperimentConfig.hybridMatchWeights`가 고정되어야 한다.
+- Python 구현에서는 interface를 `Protocol` 또는 ABC로 표현하고, registry는 `dict[str, Strategy]`로 단순하게 시작해도 충분하다.

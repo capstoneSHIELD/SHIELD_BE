@@ -1,0 +1,27 @@
+{
+  "base_url": "http://localhost:8080",
+  "dry_run": true,
+  "dataset_path": "../input/sample-dataset-v1.jsonl",
+  "classification_turns_path": "../input/sample-classification-turns-v1.jsonl",
+  "ontology_snapshot_path": "../../../src/main/resources/ontology/legal-ontology-slim.json",
+  "lawyer_corpus_path": "../input/lawyers-v1.jsonl",
+  "matching_labels_path": "../input/matching-labels-v1.jsonl",
+  "output_root": "../output",
+  "providers": ["cohere"],
+  "classification_modes": ["A_FULL", "B_SCOPED_GOLD", "B_SCOPED_RUNTIME", "C_HYBRID_RUNTIME"],
+  "matching_modes": [],
+  "selected_provider": "cohere",
+  "selected_classification_mode": "C_HYBRID_RUNTIME",
+  "top_k": 10,
+  "production_group_weights": {
+    "single": 0.4,
+    "intra_l1": 0.25,
+    "cross_l1": 0.25,
+    "ambiguous": 0.1
+  },
+  "hybrid_match_weights": {
+    "cosine": 0.6,
+    "fieldOverlap": 0.25,
+    "keywordOverlap": 0.15
+  }
+}
