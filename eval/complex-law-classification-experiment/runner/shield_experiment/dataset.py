@@ -35,6 +35,20 @@ class DatasetRepository:
             rows = read_jsonl(dataset_path)
         return [ClassificationTurn.from_json(row) for row in rows]
 
+    def load_wrong_selected_turns(
+        self,
+        path: str | Path,
+        history_window: int | None = None,
+    ) -> list[ClassificationTurn]:
+        p = Path(path)
+        if not p.exists():
+            return []
+        files = sorted(p.glob("wrong-x1-*.json")) if p.is_dir() else [p]
+        turns: list[ClassificationTurn] = []
+        for file in files:
+            turns.extend(_wrong_selected_turns_from_file(file, history_window))
+        return turns
+
 
 class LawyerCorpusRepository:
     def load_lawyer_rows(self, path: str | Path | None) -> list[dict[str, Any]]:
@@ -98,6 +112,9 @@ class LawyerCorpusValidator:
 
 
 class DatasetBuilder:
+    def __init__(self, history_window: int | None = 4):
+        self.history_window = history_window
+
     def build_classification_turns(self, case_rows: list[dict]) -> list[ClassificationTurn]:
         turns: list[ClassificationTurn] = []
         for row in case_rows:
@@ -117,9 +134,73 @@ class DatasetBuilder:
                 turn_row["id"] = f"{case_id}-T{ordinal:02d}"
                 turn_row["turn_index"] = ordinal
                 turn_row["is_final_turn"] = ordinal == len(user_message_indexes)
-                turn_row["messages"] = prefix[-4:]
+                turn_row["messages"] = _apply_history_window(prefix, self.history_window)
                 turns.append(ClassificationTurn.from_json(turn_row))
         return turns
+
+
+def _wrong_selected_turns_from_file(path: Path, history_window: int | None) -> list[ClassificationTurn]:
+    raw = json.loads(path.read_text(encoding="utf-8-sig"))
+    case = raw.get("case") or {}
+    case_id = str(case.get("caseId") or path.stem)
+    case_turns = list(case.get("turns") or [])
+    gold_labels = [dict(label) for label in case.get("goldLabels", []) if isinstance(label, dict)]
+    selected_labels = [dict(label) for label in case.get("selectedLabels", []) if isinstance(label, dict)]
+    selected_node_ids = _node_ids_from_labels(selected_labels)
+    messages: list[dict[str, str]] = []
+    result: list[ClassificationTurn] = []
+
+    for index, turn in enumerate(case_turns, start=1):
+        if not isinstance(turn, dict):
+            continue
+        user_input = str(turn.get("userInput") or "").strip()
+        if user_input:
+            messages.append({"role": "USER", "content": user_input})
+        turn_index = int(turn.get("turnIndex") or index)
+        evaluation_target = bool(turn.get("evaluationTarget", True))
+        if not evaluation_target:
+            continue
+
+        observable_gold = [str(node_id) for node_id in turn.get("observableGoldNodeIds", []) if str(node_id)]
+        gold_node_ids = observable_gold or _node_ids_from_labels(gold_labels)
+        turn_row = {
+            "id": f"{case_id}-T{turn_index:02d}",
+            "case_id": case_id,
+            "conversation_id": case_id,
+            "turn_index": turn_index,
+            "is_final_turn": turn_index == _last_evaluation_turn_index(case_turns),
+            "benchmark_split": str(raw.get("schemaVersion") or "wrong-selected-cross-l1-testcases.v1"),
+            "group": str(case.get("group") or "wrong_selected_cross_l1"),
+            "messages": _apply_history_window(messages, history_window),
+            "gold_node_ids": gold_node_ids,
+            "gold_primary_node_id": gold_node_ids[0] if gold_node_ids else None,
+            "expected_complex": len(gold_node_ids) >= 2,
+            "matching_label_set_id": case.get("matchingLabelSetId"),
+            "selected_node_ids": selected_node_ids,
+            "selected_labels": selected_labels,
+            "evaluation_target": evaluation_target,
+        }
+        result.append(ClassificationTurn.from_json(turn_row))
+    return result
+
+
+def _node_ids_from_labels(labels: list[dict]) -> list[str]:
+    return [str(label.get("nodeId")) for label in labels if label.get("nodeId")]
+
+
+def _last_evaluation_turn_index(turns: list[dict]) -> int:
+    indexes = [
+        int(turn.get("turnIndex") or idx)
+        for idx, turn in enumerate(turns, start=1)
+        if isinstance(turn, dict) and bool(turn.get("evaluationTarget", True))
+    ]
+    return max(indexes) if indexes else 0
+
+
+def _apply_history_window(messages: list[dict], history_window: int | None) -> list[dict]:
+    if history_window is None or history_window <= 0:
+        return [dict(message) for message in messages]
+    return [dict(message) for message in messages[-history_window:]]
 
 
 def _count_by(key_fn, values: set[str]) -> dict[str, int]:

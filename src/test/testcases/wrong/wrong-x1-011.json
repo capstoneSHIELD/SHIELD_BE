@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-011",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-007-01-01",
+                                            "l1":  "임대차보호",
+                                            "l2":  "주택임대차보호",
+                                            "l3":  "대항력 및 우선변제권"
+                                        },
+                                        {
+                                            "nodeId":  "law-003-01-01",
+                                            "l1":  "상속·유류분·유언",
+                                            "l2":  "상속 일반",
+                                            "l3":  "상속순위 및 상속분"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-008-05-03",
+                                        "l1":  "기업·상사거래",
+                                        "l2":  "임원 책임 및 영업보호",
+                                        "l3":  "영업비밀 보호"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "퇴사한 직원이 회사 고객 명단과 단가표를 가지고 경쟁업체에 넘긴 정황이 있어 영업비밀 침해로 대응하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-05-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "해당 직원은 퇴사 직전 고객 리스트 파일을 개인 이메일로 보낸 기록이 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-05-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "파일에는 거래처 담당자, 단가, 납품 조건 같은 외부 공개되지 않은 정보가 들어 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-05-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "퇴사 후 경쟁업체가 같은 고객들에게 거의 같은 조건으로 영업을 시작했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-05-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "근로계약서와 보안서약서에는 영업정보 반출 금지 조항이 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-05-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "접속 로그, 이메일 발송 기록, 파일 다운로드 기록을 일부 확보했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-05-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "상대방에게 사용 중지를 요구하고 손해배상도 청구할 수 있는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-05-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "자료가 영업비밀로 인정되려면 어떤 관리 조치가 필요했는지도 확인해야 합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-05-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "긴급하게 사용 금지 가처분 같은 절차를 검토할 수 있는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-05-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

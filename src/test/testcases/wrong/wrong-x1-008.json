@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-008",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-003-03-01",
+                                            "l1":  "상속·유류분·유언",
+                                            "l2":  "유언",
+                                            "l3":  "유언 방식 및 요건"
+                                        },
+                                        {
+                                            "nodeId":  "law-004-05-01",
+                                            "l1":  "근로계약·해고·임금",
+                                            "l2":  "직장 내 권리보호",
+                                            "l3":  "직장 내 괴롭힘"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-008-02-05",
+                                        "l1":  "기업·상사거래",
+                                        "l2":  "납품·공급·도급",
+                                        "l3":  "하자담보 및 클레임"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "거래처에 납품한 기계 부품에 하자가 있다며 전량 반품과 위약금을 요구받았는데 검수 당시에는 아무 말이 없었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-02-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "계약서에는 검수 기간이 7일로 되어 있는데 상대방은 한 달 뒤에야 하자를 주장했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-02-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "납품 당시 인수증에는 이상 없음이라고 적혀 있었고 담당자 서명도 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-02-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "상대방은 최종 고객 클레임이 들어왔다며 대금 지급을 전부 보류하고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-02-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "문제가 된 부품은 일부 수량인데 전량 반품을 요구하는 점도 납득하기 어렵습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-02-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "납품 계약서, 인수증, 검수 메일, 제품 사진과 시험성적서를 가지고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-02-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "하자가 실제로 제 책임인지, 운송이나 보관 중 발생한 문제인지 확인이 필요합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-02-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "대금 지급을 청구하면서 반품 요구에 대응하는 방법을 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-02-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "계약상 클레임 통지 기간을 넘긴 경우 어떤 주장을 할 수 있는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-02-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

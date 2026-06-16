@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-016",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-006-03-04",
+                                            "l1":  "채무·보증·개인파산·회생",
+                                            "l2":  "민사집행 및 보전처분",
+                                            "l3":  "불법 채권추심 대응"
+                                        },
+                                        {
+                                            "nodeId":  "law-004-05-02",
+                                            "l1":  "근로계약·해고·임금",
+                                            "l2":  "직장 내 권리보호",
+                                            "l3":  "성희롱 및 차별"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-005-02-02",
+                                        "l1":  "손해배상·불법행위",
+                                        "l2":  "교통사고",
+                                        "l3":  "보험 합의 및 소송"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "교통사고 후 보험사가 제시한 합의금이 치료비와 휴업손해에 비해 너무 낮아서 합의하지 않고 다툴 수 있는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-02-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "사고 후 3개월 동안 통원치료를 받았고 아직 허리 통증이 남아 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-02-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "보험사는 제 과실도 있다며 낮은 금액으로 합의하면 빨리 지급하겠다고 합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-02-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "치료비 외에 일을 쉬면서 생긴 소득 손실도 반영되지 않은 것 같습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-02-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "진단서, 치료비 영수증, 사고 당시 블랙박스 영상은 가지고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-02-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "후유증이 남을 수도 있는데 지금 합의하면 나중에 추가 청구가 어려운지 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-02-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "상대 보험사의 과실비율 산정 근거를 받아볼 수 있는지도 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-02-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "합의 전 손해 항목을 어떻게 계산해야 하는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-02-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "소송까지 가야 하는 상황인지, 조정이나 추가 협상으로 해결할 수 있는지 검토하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-02-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

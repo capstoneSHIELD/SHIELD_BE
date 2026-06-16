@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-019",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-004-02-03",
+                                            "l1":  "근로계약·해고·임금",
+                                            "l2":  "임금 및 수당",
+                                            "l3":  "법정수당 산정"
+                                        },
+                                        {
+                                            "nodeId":  "law-003-03-02",
+                                            "l1":  "상속·유류분·유언",
+                                            "l2":  "유언",
+                                            "l3":  "유언 효력 및 무효"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-008-04-02",
+                                        "l1":  "기업·상사거래",
+                                        "l2":  "지분 및 주주 분쟁",
+                                        "l3":  "주주총회 결의 하자"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "주주총회 소집통지도 제대로 못 받았는데 대주주들끼리 이사 선임 결의를 끝냈다고 해서 결의 효력을 다투고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "정관에는 주주총회 소집통지를 2주 전에 하도록 되어 있는데 저는 통지를 받지 못했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "나중에 회의록을 보니 제 의결권이 없는 것처럼 처리되어 있었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "그 결의로 새 이사가 선임되고 회사 주요 계약 체결 권한도 바뀌었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "저는 소수주주지만 지분율이 의미 있는 수준이고 결의 내용에 직접 영향을 받습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "정관, 주주명부, 주주총회 의사록, 이메일 수신 내역을 확인 중입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "결의 취소나 무효 확인을 구하는 절차가 있는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "소를 제기할 수 있는 기간이 짧다고 들어서 기한이 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "결의 효력을 임시로 막을 수 있는 조치가 필요한지도 검토하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

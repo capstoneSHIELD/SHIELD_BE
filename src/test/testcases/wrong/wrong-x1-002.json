@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-002",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-001-01-05",
+                                            "l1":  "부동산 거래",
+                                            "l2":  "부동산 매매",
+                                            "l3":  "소유권 이전 및 등기"
+                                        },
+                                        {
+                                            "nodeId":  "law-006-05-01",
+                                            "l1":  "채무·보증·개인파산·회생",
+                                            "l2":  "개인회생",
+                                            "l3":  "회생 신청 요건"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-002-03-01",
+                                        "l1":  "이혼·위자료·재산분할",
+                                        "l2":  "재산분할",
+                                        "l3":  "분할 대상 재산 특정"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "이혼을 준비 중인데 결혼 후 마련한 아파트와 예금, 배우자 명의 차량이 재산분할 대상에 들어가는지 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "혼인 기간은 12년 정도이고 별거는 작년 말부터 시작했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "아파트는 혼인 중에 매수했지만 등기는 배우자 단독 명의로 되어 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "제 급여도 대출 상환과 생활비에 계속 들어갔고, 예금 일부는 배우자 계좌에만 남아 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "차량과 보험, 퇴직연금 같은 재산도 있는데 정확한 내역을 배우자가 알려주지 않습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "아파트 매수 계약서, 대출 상환 내역, 제 급여 이체 기록은 확보할 수 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "배우자가 최근 예금을 다른 계좌로 옮긴 것 같아 재산 조회나 보전 조치도 필요할지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "채무 중 일부는 생활비로 쓴 것이고 일부는 배우자 개인 용도라 구분이 필요합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "재산 목록을 기준으로 어느 범위까지 나누어야 하는지 정리하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

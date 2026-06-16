@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-024",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-002-03-03",
+                                            "l1":  "이혼·위자료·재산분할",
+                                            "l2":  "재산분할",
+                                            "l3":  "채무 분담"
+                                        },
+                                        {
+                                            "nodeId":  "law-006-03-01",
+                                            "l1":  "채무·보증·개인파산·회생",
+                                            "l2":  "민사집행 및 보전처분",
+                                            "l3":  "지급명령 및 소액사건"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-004-01-03",
+                                        "l1":  "근로계약·해고·임금",
+                                        "l2":  "근로계약",
+                                        "l3":  "근로자성 판단"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "프리랜서 계약서로 일했지만 매일 정해진 시간에 출근했고 회사 지시를 받아 일했는데 근로자로 인정될 수 있는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-01-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "계약서에는 프리랜서라고 되어 있지만 회사 사무실에서 매일 같은 시간 근무했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-01-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "업무 지시는 팀장이 메신저로 했고 휴가도 회사 승인을 받아야 했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-01-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "보수는 매월 고정적으로 지급됐고 개인 사업자로서 독립적으로 영업한 적은 없습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-01-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "회사 장비와 계정을 사용했고 업무 결과도 회사 시스템에 등록했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-01-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "출퇴근 기록, 메신저 지시 내용, 월별 지급 내역, 업무 배정표를 가지고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-01-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "근로자로 인정되면 퇴직금이나 연차수당도 청구할 수 있는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-01-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "회사에서는 세금계산서를 발행했으니 근로자가 아니라고 주장합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-01-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "실제 근무 방식 기준으로 근로자성이 판단되는 요소를 정리하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-01-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-013",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-008-01-03",
+                                            "l1":  "기업·상사거래",
+                                            "l2":  "상사계약 일반",
+                                            "l3":  "대금 지급 및 정산"
+                                        },
+                                        {
+                                            "nodeId":  "law-005-05-02",
+                                            "l1":  "손해배상·불법행위",
+                                            "l2":  "특수 불법행위 책임",
+                                            "l3":  "시설물 관리 책임"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-003-02-03",
+                                        "l1":  "상속·유류분·유언",
+                                        "l2":  "상속재산 처리",
+                                        "l3":  "상속포기"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "아버지가 빚을 많이 남기고 돌아가셨는데 재산보다 채무가 큰 것 같아 상속포기를 해야 하는지 알아보고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "사망 후 채권자들에게 연락이 오기 시작했고 카드대금과 대출 잔액이 확인됐습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "상속재산은 오래된 차량과 소액 예금 정도라 채무가 훨씬 많아 보입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "사망 사실을 안 날은 한 달 전이고 아직 법원에 아무 신청도 하지 않았습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "형제 중 일부는 아무것도 하지 않으면 자동으로 빚을 떠안는지 걱정하고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "가족관계증명서, 기본증명서, 채무 독촉장, 예금 잔액 자료를 모으고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "상속포기를 하면 제 자녀에게 채무가 넘어가는지도 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "한정승인과 상속포기 중 어느 절차가 맞는지 비교가 필요합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "신청 기간을 놓치지 않기 위해 필요한 서류와 순서를 정리하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

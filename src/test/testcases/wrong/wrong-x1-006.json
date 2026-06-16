@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-006",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-005-03-01",
+                                            "l1":  "손해배상·불법행위",
+                                            "l2":  "의료사고",
+                                            "l3":  "진료 과실 및 설명의무"
+                                        },
+                                        {
+                                            "nodeId":  "law-003-02-03",
+                                            "l1":  "상속·유류분·유언",
+                                            "l2":  "상속재산 처리",
+                                            "l3":  "상속포기"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-006-03-02",
+                                        "l1":  "채무·보증·개인파산·회생",
+                                        "l2":  "민사집행 및 보전처분",
+                                        "l3":  "가압류 및 가처분"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "빌려준 5천만 원을 계속 못 받고 있는데 상대방이 부동산을 처분하려는 것 같아 가압류를 먼저 할 수 있는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "차용증은 없지만 계좌이체 내역과 카카오톡으로 빌려달라는 대화가 남아 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "변제기한은 작년 12월로 정했는데 이후 여러 차례 미루기만 했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "최근 상대방이 보유하던 차량과 부동산을 가족 명의로 넘기려 한다는 말을 들었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "본안 소송 전에 재산을 묶어둘 수 있는 절차가 필요한지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "상대방 주소, 주민등록번호 일부, 근무지 정보는 알고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "청구 금액은 원금 5천만 원과 약정 이자 일부입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "가압류 신청에 필요한 소명자료와 담보 제공 가능성도 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "재산 처분이 끝나기 전에 빨리 진행해야 할 절차가 무엇인지 정리하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

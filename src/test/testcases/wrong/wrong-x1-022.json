@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-022",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-007-01-04",
+                                            "l1":  "임대차보호",
+                                            "l2":  "주택임대차보호",
+                                            "l3":  "차임 증감 제한"
+                                        },
+                                        {
+                                            "nodeId":  "law-005-01-01",
+                                            "l1":  "손해배상·불법행위",
+                                            "l2":  "손해배상 일반",
+                                            "l3":  "불법행위 성립요건"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-003-03-02",
+                                        "l1":  "상속·유류분·유언",
+                                        "l2":  "유언",
+                                        "l3":  "유언 효력 및 무효"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "돌아가신 어머니의 유언장이 발견됐는데 자필이 아니고 날짜도 빠져 있어서 효력이 있는지 다툴 수 있는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "유언장에는 어머니 이름은 적혀 있지만 작성일 일부가 빠져 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "내용도 누가 대신 써 준 것처럼 보이고 서명은 있지만 날인은 불명확합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "다른 형제는 유언장대로 재산을 나누자고 하지만 저는 형식이 맞는지 의심됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "유언장 발견 장소와 보관 경위도 분명하지 않습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "원본 유언장 사진, 사본, 가족관계 자료, 상속재산 목록을 가지고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "자필증서유언 요건을 갖추지 못하면 효력이 없는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "유언 효력을 다투려면 어떤 절차를 진행해야 하는지도 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "재산분할 협의 전에 유언장의 유효성을 먼저 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

@@ -22,6 +22,9 @@ Implemented in this slice:
 - BE `POST /internal/experiments/intent-route` adapter for local/test profile
 - BE `POST /internal/experiments/lawyer-match` adapter for local/test profile
 - synthetic lawyer corpus generator driven by `lawyer-corpus-generator-config.yaml`
+- wrong-selected testcase directory loader for `src/test/testcases/wrong/wrong-x1-*.json`
+- selected-label metadata forwarding to the intent-route adapter payload
+- turn-index classification progress report for measuring 2~10 turn improvement
 
 ## Run
 
@@ -38,6 +41,17 @@ python .\eval\complex-law-classification-experiment\runner\run_experiment.py --c
 ```
 
 `config.example.json` uses `dry_run=true`, so it validates the runner flow without calling the backend. For real classification and matching runs, set `dry_run=false` and start SHIELD BE with `local` or `test` profile so the internal experiment adapters are registered.
+
+For the wrong-selected cross-L1 benchmark, use:
+
+```powershell
+cd C:\SHIELD_BE
+python .\eval\complex-law-classification-experiment\runner\run_experiment.py --config .\eval\complex-law-classification-experiment\runner\config.wrong-selected.example.json
+```
+
+`config.wrong-selected.example.json` reads `src/test/testcases/wrong/wrong-x1-*.json`, converts each evaluation turn to normalized classification turns, and writes the normalized JSONL cache to `eval/complex-law-classification-experiment/input/wrong-selected-classification-turns-v1.jsonl`.
+
+For this benchmark, `classification_history_window` is `null` so turn 2~10 receive the cumulative user utterance history. `B_SCOPED_GOLD` is intentionally excluded because it scopes by the gold L1 and leaks the answer. The generated report `classification-turn-progress.md` groups classification metrics by `turn_index`.
 
 Current backend adapter status:
 

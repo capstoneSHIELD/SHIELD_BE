@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-029",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-001-03-05",
+                                            "l1":  "부동산 거래",
+                                            "l2":  "부동산 담보",
+                                            "l3":  "담보권 말소 및 변경"
+                                        },
+                                        {
+                                            "nodeId":  "law-003-04-01",
+                                            "l1":  "상속·유류분·유언",
+                                            "l2":  "유류분",
+                                            "l3":  "유류분 권리자 및 비율"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-005-04-02",
+                                        "l1":  "손해배상·불법행위",
+                                        "l2":  "인격권 침해",
+                                        "l3":  "초상권 및 사생활 침해"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "제 얼굴이 나온 사진을 동의 없이 업체 광고에 사용하고 있어서 게시 중단과 손해배상을 요구하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "광고에는 제 사진이 제품 사용 후기처럼 편집되어 올라가 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "저는 촬영이나 광고 사용에 동의한 적이 없고 업체와 계약한 적도 없습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "게시 후 지인들이 광고를 보고 연락했고, 제 이미지가 상업적으로 이용되고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "업체에 삭제 요청을 했지만 홍보 대행사가 올린 것이라며 책임을 미루고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "광고 화면 캡처, 게시 URL, 업체 답변, 원본 사진을 보관하고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "게시 중단을 빠르게 요구할 수 있는 방법과 손해배상 가능성을 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "초상권 침해와 사생활 침해 중 어떤 쟁점이 중심인지 정리하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "업체와 대행사 중 누구에게 책임을 물어야 하는지도 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-04-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

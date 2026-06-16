@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-018",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-001-01-03",
+                                            "l1":  "부동산 거래",
+                                            "l2":  "부동산 매매",
+                                            "l3":  "계약 해제·해지"
+                                        },
+                                        {
+                                            "nodeId":  "law-007-03-02",
+                                            "l1":  "임대차보호",
+                                            "l2":  "임차인 보호 절차",
+                                            "l3":  "임대차 분쟁조정"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-004-05-04",
+                                        "l1":  "근로계약·해고·임금",
+                                        "l2":  "직장 내 권리보호",
+                                        "l3":  "산업재해 및 보상"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "작업 중 기계에 손을 다쳤는데 회사가 산재 처리를 하지 말고 개인 병가로 처리하자고 해서 보상 절차가 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-05-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "다친 날 현장에는 안전장치가 제대로 설치되어 있지 않았고 보호장갑도 낡아 있었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-05-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "병원에서는 몇 주 이상 치료가 필요하다고 했고 손가락 움직임이 아직 불편합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-05-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "회사는 산재 신청을 하면 회사 평가에 문제가 된다며 개인 건강보험으로 처리하자고 했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-05-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "사고 당시 같이 있던 동료들이 있고 CCTV도 있을 가능성이 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-05-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "진단서, 치료 기록, 현장 사진, 근무표는 확보할 수 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-05-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "산재 신청을 제가 직접 할 수 있는지, 회사 동의가 필요한지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-05-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "치료비와 휴업급여, 장해가 남을 경우 보상 범위를 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-05-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "회사에 불이익을 당하지 않으면서 절차를 진행하는 방법도 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-05-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

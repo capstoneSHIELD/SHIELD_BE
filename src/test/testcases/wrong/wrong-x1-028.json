@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-028",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-004-01-02",
+                                            "l1":  "근로계약·해고·임금",
+                                            "l2":  "근로계약",
+                                            "l3":  "고용형태 및 비정규직"
+                                        },
+                                        {
+                                            "nodeId":  "law-008-04-05",
+                                            "l1":  "기업·상사거래",
+                                            "l2":  "지분 및 주주 분쟁",
+                                            "l3":  "경영권 분쟁"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-001-02-04",
+                                        "l1":  "부동산 거래",
+                                        "l2":  "부동산 임대차",
+                                        "l3":  "명도 및 인도"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "월세를 6개월째 내지 않는 임차인이 나가지도 않아서 건물을 인도받는 절차를 진행하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-02-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "임대차계약은 이미 해지 통보를 했고 보증금에서 밀린 차임을 공제하겠다고 알렸습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-02-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "임차인은 영업이 어렵다며 계속 시간을 달라고 하지만 퇴거 날짜를 정하지 않습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-02-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "건물 매수 예정자가 있어 인도가 늦어지면 손해가 커질 수 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-02-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "내용증명을 보냈지만 반송되지 않고 도달한 것으로 확인됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-02-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "계약서, 차임 미납 내역, 해지 통보 문자, 내용증명 발송 자료를 가지고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-02-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "명도소송 전에 점유이전금지가처분 같은 조치가 필요한지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-02-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "보증금 정산과 원상회복 비용을 함께 다룰 수 있는지도 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-02-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "임차인이 계속 버티는 경우 강제집행까지 어떤 순서로 진행되는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-02-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

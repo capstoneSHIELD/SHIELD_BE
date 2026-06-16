@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-020",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-008-02-01",
+                                            "l1":  "기업·상사거래",
+                                            "l2":  "납품·공급·도급",
+                                            "l3":  "물품공급 및 납품계약"
+                                        },
+                                        {
+                                            "nodeId":  "law-002-04-03",
+                                            "l1":  "이혼·위자료·재산분할",
+                                            "l2":  "자녀 및 양육",
+                                            "l3":  "면접교섭권"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-006-01-05",
+                                        "l1":  "채무·보증·개인파산·회생",
+                                        "l2":  "금전채권 및 채무",
+                                        "l3":  "소멸시효"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "8년 전에 지인에게 빌려준 돈을 이제라도 청구하려는데 너무 오래 지나서 소멸시효가 완성됐는지 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "돈을 빌려준 날짜는 8년 전이고, 당시 변제일은 1년 뒤로 정했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "중간에 상대방이 일부 금액을 갚거나 갚겠다고 문자로 인정한 적이 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "최근 연락하니 오래된 일이라 갚을 의무가 없다고 주장합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "차용증은 없지만 계좌이체 내역과 문자 대화는 남아 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "소멸시효가 중간에 중단되거나 새로 진행될 수 있는 사정이 있는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "상대방이 채무를 인정한 문자 내용이 중요한지 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "지급명령이나 소송을 바로 진행해도 되는지, 먼저 내용증명을 보내야 하는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "청구 가능한 원금과 이자 범위를 정리하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

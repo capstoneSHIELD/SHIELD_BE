@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-026",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-005-02-03",
+                                            "l1":  "손해배상·불법행위",
+                                            "l2":  "교통사고",
+                                            "l3":  "후유장해 및 일실수익"
+                                        },
+                                        {
+                                            "nodeId":  "law-001-02-01",
+                                            "l1":  "부동산 거래",
+                                            "l2":  "부동산 임대차",
+                                            "l3":  "계약 체결 및 조건"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-008-03-04",
+                                        "l1":  "기업·상사거래",
+                                        "l2":  "유통·가맹·대리점",
+                                        "l3":  "불공정거래행위"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "가맹본부가 지정 물품을 시중가보다 훨씬 비싸게 사라고 강요하고, 거절하면 계약을 끊겠다고 합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "가맹계약서에는 필수 구매 품목이라고 적혀 있지만 가격 산정 근거는 설명받지 못했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "같은 제품을 외부에서 사면 훨씬 저렴한데 본부는 지정 업체만 이용하라고 합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "이의를 제기하자 다음 계약 갱신이 어려울 수 있다고 말했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "다른 가맹점주들도 비슷한 요구를 받고 있지만 공개적으로 말하기 어려워합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "계약서, 물품 단가표, 본부 공문, 비교 견적 자료를 모아 두었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "필수품목 지정 자체가 가능한 경우와 부당한 경우를 구분하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "계약 해지 압박이나 불이익 제공이 문제될 수 있는지도 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "공정거래 관련 신고나 손해배상 청구 가능성을 검토하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

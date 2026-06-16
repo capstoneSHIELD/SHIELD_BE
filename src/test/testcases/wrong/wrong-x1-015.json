@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-015",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-003-04-02",
+                                            "l1":  "상속·유류분·유언",
+                                            "l2":  "유류분",
+                                            "l3":  "유류분 산정"
+                                        },
+                                        {
+                                            "nodeId":  "law-001-02-05",
+                                            "l1":  "부동산 거래",
+                                            "l2":  "부동산 임대차",
+                                            "l3":  "수선·원상회복 및 비용"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-006-05-01",
+                                        "l1":  "채무·보증·개인파산·회생",
+                                        "l2":  "개인회생",
+                                        "l3":  "회생 신청 요건"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "카드빚과 대출이 9천만 원 정도 있고 월급은 계속 받고 있어서 개인회생 신청 요건에 맞는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-05-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "월 소득은 세후 약 280만 원이고 부양가족은 배우자와 자녀 한 명입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-05-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "채무는 카드론, 신용대출, 대부업체 대출이 섞여 있고 연체가 6개월째입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-05-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "최근 급여 압류 예고 통지를 받아 생활비가 부족해질까 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-05-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "재산은 보증금 일부와 오래된 차량 정도이고 고가 재산은 없습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-05-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "채권자 목록, 원리금 잔액, 급여명세서, 임대차계약서를 정리하고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-05-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "개인회생을 신청하면 독촉이나 압류가 멈추는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-05-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "월 변제금이 어느 정도로 산정될지, 생계비가 얼마나 인정되는지도 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-05-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "신청 전에 하면 안 되는 변제나 재산 처분이 있는지 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-05-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

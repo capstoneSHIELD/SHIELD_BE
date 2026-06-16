@@ -10,6 +10,7 @@ from typing import Any
 class ExperimentConfig:
     dataset_path: Path
     classification_turns_path: Path
+    wrong_selected_testcases_path: Path | None
     ontology_snapshot_path: Path
     lawyer_corpus_path: Path | None
     lawyer_corpus_generator_config_path: Path | None
@@ -23,6 +24,7 @@ class ExperimentConfig:
     selected_provider: str = "cohere"
     dry_run: bool = False
     top_k: int = 10
+    classification_history_window: int | None = 4
     production_group_weights: dict[str, float] = field(default_factory=dict)
     hybrid_match_weights: dict[str, float] = field(default_factory=lambda: {
         "cosine": 0.60,
@@ -48,6 +50,7 @@ class ExperimentConfig:
             classification_turns_path=resolve(
                 "classification_turns_path", "../input/classification-turns-v1.jsonl"
             ),
+            wrong_selected_testcases_path=resolve("wrong_selected_testcases_path"),
             ontology_snapshot_path=resolve(
                 "ontology_snapshot_path", "../input/legal-ontology-slim.snapshot.json"
             ),
@@ -63,6 +66,7 @@ class ExperimentConfig:
             selected_provider=str(data.get("selected_provider", "cohere")),
             dry_run=bool(data.get("dry_run", False)),
             top_k=int(data.get("top_k", 10)),
+            classification_history_window=_optional_int(data.get("classification_history_window", 4)),
             production_group_weights=dict(data.get("production_group_weights", {})),
             hybrid_match_weights=dict(data.get("hybrid_match_weights", {
                 "cosine": 0.60,
@@ -86,3 +90,9 @@ def _load_config(path: Path) -> dict[str, Any]:
         loaded = yaml.safe_load(raw)
         return loaded or {}
     raise ValueError(f"Unsupported config file: {path}")
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)

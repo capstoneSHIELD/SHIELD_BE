@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-030",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-002-03-03",
+                                            "l1":  "이혼·위자료·재산분할",
+                                            "l2":  "재산분할",
+                                            "l3":  "채무 분담"
+                                        },
+                                        {
+                                            "nodeId":  "law-003-04-01",
+                                            "l1":  "상속·유류분·유언",
+                                            "l2":  "유류분",
+                                            "l3":  "유류분 권리자 및 비율"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-008-01-04",
+                                        "l1":  "기업·상사거래",
+                                        "l2":  "상사계약 일반",
+                                        "l3":  "해제·해지 및 손해배상"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "거래처가 1년 공급계약을 중간에 일방적으로 해지하겠다고 통보해서 이미 준비한 물량과 손해를 청구할 수 있는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "공급계약 기간은 올해 말까지였고 저는 이미 원자재를 발주해 둔 상태입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "거래처는 내부 사정만 말하면서 다음 달부터 물량을 받지 않겠다고 통보했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "계약서에는 중도 해지 사유와 통지 기간이 정해져 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "저는 해당 거래를 위해 생산라인을 조정했고 다른 판매처를 바로 찾기 어렵습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "공급계약서, 발주서, 원자재 구매 내역, 해지 통보 메일을 보관하고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "상대방의 일방 해지가 계약 위반인지, 이미 발생한 비용을 청구할 수 있는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "계속 이행을 요구할 수 있는지 아니면 손해배상 청구가 현실적인지도 검토하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "손해액을 산정할 때 준비한 물량, 기대이익, 보관비를 어떻게 정리해야 하는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-008-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

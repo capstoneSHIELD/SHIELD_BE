@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-027",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-008-04-05",
+                                            "l1":  "기업·상사거래",
+                                            "l2":  "지분 및 주주 분쟁",
+                                            "l3":  "경영권 분쟁"
+                                        },
+                                        {
+                                            "nodeId":  "law-004-02-02",
+                                            "l1":  "근로계약·해고·임금",
+                                            "l2":  "임금 및 수당",
+                                            "l3":  "통상임금 및 평균임금"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-006-02-03",
+                                        "l1":  "채무·보증·개인파산·회생",
+                                        "l2":  "보증",
+                                        "l3":  "보증인 구상권"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "친구 대출에 보증을 섰다가 제가 대신 갚았는데 친구에게 구상금을 청구할 수 있는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "제가 대신 갚은 금액은 원금과 이자를 합쳐 약 3천만 원입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "채권자는 보증인인 저에게 먼저 청구했고 저는 신용 문제 때문에 변제했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "친구는 곧 갚겠다고 말했지만 현재 연락을 피하고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "보증계약서, 변제 영수증, 친구와의 대화 기록은 가지고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "제가 대신 갚은 뒤 원래 채무자에게 어느 범위까지 청구할 수 있는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "이자나 지연손해금도 함께 요구할 수 있는지 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "친구 재산이 줄어들기 전에 보전 조치가 필요한지도 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "구상금 청구를 위해 내용증명, 지급명령, 소송 중 어떤 절차가 적절한지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-006-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

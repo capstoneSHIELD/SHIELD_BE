@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-025",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-004-01-02",
+                                            "l1":  "근로계약·해고·임금",
+                                            "l2":  "근로계약",
+                                            "l3":  "고용형태 및 비정규직"
+                                        },
+                                        {
+                                            "nodeId":  "law-007-03-04",
+                                            "l1":  "임대차보호",
+                                            "l2":  "임차인 보호 절차",
+                                            "l3":  "명도소송 대응"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-005-03-02",
+                                        "l1":  "손해배상·불법행위",
+                                        "l2":  "의료사고",
+                                        "l3":  "인과관계 및 입증책임"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "수술 뒤 예상하지 못한 합병증이 생겼는데 병원은 원래 생길 수 있는 일이라고만 해서 과실과 인과관계를 어떻게 입증해야 할지 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "수술 전 설명에서는 일반적인 위험만 들었고 지금 같은 합병증 가능성은 자세히 듣지 못했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "수술 직후부터 증상이 있었지만 병원은 시간이 지나면 괜찮아진다고 했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "다른 병원에서는 수술 과정이나 사후 조치와 관련해 검토가 필요하다는 말을 들었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "의무기록 사본과 영상자료를 발급받으려 하고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "현재 추가 치료비가 계속 나오고 일상생활에도 제한이 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "의료 과실과 현재 손해 사이의 인과관계를 입증하려면 감정이 필요한지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "의료분쟁 조정 절차와 바로 소송하는 방법의 차이를 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "설명의무 위반과 진료상 과실을 각각 어떻게 정리해야 하는지 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-005-03-02"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-014",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-002-03-02",
+                                            "l1":  "이혼·위자료·재산분할",
+                                            "l2":  "재산분할",
+                                            "l3":  "기여도 산정"
+                                        },
+                                        {
+                                            "nodeId":  "law-007-02-02",
+                                            "l1":  "임대차보호",
+                                            "l2":  "상가건물임대차보호",
+                                            "l3":  "계약갱신요구권"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-001-03-04",
+                                        "l1":  "부동산 거래",
+                                        "l2":  "부동산 담보",
+                                        "l3":  "배당 및 우선순위"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "경매가 진행 중인 집에 전세권과 근저당이 같이 잡혀 있는데 배당 순위에서 제가 얼마나 먼저 받을 수 있는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "전세권 설정일과 근저당 설정일이 서로 달라서 순위를 어떻게 봐야 하는지 모르겠습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "경매개시결정 이후 배당요구 종기 통지를 받았고 기한이 얼마 남지 않았습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "제 보증금 전액을 받을 수 있을지, 선순위 근저당 때문에 일부만 받을지 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "등기부등본에는 여러 근저당과 압류가 함께 표시되어 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "임대차계약서, 전세권 설정등기 자료, 확정일자 자료, 배당요구 통지서를 가지고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "소액임차인 최우선변제가 적용되는지도 함께 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "배당요구를 하지 않으면 권리가 사라지는지, 어떤 서류를 제출해야 하는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "경매 절차에서 제 순위와 배당 가능 금액을 계산하는 기준을 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-03-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

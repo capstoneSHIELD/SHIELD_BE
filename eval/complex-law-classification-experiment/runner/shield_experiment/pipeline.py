@@ -74,7 +74,12 @@ class PreflightPipeline:
         for path in required:
             if not path.exists():
                 raise FileNotFoundError(f"Required input file does not exist: {path}")
-        if not config.classification_turns_path.exists() and not config.dataset_path.exists():
+        if config.wrong_selected_testcases_path is not None:
+            if not config.wrong_selected_testcases_path.exists():
+                raise FileNotFoundError(
+                    f"wrong_selected_testcases_path must exist: {config.wrong_selected_testcases_path}"
+                )
+        elif not config.classification_turns_path.exists() and not config.dataset_path.exists():
             raise FileNotFoundError(
                 "Either classification_turns_path or dataset_path must exist: "
                 f"{config.classification_turns_path}, {config.dataset_path}"
@@ -84,7 +89,11 @@ class PreflightPipeline:
                 raise FileNotFoundError(f"lawyer_corpus_path is required for matching: {config.lawyer_corpus_path}")
             if config.matching_labels_path is None or not config.matching_labels_path.exists():
                 raise FileNotFoundError(f"matching_labels_path is required for matching: {config.matching_labels_path}")
-        turn_report = self._validate_classification_turns(turns, mapper)
+        turn_report = self._validate_classification_turns(
+            turns,
+            mapper,
+            require_wrong_selected_rule=config.wrong_selected_testcases_path is not None,
+        )
         if turn_report["error_count"]:
             raise ValueError("classification-turns preflight failed: " + "; ".join(turn_report["errors"][:5]))
 
@@ -149,7 +158,12 @@ class PreflightPipeline:
             )
         return summary
 
-    def _validate_classification_turns(self, turns, mapper: OntologyMapper) -> dict:
+    def _validate_classification_turns(
+        self,
+        turns,
+        mapper: OntologyMapper,
+        require_wrong_selected_rule: bool = False,
+    ) -> dict:
         errors: list[str] = []
         invalid_node_ids: list[str] = []
         for turn in turns:
@@ -169,6 +183,26 @@ class PreflightPipeline:
                 if not mapper.snapshot.exists(node_id):
                     invalid_node_ids.append(node_id)
                     errors.append(f"{turn.id}: unknown gold_node_id {node_id}")
+            for node_id in turn.selected_node_ids:
+                if not mapper.snapshot.exists(node_id):
+                    invalid_node_ids.append(node_id)
+                    errors.append(f"{turn.id}: unknown selected_node_id {node_id}")
+            selected_l1 = {
+                mapper.to_l1(node_id)
+                for node_id in turn.selected_node_ids
+                if mapper.to_l1(node_id)
+            }
+            gold_l1 = {
+                mapper.to_l1(node_id)
+                for node_id in turn.gold_node_ids
+                if mapper.to_l1(node_id)
+            }
+            if turn.selected_node_ids and len(selected_l1) != len(turn.selected_node_ids):
+                errors.append(f"{turn.id}: selected_node_ids must have distinct L1 values")
+            if require_wrong_selected_rule and len(turn.selected_node_ids) != 2:
+                errors.append(f"{turn.id}: selected_node_ids must contain exactly 2 labels")
+            if selected_l1 & gold_l1:
+                errors.append(f"{turn.id}: selected_node_ids must not overlap gold L1 values")
         return {
             "row_count": len(turns),
             "error_count": len(errors),
@@ -249,21 +283,35 @@ class EvaluationPipeline:
         matching_results: dict[str, list[MatchingResult]],
         labels,
         mapper: OntologyMapper,
-    ) -> tuple[dict[str, dict[str, float]], dict[str, dict[str, float]]]:
+    ) -> tuple[
+        dict[str, dict[str, float]],
+        dict[str, dict[str, float]],
+        dict[str, dict[int, dict[str, float]]],
+    ]:
         classification_evaluator = ClassificationEvaluator(mapper)
         matching_evaluator = MatchingEvaluator()
         by_classification_key: dict[str, list[ClassificationResult]] = {}
+        by_classification_key_turn: dict[str, dict[int, list[ClassificationResult]]] = {}
         for (_, provider, mode), result in classification_results.items():
-            by_classification_key.setdefault(f"{provider}_{mode}", []).append(result)
+            key = f"{provider}_{mode}"
+            by_classification_key.setdefault(key, []).append(result)
+            by_classification_key_turn.setdefault(key, {}).setdefault(result.turn_index, []).append(result)
         classification_metrics = {
             key: classification_evaluator.evaluate(rows)
             for key, rows in by_classification_key.items()
+        }
+        classification_turn_metrics = {
+            key: {
+                turn_index: classification_evaluator.evaluate(rows)
+                for turn_index, rows in sorted(turn_rows.items())
+            }
+            for key, turn_rows in by_classification_key_turn.items()
         }
         matching_metrics = {
             key: matching_evaluator.evaluate(rows, labels)
             for key, rows in matching_results.items()
         }
-        return classification_metrics, matching_metrics
+        return classification_metrics, matching_metrics, classification_turn_metrics
 
 
 class ReportingPipeline:
@@ -271,6 +319,7 @@ class ReportingPipeline:
         self,
         run_dir: Path,
         classification_metrics,
+        classification_turn_metrics,
         matching_metrics,
         preflight_summary,
         classification_results,
@@ -280,6 +329,7 @@ class ReportingPipeline:
     ) -> None:
         writer = ReportWriter(run_dir / "reports")
         writer.write_metrics_summary(classification_metrics)
+        writer.write_classification_turn_progress(classification_turn_metrics)
         writer.write_matching_summary(matching_metrics)
         writer.write_benchmark_validity_check(preflight_summary, classification_metrics, matching_metrics)
         writer.write_corpus_coverage_report(preflight_summary)
@@ -319,12 +369,13 @@ class ExperimentPipelineFacade:
         matching_results = self.matching_pipeline.run(
             config, final_turns, classification_results, client, mapper, sink
         )
-        classification_metrics, matching_metrics = self.evaluation_pipeline.run(
+        classification_metrics, matching_metrics, classification_turn_metrics = self.evaluation_pipeline.run(
             classification_results, matching_results, labels, mapper
         )
         self.reporting_pipeline.run(
             context.output_dir,
             classification_metrics,
+            classification_turn_metrics,
             matching_metrics,
             preflight_summary,
             classification_results,
@@ -351,6 +402,13 @@ class ExperimentPipelineFacade:
         )
 
     def _load_or_build_turns(self, config: ExperimentConfig):
+        if config.wrong_selected_testcases_path is not None:
+            turns = self.dataset_repository.load_wrong_selected_turns(
+                config.wrong_selected_testcases_path,
+                history_window=config.classification_history_window,
+            )
+            write_jsonl(config.classification_turns_path, [turn.to_json() for turn in turns])
+            return turns
         turns = self.dataset_repository.load_classification_turns(
             config.classification_turns_path,
             dataset_path=config.dataset_path,
@@ -358,7 +416,7 @@ class ExperimentPipelineFacade:
         if config.classification_turns_path.exists():
             return turns
         case_rows = read_jsonl(config.dataset_path)
-        built = DatasetBuilder().build_classification_turns(case_rows)
+        built = DatasetBuilder(config.classification_history_window).build_classification_turns(case_rows)
         write_jsonl(config.classification_turns_path, [turn.to_json() for turn in built])
         return built
 
@@ -371,6 +429,11 @@ class ExperimentPipelineFacade:
             "commit_sha": context.commit_sha,
             "dataset_path": str(config.dataset_path),
             "classification_turns_path": str(config.classification_turns_path),
+            "wrong_selected_testcases_path": (
+                str(config.wrong_selected_testcases_path)
+                if config.wrong_selected_testcases_path
+                else None
+            ),
             "ontology_snapshot_path": str(config.ontology_snapshot_path),
             "lawyer_corpus_path": str(config.lawyer_corpus_path) if config.lawyer_corpus_path else None,
             "lawyer_corpus_generator_config_path": (
@@ -385,6 +448,7 @@ class ExperimentPipelineFacade:
             "selected_provider": config.selected_provider,
             "selected_classification_mode": config.selected_classification_mode,
             "dry_run": config.dry_run,
+            "classification_history_window": config.classification_history_window,
             "runtime_scope_source": "A_FULL_caseType_l1",
             "production_group_weights": config.production_group_weights,
             "hybrid_match_weights": config.hybrid_match_weights,

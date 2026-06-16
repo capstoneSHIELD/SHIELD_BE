@@ -20,6 +20,27 @@ class ReportWriter:
             lines.append("")
         (self.reports_dir / "metrics-summary.md").write_text("\n".join(lines), encoding="utf-8")
 
+    def write_classification_turn_progress(
+        self,
+        classification_turn_metrics: dict[str, dict[int, dict[str, float]]],
+    ) -> None:
+        lines = [
+            "# Classification Turn Progress",
+            "",
+            "| provider_mode | turn_index | row_count | exact_set_match | micro_f1 | primary_accuracy | hierarchical_partial_score |",
+            "|---|---:|---:|---:|---:|---:|---:|",
+        ]
+        for key, by_turn in sorted(classification_turn_metrics.items()):
+            for turn_index, metrics in sorted(by_turn.items()):
+                lines.append(
+                    f"| `{key}` | {turn_index} | {metrics.get('row_count', 0.0):.0f} "
+                    f"| {metrics.get('exact_set_match', 0.0):.4f} "
+                    f"| {metrics.get('micro_f1', 0.0):.4f} "
+                    f"| {metrics.get('primary_accuracy', 0.0):.4f} "
+                    f"| {metrics.get('hierarchical_partial_score', 0.0):.4f} |"
+                )
+        (self.reports_dir / "classification-turn-progress.md").write_text("\n".join(lines), encoding="utf-8")
+
     def write_matching_summary(self, matching_metrics: dict[str, dict[str, float]]) -> None:
         lines = ["# Matching Metrics Summary", ""]
         for key, metrics in sorted(matching_metrics.items()):

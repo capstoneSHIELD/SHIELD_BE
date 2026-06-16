@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-017",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-005-04-03",
+                                            "l1":  "손해배상·불법행위",
+                                            "l2":  "인격권 침해",
+                                            "l3":  "개인정보 침해"
+                                        },
+                                        {
+                                            "nodeId":  "law-008-03-03",
+                                            "l1":  "기업·상사거래",
+                                            "l2":  "유통·가맹·대리점",
+                                            "l3":  "거래중단 및 계약종료"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-001-04-01",
+                                        "l1":  "부동산 거래",
+                                        "l2":  "부동산 권리관계",
+                                        "l3":  "공유 및 지분관계"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "형제들과 공동명의로 된 토지가 있는데 한 사람이 동의 없이 전체를 팔겠다고 해서 제 지분 권리를 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "토지는 아버지 생전에 형제 세 명에게 각 지분으로 이전된 상태입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "한 명이 전체 토지를 매수하겠다는 사람과 협의 중이라고 하며 제 동의 없이 계약하려 합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "저는 제 지분을 팔 생각이 없고, 사용 수익이나 관리비 문제도 정리되지 않았습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "등기부등본에는 각자 지분이 명확히 표시되어 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "공유물 분할을 청구할 수 있다는 말을 들었지만 토지를 그대로 유지하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "상대방이 단독으로 전체 매매계약을 체결하면 제 지분에 영향이 있는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "지분권자로서 사용료나 관리 비용 정산을 요구할 수 있는지도 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "앞으로 매각, 분할, 사용 방법을 둘러싼 분쟁을 어떻게 정리해야 할지 상담이 필요합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

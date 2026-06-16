@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-012",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-004-04-02",
+                                            "l1":  "근로계약·해고·임금",
+                                            "l2":  "해고 및 징계",
+                                            "l3":  "해고의 정당성"
+                                        },
+                                        {
+                                            "nodeId":  "law-006-02-02",
+                                            "l1":  "채무·보증·개인파산·회생",
+                                            "l2":  "보증",
+                                            "l3":  "보증책임 범위 및 한도"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-002-04-01",
+                                        "l1":  "이혼·위자료·재산분할",
+                                        "l2":  "자녀 및 양육",
+                                        "l3":  "친권 및 양육권"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "이혼 후 아이를 누가 키울지 합의가 안 되고 배우자가 일방적으로 아이를 데려가려고 해서 양육권 문제를 상담하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "아이는 초등학생이고 지금까지 주로 제가 등하교와 병원, 학원 관리를 해 왔습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "배우자는 별거 이후 아이를 데려가겠다고 하며 제 연락을 제한하려고 합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "아이의 생활 환경과 학교를 바꾸지 않는 것이 좋다고 생각하지만 합의가 되지 않습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "양육비와 면접교섭도 함께 정해야 할 상황입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "아이의 생활 기록, 병원 기록, 학교 상담 내역, 제가 돌본 자료는 정리할 수 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "배우자가 아이 앞에서 제 험담을 하는 일도 있어 정서적인 영향이 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "친권과 양육권을 법원에서 어떻게 판단하는지 사실자료 중심으로 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "임시 양육자 지정 같은 절차가 필요한지도 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-04-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

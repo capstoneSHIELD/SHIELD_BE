@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-009",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-008-04-03",
+                                            "l1":  "기업·상사거래",
+                                            "l2":  "지분 및 주주 분쟁",
+                                            "l3":  "주주간 계약 분쟁"
+                                        },
+                                        {
+                                            "nodeId":  "law-006-04-01",
+                                            "l1":  "채무·보증·개인파산·회생",
+                                            "l2":  "개인파산",
+                                            "l3":  "파산 신청 요건"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-007-03-01",
+                                        "l1":  "임대차보호",
+                                        "l2":  "임차인 보호 절차",
+                                        "l3":  "임차권등기명령"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "전세계약이 끝났고 이사를 가야 하는데 보증금을 아직 못 받아서 임차권등기명령을 신청해야 하는 상황입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "이사 날짜가 이미 잡혀 있어서 집을 비워야 하지만 보증금은 아직 받지 못했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "임대인은 다음 세입자가 들어오면 주겠다고만 하고 확정된 지급 계획이 없습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "전입신고와 확정일자는 되어 있고 현재도 주민등록은 해당 주소에 남아 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "이사를 먼저 가면 대항력이나 우선변제권에 문제가 생길까 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "계약서, 주민등록초본, 확정일자 자료, 보증금 입금 내역은 준비할 수 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "임차권등기명령을 신청한 뒤 이사해도 되는지 절차와 기간을 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "신청 전에 임대인에게 별도 통보를 해야 하는지도 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "보증금 반환 소송과 임차권등기명령의 순서를 어떻게 잡아야 할지 정리하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-03-01"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

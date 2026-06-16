@@ -97,6 +97,9 @@ class ExperimentClient:
             "messages": [message.to_json() for message in request.turn.messages],
             "includeRaw": True,
         }
+        if request.turn.selected_node_ids:
+            payload["selectedNodeIds"] = request.turn.selected_node_ids
+            payload["selectedLabels"] = request.turn.selected_labels
         return self._post("/internal/experiments/intent-route", payload)
 
     def lawyer_match(self, payload: dict[str, Any]) -> dict[str, Any]:

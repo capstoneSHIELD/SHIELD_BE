@@ -3,6 +3,7 @@
   "dry_run": true,
   "dataset_path": "../input/sample-dataset-v1.jsonl",
   "classification_turns_path": "../input/sample-classification-turns-v1.jsonl",
+  "wrong_selected_testcases_path": null,
   "ontology_snapshot_path": "../../../src/main/resources/ontology/legal-ontology-slim.json",
   "lawyer_corpus_path": "../input/lawyers-v1.jsonl",
   "lawyer_corpus_generator_config_path": "../input/lawyer-corpus-generator-config.yaml",
@@ -19,6 +20,7 @@
   ],
   "selected_provider": "cohere",
   "selected_classification_mode": "C_HYBRID_RUNTIME",
+  "classification_history_window": 4,
   "top_k": 10,
   "production_group_weights": {
     "single": 0.4,

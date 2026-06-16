@@ -34,6 +34,9 @@ class ClassificationTurn:
     gold_primary_node_id: str | None = None
     expected_complex: bool = False
     matching_label_set_id: str | None = None
+    selected_node_ids: list[str] = field(default_factory=list)
+    selected_labels: list[JsonObject] = field(default_factory=list)
+    evaluation_target: bool = True
 
     @staticmethod
     def from_json(data: JsonObject) -> "ClassificationTurn":
@@ -53,6 +56,13 @@ class ClassificationTurn:
             gold_primary_node_id=data.get("gold_primary_node_id"),
             expected_complex=bool(data.get("expected_complex", False)),
             matching_label_set_id=data.get("matching_label_set_id"),
+            selected_node_ids=[str(x) for x in data.get("selected_node_ids", [])],
+            selected_labels=[
+                dict(label)
+                for label in data.get("selected_labels", [])
+                if isinstance(label, dict)
+            ],
+            evaluation_target=bool(data.get("evaluation_target", True)),
         )
 
     def to_json(self) -> JsonObject:
@@ -69,6 +79,9 @@ class ClassificationTurn:
             "gold_primary_node_id": self.gold_primary_node_id,
             "expected_complex": self.expected_complex,
             "matching_label_set_id": self.matching_label_set_id,
+            "selected_node_ids": self.selected_node_ids,
+            "selected_labels": self.selected_labels,
+            "evaluation_target": self.evaluation_target,
         }
 
 
@@ -89,6 +102,9 @@ class ClassificationResult:
     gold_primary_node_id: str | None
     expected_complex: bool
     pred_node_ids: list[str]
+    selected_node_ids: list[str] = field(default_factory=list)
+    selected_labels: list[JsonObject] = field(default_factory=list)
+    evaluation_target: bool = True
     raw: JsonObject = field(default_factory=dict)
     parse_success: bool = True
     schema_success: bool = True
@@ -116,6 +132,9 @@ class ClassificationResult:
             "gold_primary_node_id": self.gold_primary_node_id,
             "expected_complex": self.expected_complex,
             "pred_node_ids": self.pred_node_ids,
+            "selected_node_ids": self.selected_node_ids,
+            "selected_labels": self.selected_labels,
+            "evaluation_target": self.evaluation_target,
             "parse_success": self.parse_success,
             "schema_success": self.schema_success,
             "fallback_used": self.fallback_used,

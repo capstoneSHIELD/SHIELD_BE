@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-023",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-003-02-02",
+                                            "l1":  "상속·유류분·유언",
+                                            "l2":  "상속재산 처리",
+                                            "l3":  "상속채무 및 청산"
+                                        },
+                                        {
+                                            "nodeId":  "law-008-05-04",
+                                            "l1":  "기업·상사거래",
+                                            "l2":  "임원 책임 및 영업보호",
+                                            "l3":  "경업금지 및 전직금지"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-002-02-03",
+                                        "l1":  "이혼·위자료·재산분할",
+                                        "l2":  "위자료",
+                                        "l3":  "제3자 책임"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "배우자의 외도 상대방에게도 위자료를 청구할 수 있는지 알고 싶고, 메시지 캡처와 숙박 예약 내역은 가지고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "배우자와 상대방이 장기간 연락한 메시지와 숙박 예약 내역을 확인했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "상대방은 배우자가 기혼자인 사실을 알고 있었던 것으로 보입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "그 일 이후 혼인관계가 크게 악화됐고 별거까지 하게 됐습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "배우자와의 이혼 여부와 별개로 상대방에게 책임을 묻고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "메시지 캡처, 사진, 결제 내역, 지인 진술을 일부 확보했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "상대방에게 바로 연락하면 증거를 지울까 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "위자료 청구를 하려면 부정행위와 혼인 파탄 사이의 관계를 어떻게 정리해야 하는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "청구 금액을 산정할 때 고려되는 기간, 경위, 피해 정도를 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-002-02-03"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

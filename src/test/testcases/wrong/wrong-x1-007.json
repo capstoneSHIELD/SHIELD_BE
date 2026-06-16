@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-007",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-006-01-01",
+                                            "l1":  "채무·보증·개인파산·회생",
+                                            "l2":  "금전채권 및 채무",
+                                            "l3":  "대여금 및 이자"
+                                        },
+                                        {
+                                            "nodeId":  "law-002-02-02",
+                                            "l1":  "이혼·위자료·재산분할",
+                                            "l2":  "위자료",
+                                            "l3":  "산정 기준"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-001-01-04",
+                                        "l1":  "부동산 거래",
+                                        "l2":  "부동산 매매",
+                                        "l3":  "하자담보책임"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "아파트를 산 뒤 바로 큰 누수와 곰팡이가 발견됐는데 매도인이 매매 전부터 알면서 숨긴 것 같습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "잔금 지급 후 한 달도 안 돼 천장에서 물이 새기 시작했고 벽 안쪽 곰팡이도 심했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "관리사무소에서는 이전에도 같은 세대에서 누수 민원이 있었다고 말했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "매도인은 계약 당시 하자가 없다고 했고 특약에도 별도 고지는 없었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "수리업체 견적을 받아 보니 배관 교체와 마감 공사 비용이 상당합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "매매계약서, 하자 사진, 관리사무소 확인 내용, 수리 견적서를 모아 두었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "매도인에게 수리비 부담을 요청했지만 중고 주택이라 책임이 없다고 합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "계약 해제까지 가능한 사안인지 아니면 손해배상이나 수리비 청구가 현실적인지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "하자를 안 날부터 어느 기간 안에 통지해야 하는지도 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-001-01-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

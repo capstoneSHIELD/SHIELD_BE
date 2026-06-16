@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-001",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-002-04-02",
+                                            "l1":  "이혼·위자료·재산분할",
+                                            "l2":  "자녀 및 양육",
+                                            "l3":  "양육비 산정 및 청구"
+                                        },
+                                        {
+                                            "nodeId":  "law-004-02-01",
+                                            "l1":  "근로계약·해고·임금",
+                                            "l2":  "임금 및 수당",
+                                            "l3":  "임금체불 및 지급청구"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-007-01-05",
+                                        "l1":  "임대차보호",
+                                        "l2":  "주택임대차보호",
+                                        "l3":  "보증금 반환 및 회수"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "전세 계약이 끝난 지 두 달이 지났는데 집주인이 보증금 1억 8천만 원을 돌려주지 않고 연락도 피하고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "계약 만료일은 지난 4월 말이었고, 저는 그 전에 이사 날짜와 반환 계좌를 문자로 보냈습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "임대인은 새 임차인이 구해져야 돈을 줄 수 있다고만 말했고 구체적인 지급일을 정하지 않았습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "전입신고와 확정일자는 계약 초기에 해 두었고 아직 보증금 전액을 받지 못했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "현재는 다른 집으로 이사해야 해서 임차권등기명령이나 반환 청구 절차를 알아보고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "계약서, 보증금 입금 내역, 임대인과 주고받은 문자 기록은 모두 보관하고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "임대인이 집을 매도하려 한다는 이야기를 들어서 보증금 회수 가능성이 더 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "보증금을 일부라도 먼저 받을 수 있는 방법과 소송 전 필요한 조치를 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "최종적으로 보증금 전액 반환을 요구하고, 지연 기간에 대한 책임도 함께 확인하고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-007-01-05"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

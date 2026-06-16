@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-004",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-002-01-02",
+                                            "l1":  "이혼·위자료·재산분할",
+                                            "l2":  "이혼 절차",
+                                            "l3":  "재판상 이혼"
+                                        },
+                                        {
+                                            "nodeId":  "law-001-03-03",
+                                            "l1":  "부동산 거래",
+                                            "l2":  "부동산 담보",
+                                            "l3":  "담보권 실행 및 경매"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-004-04-04",
+                                        "l1":  "근로계약·해고·임금",
+                                        "l2":  "해고 및 징계",
+                                        "l3":  "부당해고 구제"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "회사에서 별다른 설명 없이 문자로 내일부터 나오지 말라고 통보했습니다. 해고 사유서도 받지 못했고 구제 신청이 가능한지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "통보받은 날 바로 회사 단체 채팅방에서도 계정이 삭제됐고 출입카드가 막혔습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "근로계약서는 정규직으로 작성했고 징계위원회나 면담 절차는 없었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "회사에서는 실적 부진이라고만 말했지만 구체적인 평가자료를 보여준 적은 없습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "해고예고수당이나 퇴직 처리 서류도 아직 받지 못했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "문자 통보 내용, 근로계약서, 최근 급여명세서와 출근 기록은 가지고 있습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "복직을 요구할지 금전보상을 요구할지 아직 결정하지 못했습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "노동위원회 구제신청 기간이 정해져 있다고 들어서 언제까지 접수해야 하는지 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "회사에 먼저 해고 사유서를 요청하고 절차 위반을 다툴 수 있는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-004-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}

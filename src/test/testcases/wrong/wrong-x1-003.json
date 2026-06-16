@@ -1,0 +1,114 @@
+﻿{
+    "schemaVersion":  "wrong-selected-cross-l1-testcases.v1",
+    "description":  "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+    "sourceOntologyPath":  "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+    "selectionRule":  "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+    "case":  {
+                 "caseId":  "WRONG-X1-003",
+                 "group":  "wrong_selected_cross_l1",
+                 "selectedLabels":  [
+                                        {
+                                            "nodeId":  "law-007-02-03",
+                                            "l1":  "임대차보호",
+                                            "l2":  "상가건물임대차보호",
+                                            "l3":  "권리금 보호"
+                                        },
+                                        {
+                                            "nodeId":  "law-005-02-01",
+                                            "l1":  "손해배상·불법행위",
+                                            "l2":  "교통사고",
+                                            "l3":  "과실비율 산정"
+                                        }
+                                    ],
+                 "goldLabels":  [
+                                    {
+                                        "nodeId":  "law-003-04-04",
+                                        "l1":  "상속·유류분·유언",
+                                        "l2":  "유류분",
+                                        "l3":  "유류분 반환청구"
+                                    }
+                                ],
+                 "turns":  [
+                               {
+                                   "turnIndex":  1,
+                                   "userInput":  "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+                                   "observableGoldNodeIds":  [
+
+                                                             ],
+                                   "evaluationTarget":  false
+                               },
+                               {
+                                   "turnIndex":  2,
+                                   "userInput":  "아버지가 돌아가시기 전에 형에게 대부분의 부동산을 증여했고 저는 거의 받은 게 없어서 유류분을 돌려받을 수 있는지 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  3,
+                                   "userInput":  "아버지 사망 후 상속재산을 확인해 보니 형 명의로 넘어간 부동산이 대부분이었습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  4,
+                                   "userInput":  "증여 시점은 사망 2년 전쯤이고 저는 그 사실을 장례 이후에야 알게 됐습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  5,
+                                   "userInput":  "상속인은 어머니와 형제 세 명이고, 저는 현금으로 받은 재산이 거의 없습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  6,
+                                   "userInput":  "형은 생전에 아버지가 원해서 준 것이라며 더 이상 나눌 재산이 없다고 합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  7,
+                                   "userInput":  "등기부등본과 증여계약서 사본은 일부 확보했고, 당시 부동산 가액을 확인 중입니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  8,
+                                   "userInput":  "제가 청구할 수 있는 최소 몫이 있는지, 증여받은 재산을 기준으로 계산해야 하는지 궁금합니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  9,
+                                   "userInput":  "상대방에게 먼저 내용증명을 보내야 하는지 바로 소송을 준비해야 하는지도 알고 싶습니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               },
+                               {
+                                   "turnIndex":  10,
+                                   "userInput":  "상속 개시일과 증여 시점을 기준으로 청구 기간을 놓치지 않는 것이 걱정됩니다.",
+                                   "observableGoldNodeIds":  [
+                                                                 "law-003-04-04"
+                                                             ],
+                                   "evaluationTarget":  true
+                               }
+                           ]
+             }
+}
