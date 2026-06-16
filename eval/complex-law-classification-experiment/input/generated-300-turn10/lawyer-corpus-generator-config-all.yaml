@@ -1,0 +1,6 @@
+seed: 20260616
+specialists_per_l3: 1
+adjacent_per_l3: 1
+cross_domain_count: 24
+hard_negative_count: 24
+max_l3_nodes: 10000

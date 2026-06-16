@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import os
+import time
 from typing import Any
 
 from .client import ExperimentClient, IntentRouteRequest
@@ -32,7 +34,22 @@ class ClassificationModeStrategy(ABC):
         client: ExperimentClient,
         domain: str | None,
     ) -> ClassificationResult:
-        raw = client.intent_route(IntentRouteRequest(provider, self.mode_name, domain, turn))
+        raw: dict[str, Any] | None = None
+        attempts = _classification_retry_attempts()
+        for attempt in range(attempts):
+            try:
+                raw = client.intent_route(IntentRouteRequest(provider, self.mode_name, domain, turn))
+            except Exception as exc:
+                if attempt >= attempts - 1:
+                    raw = _error_response(provider, self.mode_name, domain, exc)
+                    break
+                time.sleep(_retry_delay_seconds(attempt))
+                continue
+            if not _has_provider_error(raw):
+                break
+            if attempt < attempts - 1:
+                time.sleep(_retry_delay_seconds(attempt))
+        raw = raw or {}
         parsed = raw.get("parsed") or {}
         pred_node_ids = _extract_node_ids(parsed)
         return ClassificationResult(
@@ -192,3 +209,34 @@ def _extract_node_ids(parsed: dict[str, Any]) -> list[str]:
 
 def _node_depth(node_id: str) -> int:
     return len(node_id.split("-"))
+
+
+def _has_provider_error(raw: dict[str, Any]) -> bool:
+    return bool(raw.get("errorType") or raw.get("errorMessage"))
+
+
+def _classification_retry_attempts() -> int:
+    raw = os.environ.get("SHIELD_EXPERIMENT_CLASSIFY_RETRY_ATTEMPTS", "5")
+    try:
+        return max(1, min(10, int(raw)))
+    except ValueError:
+        return 5
+
+
+def _retry_delay_seconds(attempt: int) -> float:
+    return min(8.0, 1.5 * (attempt + 1))
+
+
+def _error_response(provider: str, mode: str, domain: str | None, exc: Exception) -> dict[str, Any]:
+    return {
+        "provider": provider,
+        "requestedProvider": provider,
+        "mode": mode,
+        "inputDomain": domain,
+        "parsed": {},
+        "parseSuccess": False,
+        "schemaSuccess": False,
+        "fallbackUsed": False,
+        "errorType": exc.__class__.__name__,
+        "errorMessage": str(exc),
+    }

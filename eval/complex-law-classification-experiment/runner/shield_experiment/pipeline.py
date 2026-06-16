@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -40,9 +42,11 @@ class RunContextFactory:
         branch = _git("rev-parse", "--abbrev-ref", "HEAD")
         commit = _git("rev-parse", "HEAD")
         short = commit[:8] if commit else "unknown"
-        stamp = datetime.now(_korean_timezone()).strftime("%Y-%m-%d_%H%M")
         safe_branch = _safe_path_component(branch or "unknown")
-        run_id = f"{stamp}_{safe_branch}_{short}"
+        run_id = os.environ.get("SHIELD_EXPERIMENT_RUN_ID")
+        if not run_id:
+            stamp = datetime.now(_korean_timezone()).strftime("%Y-%m-%d_%H%M")
+            run_id = f"{stamp}_{safe_branch}_{short}"
         return RunContext(
             run_id=run_id,
             repo="capstoneSHIELD/SHIELD_BE",
@@ -223,15 +227,41 @@ class ClassificationExperimentPipeline:
         mapper: OntologyMapper,
         sink: JsonlResultSink,
     ) -> dict[tuple[str, str, str], ClassificationResult]:
-        results: dict[tuple[str, str, str], ClassificationResult] = {}
+        results: dict[tuple[str, str, str], ClassificationResult] = _load_resume_classification_results()
+        max_workers = _experiment_max_workers()
+        skip_completed_modes = _skip_completed_modes()
         for provider in config.providers:
             for mode in config.classification_modes:
                 strategy = self.registry.get(mode)
-                rows: list[ClassificationResult] = []
-                for turn in turns:
-                    result = strategy.execute(turn, provider, client, mapper, results)
-                    results[(turn.id, provider, mode)] = result
-                    rows.append(result)
+                if skip_completed_modes and all((turn.id, provider, mode) in results for turn in turns):
+                    continue
+                if max_workers <= 1:
+                    rows = [
+                        strategy.execute(turn, provider, client, mapper, results)
+                        for turn in turns
+                    ]
+                else:
+                    previous_results = dict(results)
+                    rows: list[ClassificationResult | None] = [None] * len(turns)
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        futures = {
+                            executor.submit(
+                                strategy.execute,
+                                turn,
+                                provider,
+                                client,
+                                mapper,
+                                previous_results,
+                            ): index
+                            for index, turn in enumerate(turns)
+                        }
+                        for future in as_completed(futures):
+                            rows[futures[future]] = future.result()
+
+                    rows = [row for row in rows if row is not None]
+
+                for result in rows:
+                    results[(result.turn_id, provider, mode)] = result
                 sink.write_classification_results(provider, mode, rows)
         return results
 
@@ -466,6 +496,72 @@ def _git(*args: str) -> str:
         return subprocess.check_output(["git", *args], text=True, stderr=subprocess.DEVNULL).strip()
     except Exception:
         return ""
+
+
+def _experiment_max_workers() -> int:
+    raw = os.environ.get("SHIELD_EXPERIMENT_MAX_WORKERS", "1")
+    try:
+        return max(1, min(16, int(raw)))
+    except ValueError:
+        return 1
+
+
+def _load_resume_classification_results() -> dict[tuple[str, str, str], ClassificationResult]:
+    raw_dir = os.environ.get("SHIELD_EXPERIMENT_RESUME_DIR")
+    if not raw_dir:
+        return {}
+    allowed_modes = _resume_modes()
+    parsed_dir = Path(raw_dir) / "parsed"
+    if not parsed_dir.exists():
+        return {}
+
+    results: dict[tuple[str, str, str], ClassificationResult] = {}
+    for path in parsed_dir.glob("*.parsed.jsonl"):
+        for row in read_jsonl(path):
+            result = _classification_result_from_json(row)
+            if allowed_modes and result.mode not in allowed_modes:
+                continue
+            results[(result.turn_id, result.provider, result.mode)] = result
+    return results
+
+
+def _resume_modes() -> set[str]:
+    raw = os.environ.get("SHIELD_EXPERIMENT_RESUME_MODES", "")
+    return {part.strip() for part in raw.split(",") if part.strip()}
+
+
+def _skip_completed_modes() -> bool:
+    raw = os.environ.get("SHIELD_EXPERIMENT_SKIP_COMPLETED_MODES", "false")
+    return raw.lower() in {"1", "true", "yes", "y"}
+
+
+def _classification_result_from_json(row: dict) -> ClassificationResult:
+    return ClassificationResult(
+        turn_id=str(row.get("turn_id", "")),
+        case_id=str(row.get("case_id", "")),
+        conversation_id=str(row.get("conversation_id", "")),
+        turn_index=int(row.get("turn_index", 0)),
+        is_final_turn=bool(row.get("is_final_turn", False)),
+        benchmark_split=str(row.get("benchmark_split", "")),
+        group=str(row.get("group", "")),
+        provider=str(row.get("provider", "")),
+        requested_provider=str(row.get("requested_provider", row.get("provider", ""))),
+        mode=str(row.get("mode", "")),
+        input_domain=row.get("input_domain"),
+        gold_node_ids=[str(node_id) for node_id in row.get("gold_node_ids", [])],
+        gold_primary_node_id=row.get("gold_primary_node_id"),
+        expected_complex=bool(row.get("expected_complex", False)),
+        pred_node_ids=[str(node_id) for node_id in row.get("pred_node_ids", [])],
+        raw=row.get("raw") or {},
+        parse_success=bool(row.get("parse_success", True)),
+        schema_success=bool(row.get("schema_success", True)),
+        fallback_used=bool(row.get("fallback_used", False)),
+        error_type=row.get("error_type"),
+        error_message=row.get("error_message"),
+        latency_ms=row.get("latency_ms"),
+        tokens_in=row.get("tokens_in"),
+        tokens_out=row.get("tokens_out"),
+    )
 
 
 def _korean_timezone():

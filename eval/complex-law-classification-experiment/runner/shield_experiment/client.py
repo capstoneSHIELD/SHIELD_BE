@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -22,12 +23,12 @@ class ExperimentClient:
         self,
         base_url: str,
         dry_run: bool = False,
-        timeout_seconds: int = 60,
+        timeout_seconds: int | None = None,
         experiment_access_token: str | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.dry_run = dry_run
-        self.timeout_seconds = timeout_seconds
+        self.timeout_seconds = timeout_seconds or _http_timeout_seconds()
         self.experiment_access_token = (
             experiment_access_token.strip() if experiment_access_token else None
         )
@@ -161,3 +162,11 @@ class ExperimentClient:
             raise RuntimeError(f"HTTP {exc.code} from {url}: {detail}") from exc
         except urllib.error.URLError as exc:
             raise RuntimeError(f"Failed to call {url}: {exc}") from exc
+
+
+def _http_timeout_seconds() -> int:
+    raw = os.environ.get("SHIELD_EXPERIMENT_HTTP_TIMEOUT_SECONDS", "180")
+    try:
+        return max(30, min(600, int(raw)))
+    except ValueError:
+        return 180

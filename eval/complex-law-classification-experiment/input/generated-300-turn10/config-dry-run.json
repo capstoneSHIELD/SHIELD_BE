@@ -1,0 +1,40 @@
+{
+  "base_url": "http://localhost:8080",
+  "dataset_path": "dataset-case-level.jsonl",
+  "classification_turns_path": "classification-turns.jsonl",
+  "ontology_snapshot_path": "../../../../src/main/resources/ontology/legal-ontology-slim.json",
+  "lawyer_corpus_path": "lawyers-generated.jsonl",
+  "lawyer_corpus_generator_config_path": "lawyer-corpus-generator-config-all.yaml",
+  "matching_labels_path": "matching-labels.jsonl",
+  "output_root": "../../output",
+  "providers": [
+    "openai"
+  ],
+  "classification_modes": [
+    "A_FULL",
+    "B_SCOPED_GOLD",
+    "B_SCOPED_RUNTIME",
+    "C_HYBRID_RUNTIME"
+  ],
+  "matching_modes": [
+    "PREDICTED_LABELS_COSINE_ONLY",
+    "ORACLE_LABELS_COSINE_ONLY",
+    "PREDICTED_LABELS_HYBRID_MATCH",
+    "ORACLE_LABELS_HYBRID_MATCH",
+    "NO_LABEL_COSINE_ONLY"
+  ],
+  "selected_provider": "openai",
+  "selected_classification_mode": "C_HYBRID_RUNTIME",
+  "top_k": 10,
+  "production_group_weights": {
+    "single": 0.3333,
+    "complex2": 0.3333,
+    "complex3": 0.3333
+  },
+  "hybrid_match_weights": {
+    "cosine": 0.6,
+    "fieldOverlap": 0.25,
+    "keywordOverlap": 0.15
+  },
+  "dry_run": true
+}

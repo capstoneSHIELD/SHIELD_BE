@@ -1,0 +1,17 @@
+{
+  "case_count": 300,
+  "turn_count": 3000,
+  "final_turn_count": 300,
+  "groups": {
+    "single": 100,
+    "complex2": 100,
+    "complex3": 100
+  },
+  "turns_per_case": [
+    10
+  ],
+  "classification_turns_path": "eval\\complex-law-classification-experiment\\input\\generated-300-turn10\\classification-turns.jsonl",
+  "dataset_path": "eval\\complex-law-classification-experiment\\input\\generated-300-turn10\\dataset-case-level.jsonl",
+  "config_dry_run": "eval\\complex-law-classification-experiment\\input\\generated-300-turn10\\config-dry-run.json",
+  "config_real": "eval\\complex-law-classification-experiment\\input\\generated-300-turn10\\config-openai-real.json"
+}

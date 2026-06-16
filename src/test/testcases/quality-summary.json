@@ -1,0 +1,59 @@
+{
+  "passed": true,
+  "totalCases": 300,
+  "turnsPerCase": 10,
+  "totalTurns": 3000,
+  "reports": {
+    "single": {
+      "name": "single",
+      "cases": 100,
+      "turns": 1000,
+      "expectedLabelsPerCase": 1,
+      "turnsPerCase": 10,
+      "duplicateCaseIds": 0,
+      "duplicateUserInputs": 0,
+      "invalidErrors": 0,
+      "questionMarkRuns": 0,
+      "typoZzogjeom": 0,
+      "replacementChars": 0,
+      "hangulChars": 75920,
+      "sampleCaseId": "SGL-TC-001",
+      "sampleFirstInput": "처음에는 임금체불 및 지급청구 문제로 상담을 시작하려고 합니다. 상대방이 최근에 입장을 바꾸었습니다. 최근 8일 사이 자료 5건이 추가되었고, 상담 자료 묶음 1번으로 정리했습니다.",
+      "errors": []
+    },
+    "complex2": {
+      "name": "complex2",
+      "cases": 100,
+      "turns": 1000,
+      "expectedLabelsPerCase": 2,
+      "turnsPerCase": 10,
+      "duplicateCaseIds": 0,
+      "duplicateUserInputs": 0,
+      "invalidErrors": 0,
+      "questionMarkRuns": 0,
+      "typoZzogjeom": 0,
+      "replacementChars": 0,
+      "hangulChars": 77108,
+      "sampleCaseId": "CLX2-TC-001",
+      "sampleFirstInput": "처음에는 부당해고 구제 문제로 상담을 시작하려고 합니다. 상대방이 최근에 입장을 바꾸었습니다. 최근 8일 사이 자료 5건이 추가되었고, 상담 자료 묶음 1번으로 정리했습니다.",
+      "errors": []
+    },
+    "complex3": {
+      "name": "complex3",
+      "cases": 100,
+      "turns": 1000,
+      "expectedLabelsPerCase": 3,
+      "turnsPerCase": 10,
+      "duplicateCaseIds": 0,
+      "duplicateUserInputs": 0,
+      "invalidErrors": 0,
+      "questionMarkRuns": 0,
+      "typoZzogjeom": 0,
+      "replacementChars": 0,
+      "hangulChars": 79638,
+      "sampleCaseId": "CLX3-TC-001",
+      "sampleFirstInput": "처음에는 부당해고 구제 문제로 상담을 시작하려고 합니다. 상대방이 최근에 입장을 바꾸었습니다. 최근 8일 사이 자료 5건이 추가되었고, 상담 자료 묶음 1번으로 정리했습니다.",
+      "errors": []
+    }
+  }
+}
