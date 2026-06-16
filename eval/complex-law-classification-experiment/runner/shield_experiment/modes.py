@@ -93,8 +93,6 @@ class RuntimeScopeResolver:
         full_result = previous_results.get((turn.id, provider, "A_FULL"))
         if full_result and full_result.pred_node_ids:
             return mapper.to_l1(full_result.pred_node_ids[0])
-        if turn.gold_node_ids:
-            return mapper.to_l1(turn.gold_node_ids[0])
         return None
 
 

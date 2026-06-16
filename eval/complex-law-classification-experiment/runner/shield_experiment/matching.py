@@ -15,16 +15,30 @@ class CurrentServiceQueryBuilder:
 
     def build_query(self, turn: ClassificationTurn, node_ids: list[str], label_source: str) -> dict:
         content = "\n".join(message.content for message in turn.messages if message.role.upper() == "USER")
-        domains = [self.mapper.to_l1(node_id) for node_id in node_ids if self.mapper.to_l1(node_id)]
-        sub_domains = [self.mapper.to_l2(node_id) for node_id in node_ids if self.mapper.to_l2(node_id)]
-        query_text = self._build_query_text(content, domains, sub_domains, node_ids)
+        input_node_ids = _unique_clean(node_ids)
+        domains = _unique_clean(
+            self.mapper.to_domain(node_id)
+            for node_id in input_node_ids
+            if self.mapper.to_domain(node_id)
+        )
+        sub_domains = _unique_clean(
+            self.mapper.to_sub_domain(node_id)
+            for node_id in input_node_ids
+            if self.mapper.to_sub_domain(node_id)
+        )
+        tags = _unique_clean(
+            self.mapper.to_tag(node_id) or self.mapper.name_of(node_id)
+            for node_id in input_node_ids
+            if self.mapper.to_tag(node_id) or self.mapper.name_of(node_id)
+        )
+        query_text = self._build_query_text(content, domains, sub_domains, tags)
         return {
             "briefContent": content,
-            "inputNodeIds": node_ids,
+            "inputNodeIds": input_node_ids,
             "labelSource": label_source,
             "domains": domains,
             "subDomains": sub_domains,
-            "tags": node_ids,
+            "tags": tags,
             "queryText": query_text,
             "queryTextHash": self.hash_query_text(query_text),
         }
@@ -305,8 +319,22 @@ def _float_or_none(value: Any) -> float | None:
 
 
 def _append_repeated_section(sections: list[str], header: str, values: list[str], repeat: int) -> None:
-    cleaned = [value.strip() for value in values if value and value.strip()]
+    cleaned = _unique_clean(values)
     if not cleaned:
         return
     joined = ". ".join(cleaned)
     sections.append(header + "\n" + ". ".join(joined for _ in range(repeat)))
+
+
+def _unique_clean(values) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        cleaned.append(text)
+    return cleaned

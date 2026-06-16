@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .client import ExperimentClient
 from .config import ExperimentConfig
@@ -40,7 +40,7 @@ class RunContextFactory:
         branch = _git("rev-parse", "--abbrev-ref", "HEAD")
         commit = _git("rev-parse", "HEAD")
         short = commit[:8] if commit else "unknown"
-        stamp = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d_%H%M")
+        stamp = datetime.now(_korean_timezone()).strftime("%Y-%m-%d_%H%M")
         safe_branch = _safe_path_component(branch or "unknown")
         run_id = f"{stamp}_{safe_branch}_{short}"
         return RunContext(
@@ -385,8 +385,10 @@ class ExperimentPipelineFacade:
             "selected_provider": config.selected_provider,
             "selected_classification_mode": config.selected_classification_mode,
             "dry_run": config.dry_run,
+            "runtime_scope_source": "A_FULL_caseType_l1",
             "production_group_weights": config.production_group_weights,
             "hybrid_match_weights": config.hybrid_match_weights,
+            "keyword_overlap_metric": "overlap_coefficient",
             "preflight": preflight_summary or {},
         }
 
@@ -396,6 +398,13 @@ def _git(*args: str) -> str:
         return subprocess.check_output(["git", *args], text=True, stderr=subprocess.DEVNULL).strip()
     except Exception:
         return ""
+
+
+def _korean_timezone():
+    try:
+        return ZoneInfo("Asia/Seoul")
+    except ZoneInfoNotFoundError:
+        return timezone(timedelta(hours=9), "KST")
 
 
 def _safe_path_component(value: str) -> str:

@@ -48,11 +48,27 @@ def _lawyer_row(
     misleading_tag: str | None = None,
 ) -> dict[str, Any]:
     primary = practice_node_ids[0] if practice_node_ids else anchor_node_id
-    l1_values = sorted({_l1(node_id) for node_id in practice_node_ids if _l1(node_id)})
-    l2_values = sorted({_l2(node_id) for node_id in practice_node_ids if _l2(node_id)})
-    tags = [*practice_node_ids, *(misleading_tag and [misleading_tag] or []), f"synthetic-{kind.lower()}"]
+    l1_values = sorted({
+        name
+        for node_id in practice_node_ids
+        if (name := _path_name_at(ontology, node_id, 0))
+    })
+    l2_values = sorted({
+        name
+        for node_id in practice_node_ids
+        if (name := _path_name_at(ontology, node_id, 1))
+    })
+    tags = [
+        *[
+            name
+            for node_id in practice_node_ids
+            if (name := _path_name_at(ontology, node_id, 2) or _name_of(ontology, node_id))
+        ],
+        *(misleading_tag and [_path_name_at(ontology, misleading_tag, 2) or misleading_tag] or []),
+        f"synthetic-{kind.lower()}",
+    ]
     bio = (
-        f"Synthetic {kind} profile for {anchor_node_id}. "
+        f"Synthetic {kind} profile for {_name_of(ontology, anchor_node_id) or anchor_node_id}. "
         "This is generated benchmark data and does not describe a real person."
     )
     lawyer_id = f"L-{anchor_node_id.replace('law-', '')}-{kind}-{index + 1:03d}"
@@ -135,6 +151,29 @@ def _l1(node_id: str) -> str | None:
 def _l2(node_id: str) -> str | None:
     parts = node_id.split("-")
     return "-".join(parts[:3]) if len(parts) >= 3 else None
+
+
+def _name_of(ontology: OntologySnapshot, node_id: str | None) -> str | None:
+    if not node_id:
+        return None
+    node = ontology.nodes.get(node_id)
+    return node.name if node else None
+
+
+def _path_name_at(ontology: OntologySnapshot, node_id: str | None, index: int) -> str | None:
+    if not node_id:
+        return None
+    ids: list[str] = []
+    current = node_id
+    while current and current in ontology.nodes:
+        ids.append(current)
+        current = ontology.parent_of(current)
+    names = [
+        ontology.nodes[path_id].name
+        for path_id in reversed(ids)
+        if path_id in ontology.nodes and ontology.nodes[path_id].name != "법률"
+    ]
+    return names[index] if len(names) > index else None
 
 
 def _load_mapping(path: Path) -> dict[str, Any]:

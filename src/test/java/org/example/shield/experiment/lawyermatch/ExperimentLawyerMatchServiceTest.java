@@ -24,8 +24,20 @@ class ExperimentLawyerMatchServiceTest {
     @Test
     void corpus_preflight_and_match_use_in_memory_cosine_candidates() {
         service.loadCorpus(new CorpusLoadRequest("test-corpus", List.of(
-                lawyer("L-007-01-05-001", List.of("law-007-01-05"), List.of("law-007"), List.of("law-007-01")),
-                lawyer("L-004-02-01-001", List.of("law-004-02-01"), List.of("law-004"), List.of("law-004-02"))
+                lawyer(
+                        "L-007-01-05-001",
+                        List.of("law-007-01-05"),
+                        List.of("임대차보호"),
+                        List.of("주택임대차보호"),
+                        List.of("보증금 반환 및 회수")
+                ),
+                lawyer(
+                        "L-004-02-01-001",
+                        List.of("law-004-02-01"),
+                        List.of("근로계약·해고·임금"),
+                        List.of("임금 및 수당"),
+                        List.of("임금체불 및 지급청구")
+                )
         )));
         MatchQuery query = query(
                 "전세보증금을 돌려받지 못했습니다.",
@@ -57,7 +69,13 @@ class ExperimentLawyerMatchServiceTest {
     @Test
     void query_hash_mismatch_is_reported_as_current_service_incompatible() {
         service.loadCorpus(new CorpusLoadRequest("test-corpus", List.of(
-                lawyer("L-007-01-05-001", List.of("law-007-01-05"), List.of("law-007"), List.of("law-007-01"))
+                lawyer(
+                        "L-007-01-05-001",
+                        List.of("law-007-01-05"),
+                        List.of("임대차보호"),
+                        List.of("주택임대차보호"),
+                        List.of("보증금 반환 및 회수")
+                )
         )));
         MatchQuery query = new MatchQuery(
                 "전세보증금을 돌려받지 못했습니다.",
@@ -85,7 +103,8 @@ class ExperimentLawyerMatchServiceTest {
             String lawyerId,
             List<String> practiceNodeIds,
             List<String> domains,
-            List<String> subDomains
+            List<String> subDomains,
+            List<String> tags
     ) {
         return new SyntheticLawyerRow(
                 lawyerId,
@@ -95,7 +114,7 @@ class ExperimentLawyerMatchServiceTest {
                 List.of(),
                 domains,
                 subDomains,
-                practiceNodeIds,
+                tags,
                 5,
                 "synthetic-region",
                 "Synthetic benchmark profile.",
@@ -105,16 +124,17 @@ class ExperimentLawyerMatchServiceTest {
     }
 
     private MatchQuery query(String content, List<String> nodeIds, String labelSource) {
-        List<String> domains = List.of("law-007");
-        List<String> subDomains = List.of("law-007-01");
-        String text = textBuilder.build(domains, subDomains, nodeIds, content);
+        List<String> domains = List.of("임대차보호");
+        List<String> subDomains = List.of("주택임대차보호");
+        List<String> tags = List.of("보증금 반환 및 회수");
+        String text = textBuilder.build(domains, subDomains, tags, content);
         return new MatchQuery(
                 content,
                 nodeIds,
                 labelSource,
                 domains,
                 subDomains,
-                nodeIds,
+                tags,
                 text,
                 ExperimentLawyerMatchService.sha256Hash(text)
         );

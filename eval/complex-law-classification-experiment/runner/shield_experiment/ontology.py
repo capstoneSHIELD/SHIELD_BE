@@ -58,6 +58,39 @@ class OntologyMapper:
     def validate(self, node_ids: list[str]) -> list[str]:
         return [node_id for node_id in node_ids if self.snapshot.exists(node_id)]
 
+    def name_of(self, node_id: str | None) -> str | None:
+        if not node_id:
+            return None
+        node = self.snapshot.nodes.get(node_id)
+        return node.name if node else None
+
+    def path_names(self, node_id: str | None) -> list[str]:
+        if not node_id:
+            return []
+        path_ids: list[str] = []
+        current = node_id
+        while current and current in self.snapshot.nodes:
+            path_ids.append(current)
+            current = self.snapshot.parent_of(current)
+        names = [
+            self.snapshot.nodes[path_id].name
+            for path_id in reversed(path_ids)
+            if path_id in self.snapshot.nodes and self.snapshot.nodes[path_id].name != "법률"
+        ]
+        return names
+
+    def to_domain(self, node_id: str | None) -> str | None:
+        path = self.path_names(node_id)
+        return path[0] if path else None
+
+    def to_sub_domain(self, node_id: str | None) -> str | None:
+        path = self.path_names(node_id)
+        return path[1] if len(path) >= 2 else None
+
+    def to_tag(self, node_id: str | None) -> str | None:
+        path = self.path_names(node_id)
+        return path[2] if len(path) >= 3 else None
+
     def to_l1(self, node_id: str | None) -> str | None:
         if not node_id:
             return None

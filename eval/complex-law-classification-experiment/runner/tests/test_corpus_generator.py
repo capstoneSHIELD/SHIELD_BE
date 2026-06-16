@@ -48,6 +48,11 @@ class SyntheticLawyerCorpusGeneratorTest(unittest.TestCase):
             }
             expected_l3 = ["law-001-01-01", "law-001-01-02", "law-001-01-03"]
             self.assertTrue(set(expected_l3).issubset(covered))
+            first_specialist = next(row for row in first if row["practice_node_ids"] == ["law-001-01-01"])
+            self.assertEqual(first_specialist["domains"], ["부동산 거래"])
+            self.assertEqual(first_specialist["sub_domains"], ["부동산 매매"])
+            self.assertIn("계약 체결 및 효력", first_specialist["tags"])
+            self.assertIn("[전문 분야]\n부동산 거래. 부동산 거래. 부동산 거래", first_specialist["embedding_text"])
 
 
 if __name__ == "__main__":
