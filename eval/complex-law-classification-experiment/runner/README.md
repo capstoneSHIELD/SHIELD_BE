@@ -17,13 +17,13 @@ Implemented in this slice:
 - basic classification and matching metrics
 - markdown summary reports
 - dry-run mode for pipeline validation before BE adapters exist
+- local/test BE intent-route adapter support via `POST /internal/experiments/intent-route`
 
 Not implemented yet:
 
-- BE `/internal/experiments/intent-route` adapter
 - BE `/internal/experiments/lawyer-match` adapter
 - synthetic lawyer corpus generator
-- full nDCG/Recall@K matching metric set
+- local synthetic lawyer corpus loading into a test schema
 
 ## Run
 
@@ -40,3 +40,10 @@ python .\eval\complex-law-classification-experiment\runner\run_experiment.py --c
 ```
 
 `config.example.json` uses `dry_run=true`, so it validates the runner flow without calling the backend. For real runs, set `dry_run=false` and start SHIELD BE with local/test experiment adapters enabled.
+
+The intent adapter is available only under the `local` or `test` Spring profile:
+
+```text
+POST /internal/experiments/intent-route/preflight
+POST /internal/experiments/intent-route
+```

@@ -144,6 +144,19 @@ public class IntentClassificationService {
         }
     }
 
+    public List<ChatMessage> buildProviderMessagesForExperiment(List<Message> recentMessages, String domain) {
+        String conversationHistory = buildConversationHistory(recentMessages);
+        String systemPrompt = buildSystemPrompt(domain);
+        return List.of(
+                ChatMessage.system(systemPrompt),
+                ChatMessage.user(buildConversationPrompt(conversationHistory))
+        );
+    }
+
+    public IntentRouterResponse parseIntentRouterResponseForExperiment(String json) {
+        return parseIntentRouterResponse(json);
+    }
+
     private AiCallResult<String> callConfiguredClassifier(List<ChatMessage> messages) {
         AiClassificationClient client = classificationClientsByProvider.get(classifyProvider);
         if (client == null) {

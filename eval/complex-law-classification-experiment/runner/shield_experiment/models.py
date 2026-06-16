@@ -154,6 +154,9 @@ class MatchingLabelSet:
     def grade_of(self, lawyer_id: str) -> int:
         return self.relevance.get(lawyer_id, 0)
 
+    def has_label(self, lawyer_id: str) -> bool:
+        return lawyer_id in self.relevance
+
 
 @dataclass(frozen=True)
 class MatchingResult:
