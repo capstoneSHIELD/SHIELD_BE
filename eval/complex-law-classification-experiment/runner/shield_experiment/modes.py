@@ -38,11 +38,18 @@ class ClassificationModeStrategy(ABC):
         return ClassificationResult(
             turn_id=turn.id,
             case_id=turn.case_id,
+            conversation_id=turn.conversation_id,
+            turn_index=turn.turn_index,
+            is_final_turn=turn.is_final_turn,
+            benchmark_split=turn.benchmark_split,
+            group=turn.group,
             provider=str(raw.get("provider") or provider),
             requested_provider=str(raw.get("requestedProvider") or provider),
             mode=self.mode_name,
             input_domain=raw.get("inputDomain", domain),
             gold_node_ids=turn.gold_node_ids,
+            gold_primary_node_id=turn.gold_primary_node_id,
+            expected_complex=turn.expected_complex,
             pred_node_ids=pred_node_ids,
             raw=raw,
             parse_success=bool(raw.get("parseSuccess", True)),
@@ -86,8 +93,6 @@ class RuntimeScopeResolver:
         full_result = previous_results.get((turn.id, provider, "A_FULL"))
         if full_result and full_result.pred_node_ids:
             return mapper.to_l1(full_result.pred_node_ids[0])
-        if turn.gold_node_ids:
-            return mapper.to_l1(turn.gold_node_ids[0])
         return None
 
 

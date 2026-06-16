@@ -1,0 +1,1 @@
+{"label_set_id":"MLS-SGL-001-V01","case_id":"SGL-001-V01","gold_node_ids":["law-007-01-05"],"relevance":[{"lawyer_id":"L-007-01-05-001","grade":3,"reason":"주택임대차 보증금 반환 L3 dry-run specialist"},{"lawyer_id":"L-CONTENT-ONLY-001","grade":1,"reason":"본문 유사도만 검증하는 약한 관련 후보"}]}

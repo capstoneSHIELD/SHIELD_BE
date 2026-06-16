@@ -23,6 +23,7 @@ class JsonlResultSink:
         )
 
     def write_classification_results(self, provider: str, mode: str, rows: list[ClassificationResult]) -> None:
+        self._write_jsonl(self.raw_dir / f"{provider}_{mode}.jsonl", [_raw_row(row) for row in rows])
         self._write_jsonl(self.parsed_dir / f"{provider}_{mode}.parsed.jsonl", [row.to_json() for row in rows])
 
     def write_matching_results(self, mode: str, rows: list[MatchingResult]) -> None:
@@ -35,3 +36,25 @@ class JsonlResultSink:
             + ("\n" if rows else ""),
             encoding="utf-8",
         )
+
+
+def _raw_row(row: ClassificationResult) -> dict:
+    return {
+        "turn_id": row.turn_id,
+        "case_id": row.case_id,
+        "conversation_id": row.conversation_id,
+        "turn_index": row.turn_index,
+        "provider": row.provider,
+        "requested_provider": row.requested_provider,
+        "mode": row.mode,
+        "input_domain": row.input_domain,
+        "parse_success": row.parse_success,
+        "schema_success": row.schema_success,
+        "fallback_used": row.fallback_used,
+        "error_type": row.error_type,
+        "error_message": row.error_message,
+        "latency_ms": row.latency_ms,
+        "tokens_in": row.tokens_in,
+        "tokens_out": row.tokens_out,
+        "raw": row.raw,
+    }

@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.CaseTypeResult;
 import org.example.shield.ai.dto.DialogueIntent;
+import org.example.shield.ai.dto.ExperimentIntentRouteParsedResponse;
+import org.example.shield.ai.dto.ExperimentIntentRouteResponse;
 import org.example.shield.ai.dto.ExtractedSlot;
 import org.example.shield.ai.dto.IntentClassificationResult;
 import org.example.shield.ai.dto.IntentClassificationResult.Keywords;
@@ -29,9 +31,12 @@ import org.springframework.util.StreamUtils;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -144,17 +149,117 @@ public class IntentClassificationService {
         }
     }
 
-    public List<ChatMessage> buildProviderMessagesForExperiment(List<Message> recentMessages, String domain) {
-        String conversationHistory = buildConversationHistory(recentMessages);
-        String systemPrompt = buildSystemPrompt(domain);
-        return List.of(
-                ChatMessage.system(systemPrompt),
-                ChatMessage.user(buildConversationPrompt(conversationHistory))
+    /**
+     * local/test benchmark adapter 전용 경로.
+     *
+     * <p>운영 {@link #route(List, String)}와 달리 provider fallback을 정상 결과로 숨기지 않는다.
+     * 요청 provider가 없으면 {@code config_error}, parser가 실패하면 {@code parse_failure}로
+     * raw provider 응답과 함께 반환해 실험 지표에서 분리할 수 있게 한다.
+     */
+    public ExperimentIntentRouteResponse routeForExperiment(
+            String requestedProvider,
+            String mode,
+            String domain,
+            List<ChatMessage> conversationMessages,
+            boolean includeRaw
+    ) {
+        String provider = requestedProvider == null || requestedProvider.isBlank()
+                ? classifyProvider
+                : requestedProvider.trim().toLowerCase();
+        AiClassificationClient client = classificationClientsByProvider.get(provider);
+        if (client == null) {
+            return ExperimentIntentRouteResponse.configError(
+                    provider,
+                    mode,
+                    domain,
+                    "No AiClassificationClient registered for provider: " + provider
+            );
+        }
+
+        List<ChatMessage> messages = List.of(
+                ChatMessage.system(buildSystemPrompt(domain)),
+                ChatMessage.user(buildConversationPrompt(buildExperimentConversationHistory(conversationMessages)))
         );
+
+        AiCallResult<String> result;
+        try {
+            result = ragMetrics.timeClassify(() -> client.classify(messages));
+        } catch (Exception e) {
+            return new ExperimentIntentRouteResponse(
+                    provider,
+                    provider,
+                    mode,
+                    domain,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    false,
+                    false,
+                    false,
+                    "upstream_error",
+                    e.getMessage()
+            );
+        }
+
+        try {
+            IntentRouterResponse parsed = parseIntentRouterResponse(result.data());
+            return new ExperimentIntentRouteResponse(
+                    provider,
+                    provider,
+                    mode,
+                    domain,
+                    result.responseId(),
+                    includeRaw ? result.data() : null,
+                    ExperimentIntentRouteParsedResponse.from(parsed),
+                    result.tokensInput(),
+                    result.tokensOutput(),
+                    result.latencyMs(),
+                    true,
+                    true,
+                    false,
+                    null,
+                    null
+            );
+        } catch (Exception e) {
+            return new ExperimentIntentRouteResponse(
+                    provider,
+                    provider,
+                    mode,
+                    domain,
+                    result.responseId(),
+                    includeRaw ? result.data() : null,
+                    null,
+                    result.tokensInput(),
+                    result.tokensOutput(),
+                    result.latencyMs(),
+                    false,
+                    false,
+                    false,
+                    "parse_failure",
+                    e.getMessage()
+            );
+        }
     }
 
-    public IntentRouterResponse parseIntentRouterResponseForExperiment(String json) {
-        return parseIntentRouterResponse(json);
+    public Map<String, Boolean> availableExperimentProviders(Collection<String> providers) {
+        Set<String> requested = new LinkedHashSet<>();
+        if (providers != null) {
+            providers.stream()
+                    .filter(provider -> provider != null && !provider.isBlank())
+                    .map(provider -> provider.trim().toLowerCase())
+                    .forEach(requested::add);
+        }
+        if (requested.isEmpty()) {
+            requested.addAll(classificationClientsByProvider.keySet());
+        }
+        Map<String, Boolean> availability = new HashMap<>();
+        for (String provider : requested) {
+            availability.put(provider, classificationClientsByProvider.containsKey(provider));
+        }
+        return availability;
     }
 
     private AiCallResult<String> callConfiguredClassifier(List<ChatMessage> messages) {
@@ -270,6 +375,29 @@ public class IntentClassificationService {
             String content = msg.getContent();
             if (content == null || content.isBlank()) continue;
             sb.append(role).append(": ").append(content).append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private String buildExperimentConversationHistory(List<ChatMessage> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        int start = Math.max(0, messages.size() - contextWindowMessages);
+        for (int i = start; i < messages.size(); i++) {
+            ChatMessage message = messages.get(i);
+            if (message == null || message.content() == null || message.content().isBlank()) {
+                continue;
+            }
+            String role = switch (message.role()) {
+                case USER -> "user";
+                case ASSISTANT -> "assistant";
+                case SYSTEM -> null;
+            };
+            if (role != null) {
+                sb.append(role).append(": ").append(message.content()).append("\n");
+            }
         }
         return sb.toString().trim();
     }

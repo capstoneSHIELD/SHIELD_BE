@@ -76,11 +76,18 @@ class ClassificationTurn:
 class ClassificationResult:
     turn_id: str
     case_id: str
+    conversation_id: str
+    turn_index: int
+    is_final_turn: bool
+    benchmark_split: str
+    group: str
     provider: str
     requested_provider: str
     mode: str
     input_domain: str | None
     gold_node_ids: list[str]
+    gold_primary_node_id: str | None
+    expected_complex: bool
     pred_node_ids: list[str]
     raw: JsonObject = field(default_factory=dict)
     parse_success: bool = True
@@ -96,11 +103,18 @@ class ClassificationResult:
         return {
             "turn_id": self.turn_id,
             "case_id": self.case_id,
+            "conversation_id": self.conversation_id,
+            "turn_index": self.turn_index,
+            "is_final_turn": self.is_final_turn,
+            "benchmark_split": self.benchmark_split,
+            "group": self.group,
             "provider": self.provider,
             "requested_provider": self.requested_provider,
             "mode": self.mode,
             "input_domain": self.input_domain,
             "gold_node_ids": self.gold_node_ids,
+            "gold_primary_node_id": self.gold_primary_node_id,
+            "expected_complex": self.expected_complex,
             "pred_node_ids": self.pred_node_ids,
             "parse_success": self.parse_success,
             "schema_success": self.schema_success,
@@ -167,6 +181,10 @@ class MatchingResult:
     label_source: str
     input_node_ids: list[str]
     ranked_lawyers: list[JsonObject]
+    top_k: int
+    current_service_compatible: bool = False
+    query_text_hash: str | None = None
+    latency_ms: int | None = None
     error_type: str | None = None
     error_message: str | None = None
 
@@ -179,6 +197,10 @@ class MatchingResult:
             "label_source": self.label_source,
             "input_node_ids": self.input_node_ids,
             "ranked_lawyers": self.ranked_lawyers,
+            "top_k": self.top_k,
+            "current_service_compatible": self.current_service_compatible,
+            "query_text_hash": self.query_text_hash,
+            "latency_ms": self.latency_ms,
             "error_type": self.error_type,
             "error_message": self.error_message,
         }

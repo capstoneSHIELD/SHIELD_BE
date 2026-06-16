@@ -17,6 +17,7 @@
 
 주요 문서:
 
+- 실험 파이프라인 구현 범위: `experiment-pipeline.md`
 - AI/RAG v2.2 상위 계획서: `ai-rag-v2.2/ai-rag-upgrade-plan-v2.2.md`
 - AI/RAG v2.2 개발 보고서: `ai-rag-v2.2/reports/ai-rag-v2.2-development-report.md`
 - AI/RAG v2.2 rollout 체크리스트: `ai-rag-v2.2/rollout/ai-rag-v2.2-rollout-checklist.md`

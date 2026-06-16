@@ -28,18 +28,60 @@ class ExperimentClient:
             return {provider: {"available": True, "dry_run": True} for provider in providers}
         return self._post("/internal/experiments/intent-route/preflight", {"providers": providers})
 
+    def upload_lawyer_corpus(self, corpus_id: str, lawyers: list[dict[str, Any]]) -> dict[str, Any]:
+        if self.dry_run:
+            coverage = {
+                node_id
+                for lawyer in lawyers
+                for node_id in lawyer.get("practice_node_ids", [])
+                if node_id
+            }
+            return {
+                "corpusId": corpus_id,
+                "acceptedCount": len(lawyers),
+                "rejectedCount": 0,
+                "rejectedLawyerIds": [],
+                "coverageNodeCount": len(coverage),
+                "dryRun": True,
+            }
+        return self._post(
+            "/internal/experiments/lawyer-match/corpus",
+            {"corpusId": corpus_id, "lawyers": lawyers},
+        )
+
+    def preflight_lawyer_match(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.dry_run:
+            required = payload.get("requiredPracticeNodeIds") or []
+            return {
+                "corpusLoaded": True,
+                "lawyerCount": 0,
+                "coverageNodeCount": len(set(required)),
+                "missingPracticeNodeCount": 0,
+                "missingPracticeNodeIds": [],
+                "currentServiceCompatible": True,
+                "rebuiltQueryTextHash": (payload.get("query") or {}).get("queryTextHash"),
+                "suppliedQueryTextHash": (payload.get("query") or {}).get("queryTextHash"),
+                "hybridWeightsAccepted": True,
+                "hybridMatchWeights": payload.get("hybridMatchWeights", {}),
+                "errorType": None,
+                "errorMessage": None,
+                "dryRun": True,
+            }
+        return self._post("/internal/experiments/lawyer-match/preflight", payload)
+
     def intent_route(self, request: IntentRouteRequest) -> dict[str, Any]:
         if self.dry_run:
+            pred_node_ids = request.turn.gold_node_ids[:]
             return {
                 "provider": request.provider,
                 "requestedProvider": request.provider,
                 "mode": request.mode,
                 "inputDomain": request.domain,
                 "parsed": {
-                    "matchedNodeIds": [],
+                    "matchedNodeIds": pred_node_ids,
                     "dialogueIntent": "ASK_LEGAL_ADVICE",
-                    "intentConfidence": 0.0,
-                    "caseType": {"confidence": 0.0},
+                    "intentConfidence": 1.0 if pred_node_ids else 0.0,
+                    "caseType": {"l1": pred_node_ids[0] if pred_node_ids else None, "confidence": 1.0 if pred_node_ids else 0.0},
                     "retrievalQueries": [],
                 },
                 "parseSuccess": True,
@@ -59,10 +101,30 @@ class ExperimentClient:
 
     def lawyer_match(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.dry_run:
+            query = payload.get("query") or {}
+            node_ids = list(query.get("inputNodeIds") or [])
+            primary_node = node_ids[0] if node_ids else "no-label"
+            lawyer_id = f"L-{primary_node.replace('law-', '')}-001" if node_ids else "L-CONTENT-ONLY-001"
             return {
                 "caseId": payload.get("caseId"),
                 "matchingMode": payload.get("matchingMode"),
-                "results": [],
+                "currentServiceCompatible": True,
+                "results": [
+                    {
+                        "rank": 1,
+                        "lawyerId": lawyer_id,
+                        "practiceNodeIds": node_ids[:1],
+                        "tags": node_ids,
+                        "score": 0.82 if node_ids else 0.35,
+                        "scoreComponents": {
+                            "cosine": 0.82 if node_ids else 0.35,
+                            "fieldOverlap": None,
+                            "keywordOverlap": None,
+                            "hybridScore": None,
+                        },
+                    }
+                ],
+                "latencyMs": 1,
                 "errorType": None,
                 "errorMessage": None,
             }

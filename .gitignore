@@ -75,6 +75,9 @@ __pycache__/
 # scripts/ 디렉터리의 Python 스크립트는 추적
 !scripts/*.py
 
+### Experiment outputs ###
+eval/complex-law-classification-experiment/output/
+
 ### 기타 ###
 *.swp
 *.swo
