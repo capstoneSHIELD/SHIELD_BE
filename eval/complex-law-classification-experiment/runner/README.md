@@ -14,16 +14,14 @@ Implemented in this slice:
 - matching mode strategies
 - ontology validation/mapping helper
 - JSONL result sink
-- basic classification and matching metrics
-- markdown summary reports
-- dry-run mode for pipeline validation before BE adapters exist
-
-Not implemented yet:
-
-- BE `/internal/experiments/intent-route` adapter
-- BE `/internal/experiments/lawyer-match` adapter
-- synthetic lawyer corpus generator
-- full nDCG/Recall@K matching metric set
+- classification metrics with valid node, fallback, primary, partial, and token/latency fields
+- matching metrics with Recall@3/5/10, nDCG@5/10, MRR, exact specialist recall, and hard-negative intrusion rate
+- markdown summary reports, current-service baseline report, and cosine-vs-hybrid delta report
+- benchmark validity, corpus coverage, failure case, L1 confusion, scoped loss, and classification-to-matching loss reports
+- dry-run mode for pipeline validation without backend calls
+- BE `POST /internal/experiments/intent-route` adapter for local/test profile
+- BE `POST /internal/experiments/lawyer-match` adapter for local/test profile
+- synthetic lawyer corpus generator driven by `lawyer-corpus-generator-config.yaml`
 
 ## Run
 
@@ -39,4 +37,28 @@ cd C:\SHIELD_BE
 python .\eval\complex-law-classification-experiment\runner\run_experiment.py --config .\eval\complex-law-classification-experiment\runner\config.example.json
 ```
 
-`config.example.json` uses `dry_run=true`, so it validates the runner flow without calling the backend. For real runs, set `dry_run=false` and start SHIELD BE with local/test experiment adapters enabled.
+`config.example.json` uses `dry_run=true`, so it validates the runner flow without calling the backend. For real classification and matching runs, set `dry_run=false` and start SHIELD BE with `local` or `test` profile so the internal experiment adapters are registered.
+
+Current backend adapter status:
+
+- `POST /internal/experiments/intent-route/preflight`
+- `POST /internal/experiments/intent-route`
+- `POST /internal/experiments/lawyer-match/corpus`
+- `POST /internal/experiments/lawyer-match/preflight`
+- `POST /internal/experiments/lawyer-match`
+
+The matching adapter uses only the runner-uploaded synthetic corpus. It does not read production lawyer tables or embeddings.
+
+## Matching Corpus Flow
+
+When `matching_modes` is non-empty, preflight validates:
+
+- required classification turn fields
+- ontology node ids in gold labels
+- synthetic lawyer practice node coverage
+- matching label lawyer ids
+- BE lawyer-match adapter corpus/query/weight compatibility
+
+With `dry_run=true`, corpus upload is skipped. With `dry_run=false`, the runner uploads `lawyers-v1.jsonl` to `/internal/experiments/lawyer-match/corpus` before calling the adapter preflight.
+
+If `lawyer_corpus_path` does not exist and `lawyer_corpus_generator_config_path` is set, the runner generates a deterministic synthetic corpus before preflight. The generator creates fake benchmark profiles only; it must not be used to model real lawyers or personal data.

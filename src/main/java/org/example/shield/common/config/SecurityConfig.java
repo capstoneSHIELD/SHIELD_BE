@@ -35,6 +35,8 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/api-docs/**",
                                 "/v3/api-docs/**",
+                                // Local/test benchmark adapters. Controller beans are profile-gated.
+                                "/internal/experiments/**",
                                 // Actuator (Phase B-8b) — 운영에서는 IP allow list/reverse proxy로 제한
                                 "/actuator/health",
                                 "/actuator/health/**",

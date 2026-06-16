@@ -12,6 +12,7 @@ class ExperimentConfig:
     classification_turns_path: Path
     ontology_snapshot_path: Path
     lawyer_corpus_path: Path | None
+    lawyer_corpus_generator_config_path: Path | None
     matching_labels_path: Path | None
     output_root: Path
     base_url: str
@@ -51,6 +52,7 @@ class ExperimentConfig:
                 "ontology_snapshot_path", "../input/legal-ontology-slim.snapshot.json"
             ),
             lawyer_corpus_path=resolve("lawyer_corpus_path", "../input/lawyers-v1.jsonl"),
+            lawyer_corpus_generator_config_path=resolve("lawyer_corpus_generator_config_path"),
             matching_labels_path=resolve("matching_labels_path", "../input/matching-labels-v1.jsonl"),
             output_root=resolve("output_root", "../output"),
             base_url=str(data.get("base_url", "http://localhost:8080")),
