@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.example.shield.ai.application.IntentClassificationService;
 import org.example.shield.ai.dto.ExperimentIntentRouteResponse;
+import org.example.shield.ai.dto.ExperimentSelectedLabel;
 import org.example.shield.ai.provider.ChatMessage;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,6 +46,9 @@ public class ExperimentIntentRouteController {
                 request.mode(),
                 request.domain(),
                 toChatMessages(request.messages()),
+                clean(request.selectedNodeIds()),
+                toSelectedLabels(request.selectedLabels()),
+                request.historyWindowMessages(),
                 request.includeRaw()
         );
     }
@@ -76,10 +80,50 @@ public class ExperimentIntentRouteController {
             @NotBlank String mode,
             String domain,
             List<ExperimentMessageRequest> messages,
+            List<String> selectedNodeIds,
+            List<ExperimentSelectedLabelRequest> selectedLabels,
+            Integer historyWindowMessages,
             boolean includeRaw
     ) {
     }
 
     public record ExperimentMessageRequest(String role, String content) {
+    }
+
+    public record ExperimentSelectedLabelRequest(
+            String nodeId,
+            String l1,
+            String l2,
+            String l3
+    ) {
+    }
+
+    private List<String> clean(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .toList();
+    }
+
+    private List<ExperimentSelectedLabel> toSelectedLabels(List<ExperimentSelectedLabelRequest> labels) {
+        if (labels == null) {
+            return List.of();
+        }
+        return labels.stream()
+                .filter(label -> label != null && label.nodeId() != null && !label.nodeId().isBlank())
+                .map(label -> new ExperimentSelectedLabel(
+                        cleanValue(label.nodeId()),
+                        cleanValue(label.l1()),
+                        cleanValue(label.l2()),
+                        cleanValue(label.l3())
+                ))
+                .toList();
+    }
+
+    private String cleanValue(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

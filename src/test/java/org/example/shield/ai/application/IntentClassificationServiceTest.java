@@ -1,13 +1,21 @@
 package org.example.shield.ai.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.example.shield.ai.dto.AiCallResult;
 import org.example.shield.ai.dto.DialogueIntent;
+import org.example.shield.ai.dto.ExperimentSelectedLabel;
 import org.example.shield.ai.dto.IntentClassificationResult;
 import org.example.shield.ai.dto.IntentRouterResponse;
+import org.example.shield.ai.infrastructure.RagMetrics;
+import org.example.shield.ai.provider.AiClassificationClient;
+import org.example.shield.ai.provider.ChatMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -152,5 +160,128 @@ class IntentClassificationServiceTest {
         assertThatThrownBy(() -> service.parseClassificationResult("not a json"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Intent classification JSON parsing failed");
+    }
+
+    @Test
+    @DisplayName("experiment route includes selected labels and full history by default")
+    void routeForExperiment_includesSelectedLabelsAndFullHistoryByDefault() {
+        CapturingClassificationClient client = new CapturingClassificationClient();
+        IntentClassificationService experimentService = experimentService(client);
+
+        experimentService.routeForExperiment(
+                "cohere",
+                "A_FULL",
+                null,
+                List.of(
+                        ChatMessage.user("turn 1"),
+                        ChatMessage.user("turn 2"),
+                        ChatMessage.user("turn 3"),
+                        ChatMessage.user("turn 4"),
+                        ChatMessage.user("turn 5")
+                ),
+                List.of("law-002-04-02", "law-004-02-01"),
+                List.of(new ExperimentSelectedLabel(
+                        "law-002-04-02",
+                        "이혼·위자료·재산분할",
+                        "자녀 및 양육",
+                        "양육비 산정 및 청구"
+                )),
+                null,
+                false
+        );
+
+        String userPrompt = client.capturedMessages().get(1).content();
+        assertThat(userPrompt)
+                .contains("User-selected legal areas")
+                .contains("law-002-04-02")
+                .contains("이혼·위자료·재산분할 > 자녀 및 양육 > 양육비 산정 및 청구")
+                .contains("law-004-02-01")
+                .contains("do not use selected areas as a hard scope")
+                .contains("user: turn 1")
+                .contains("user: turn 5");
+    }
+
+    @Test
+    @DisplayName("experiment route can explicitly limit history window")
+    void routeForExperiment_respectsExplicitHistoryWindow() {
+        CapturingClassificationClient client = new CapturingClassificationClient();
+        IntentClassificationService experimentService = experimentService(client);
+
+        experimentService.routeForExperiment(
+                "cohere",
+                "A_FULL",
+                null,
+                List.of(
+                        ChatMessage.user("turn 1"),
+                        ChatMessage.user("turn 2"),
+                        ChatMessage.user("turn 3")
+                ),
+                List.of(),
+                List.of(),
+                2,
+                false
+        );
+
+        String userPrompt = client.capturedMessages().get(1).content();
+        assertThat(userPrompt)
+                .doesNotContain("user: turn 1")
+                .contains("user: turn 2")
+                .contains("user: turn 3");
+    }
+
+    private IntentClassificationService experimentService(CapturingClassificationClient client) {
+        IntentClassificationService experimentService = new IntentClassificationService(
+                List.of(client),
+                new ObjectMapper(),
+                "{\"id\":\"law-000\",\"name\":\"law\",\"c\":[]}",
+                null,
+                4,
+                new RagMetrics(new SimpleMeterRegistry()));
+        ReflectionTestUtils.setField(
+                experimentService,
+                "intentClassifierPromptTemplate",
+                "Ontology:\n{ONTOLOGY_JSON}");
+        return experimentService;
+    }
+
+    private static class CapturingClassificationClient implements AiClassificationClient {
+        private final List<ChatMessage> capturedMessages = new ArrayList<>();
+
+        @Override
+        public AiCallResult<String> classify(List<ChatMessage> messages) {
+            capturedMessages.clear();
+            capturedMessages.addAll(messages);
+            return new AiCallResult<>(
+                    "response-1",
+                    """
+                            {
+                              "schema_version": "2.0",
+                              "dialogueIntent": "ASK_LEGAL_ADVICE",
+                              "intentConfidence": 0.95,
+                              "caseType": {
+                                "l1": "임대차보호",
+                                "l2": "주택임대차보호",
+                                "l3": "보증금 반환 및 회수",
+                                "confidence": 0.91
+                              },
+                              "matched_node_ids": ["law-007-01-05"],
+                              "core_keywords": ["전세", "보증금"],
+                              "retrievalQueries": []
+                            }
+                            """,
+                    11,
+                    22,
+                    33
+            );
+        }
+
+        @Override
+        public String providerKey() {
+            return "cohere";
+        }
+
+        List<ChatMessage> capturedMessages() {
+            return capturedMessages;
+        }
     }
 }

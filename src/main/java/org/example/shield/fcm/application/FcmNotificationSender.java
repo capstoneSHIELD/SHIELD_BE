@@ -14,6 +14,7 @@ import org.example.shield.fcm.domain.FcmToken;
 import org.example.shield.fcm.domain.FcmTokenReader;
 import org.example.shield.fcm.domain.FcmTokenWriter;
 import org.example.shield.fcm.event.PushNotificationEvent;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -26,6 +27,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "firebase", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class FcmNotificationSender {
 
     private final FirebaseMessaging firebaseMessaging;

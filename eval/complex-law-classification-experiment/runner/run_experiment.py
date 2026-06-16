@@ -13,7 +13,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     config = ExperimentConfig.from_file(args.config)
-    context = ExperimentPipelineFacade().run(config)
+    try:
+        context = ExperimentPipelineFacade().run(config)
+    except RuntimeError as exc:
+        print(f"error={exc}", file=sys.stderr)
+        if not config.dry_run:
+            print(
+                "hint=start SHIELD BE with the local or test profile, or use "
+                "config.wrong-selected.dry-run.example.json for runner-only validation.",
+                file=sys.stderr,
+            )
+        return 1
     print(f"run_id={context.run_id}")
     print(f"output_dir={context.output_dir}")
     return 0

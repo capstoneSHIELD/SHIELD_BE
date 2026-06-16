@@ -11,6 +11,7 @@ import org.example.shield.ai.dto.CaseTypeResult;
 import org.example.shield.ai.dto.DialogueIntent;
 import org.example.shield.ai.dto.ExperimentIntentRouteParsedResponse;
 import org.example.shield.ai.dto.ExperimentIntentRouteResponse;
+import org.example.shield.ai.dto.ExperimentSelectedLabel;
 import org.example.shield.ai.dto.ExtractedSlot;
 import org.example.shield.ai.dto.IntentClassificationResult;
 import org.example.shield.ai.dto.IntentClassificationResult.Keywords;
@@ -161,6 +162,9 @@ public class IntentClassificationService {
             String mode,
             String domain,
             List<ChatMessage> conversationMessages,
+            List<String> selectedNodeIds,
+            List<ExperimentSelectedLabel> selectedLabels,
+            Integer historyWindowMessages,
             boolean includeRaw
     ) {
         String provider = requestedProvider == null || requestedProvider.isBlank()
@@ -178,7 +182,10 @@ public class IntentClassificationService {
 
         List<ChatMessage> messages = List.of(
                 ChatMessage.system(buildSystemPrompt(domain)),
-                ChatMessage.user(buildConversationPrompt(buildExperimentConversationHistory(conversationMessages)))
+                ChatMessage.user(buildExperimentConversationPrompt(
+                        buildExperimentConversationHistory(conversationMessages, historyWindowMessages),
+                        selectedNodeIds,
+                        selectedLabels))
         );
 
         AiCallResult<String> result;
@@ -379,12 +386,80 @@ public class IntentClassificationService {
         return sb.toString().trim();
     }
 
-    private String buildExperimentConversationHistory(List<ChatMessage> messages) {
+    private String buildExperimentConversationPrompt(
+            String conversationHistory,
+            List<String> selectedNodeIds,
+            List<ExperimentSelectedLabel> selectedLabels
+    ) {
+        String selectedContext = buildSelectedLabelContext(selectedNodeIds, selectedLabels);
+        String conversation = buildConversationPrompt(conversationHistory);
+        if (selectedContext.isBlank()) {
+            return conversation;
+        }
+        return selectedContext + "\n\n" + conversation;
+    }
+
+    private String buildSelectedLabelContext(
+            List<String> selectedNodeIds,
+            List<ExperimentSelectedLabel> selectedLabels
+    ) {
+        List<String> lines = new ArrayList<>();
+        Set<String> emittedNodeIds = new LinkedHashSet<>();
+        if (selectedLabels != null) {
+            for (ExperimentSelectedLabel label : selectedLabels) {
+                String line = formatSelectedLabel(label);
+                if (line == null) {
+                    continue;
+                }
+                lines.add("- " + line);
+                emittedNodeIds.add(label.nodeId().trim());
+            }
+        }
+        if (selectedNodeIds != null) {
+            selectedNodeIds.stream()
+                    .filter(nodeId -> nodeId != null && !nodeId.isBlank())
+                    .map(String::trim)
+                    .filter(nodeId -> !emittedNodeIds.contains(nodeId))
+                    .forEach(nodeId -> lines.add("- " + nodeId));
+        }
+        if (lines.isEmpty()) {
+            return "";
+        }
+        return """
+                User-selected legal areas:
+                %s
+
+                Treat these selected areas as user-supplied metadata only. Classify from the conversation facts and the ontology, and do not use selected areas as a hard scope.
+                """.formatted(String.join("\n", lines)).trim();
+    }
+
+    private String formatSelectedLabel(ExperimentSelectedLabel label) {
+        if (label == null || label.nodeId() == null || label.nodeId().isBlank()) {
+            return null;
+        }
+        List<String> names = new ArrayList<>();
+        addIfPresent(names, label.l1());
+        addIfPresent(names, label.l2());
+        addIfPresent(names, label.l3());
+        String path = names.isEmpty() ? "" : " (" + String.join(" > ", names) + ")";
+        return label.nodeId().trim() + path;
+    }
+
+    private void addIfPresent(List<String> values, String value) {
+        if (value != null && !value.isBlank()) {
+            values.add(value.trim());
+        }
+    }
+
+    private String buildExperimentConversationHistory(List<ChatMessage> messages, Integer historyWindowMessages) {
         if (messages == null || messages.isEmpty()) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        int start = Math.max(0, messages.size() - contextWindowMessages);
+        int window = historyWindowMessages == null || historyWindowMessages <= 0
+                ? messages.size()
+                : historyWindowMessages;
+        int start = Math.max(0, messages.size() - window);
         for (int i = start; i < messages.size(); i++) {
             ChatMessage message = messages.get(i);
             if (message == null || message.content() == null || message.content().isBlank()) {

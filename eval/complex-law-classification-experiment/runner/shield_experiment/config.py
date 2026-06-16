@@ -77,7 +77,7 @@ class ExperimentConfig:
 
 
 def _load_config(path: Path) -> dict[str, Any]:
-    raw = path.read_text(encoding="utf-8")
+    raw = path.read_text(encoding="utf-8-sig")
     if path.suffix.lower() == ".json":
         return json.loads(raw)
     if path.suffix.lower() in {".yaml", ".yml"}:
