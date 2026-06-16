@@ -351,7 +351,11 @@ class ExperimentPipelineFacade:
 
     def run(self, config: ExperimentConfig) -> RunContext:
         context = RunContextFactory().create(config)
-        client = ExperimentClient(config.base_url, dry_run=config.dry_run)
+        client = ExperimentClient(
+            config.base_url,
+            dry_run=config.dry_run,
+            experiment_access_token=config.experiment_access_token,
+        )
         ontology = OntologySnapshot.load(config.ontology_snapshot_path)
         self._generate_lawyer_corpus_if_needed(config, ontology)
         mapper = OntologyMapper(ontology)

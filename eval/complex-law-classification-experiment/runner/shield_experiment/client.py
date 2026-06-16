@@ -18,10 +18,19 @@ class IntentRouteRequest:
 
 
 class ExperimentClient:
-    def __init__(self, base_url: str, dry_run: bool = False, timeout_seconds: int = 60):
+    def __init__(
+        self,
+        base_url: str,
+        dry_run: bool = False,
+        timeout_seconds: int = 60,
+        experiment_access_token: str | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.dry_run = dry_run
         self.timeout_seconds = timeout_seconds
+        self.experiment_access_token = (
+            experiment_access_token.strip() if experiment_access_token else None
+        )
 
     def preflight_providers(self, providers: list[str]) -> dict[str, Any]:
         if self.dry_run:
@@ -142,6 +151,8 @@ class ExperimentClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+        if self.experiment_access_token:
+            req.add_header("X-SHIELD-EXPERIMENT-TOKEN", self.experiment_access_token)
         try:
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as response:
                 return json.loads(response.read().decode("utf-8"))

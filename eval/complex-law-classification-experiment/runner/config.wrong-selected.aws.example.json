@@ -1,7 +1,7 @@
 {
-  "base_url": "http://localhost:8080",
+  "base_url": "https://api.shieldai.kr",
   "experiment_access_token": null,
-  "dry_run": true,
+  "dry_run": false,
   "dataset_path": "../input/sample-dataset-v1.jsonl",
   "classification_turns_path": "../input/wrong-selected-classification-turns-v1.jsonl",
   "wrong_selected_testcases_path": "../../../src/test/testcases/wrong",

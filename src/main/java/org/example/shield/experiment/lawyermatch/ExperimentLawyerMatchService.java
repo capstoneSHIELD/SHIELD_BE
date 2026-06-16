@@ -13,7 +13,7 @@ import org.example.shield.experiment.lawyermatch.ExperimentLawyerMatchDtos.Prefl
 import org.example.shield.experiment.lawyermatch.ExperimentLawyerMatchDtos.ScoreComponents;
 import org.example.shield.experiment.lawyermatch.ExperimentLawyerMatchDtos.SyntheticLawyerRow;
 import org.example.shield.lawyer.application.LawyerEmbeddingTextBuilder;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Service
-@Profile({"local", "test"})
+@ConditionalOnProperty(prefix = "shield.experiment.adapter", name = "enabled", havingValue = "true")
 public class ExperimentLawyerMatchService {
 
     private static final int VECTOR_DIMENSION = 256;

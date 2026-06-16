@@ -18,3 +18,8 @@ logging:
   level:
     org.example.shield: DEBUG
     org.springframework.web: INFO
+
+shield:
+  experiment:
+    adapter:
+      enabled: true

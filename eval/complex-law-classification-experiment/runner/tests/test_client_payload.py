@@ -37,21 +37,31 @@ class ExperimentClientPayloadTest(unittest.TestCase):
         self.assertEqual(client.last_payload["selectedNodeIds"], ["law-002-04-02", "law-004-02-01"])
         self.assertEqual(client.last_payload["selectedLabels"][0]["nodeId"], "law-002-04-02")
 
+    def test_client_forwards_experiment_access_token_header(self) -> None:
+        client = CapturingClient("http://localhost:8080", experiment_access_token="secret")
+
+        client.preflight_providers(["openai"])
+
+        self.assertEqual(client.last_headers["X-SHIELD-EXPERIMENT-TOKEN"], "secret")
+
 
 class CapturingClient(ExperimentClient):
-    def __init__(self, base_url: str):
-        super().__init__(base_url, dry_run=False)
+    def __init__(self, base_url: str, experiment_access_token: str | None = None):
+        super().__init__(base_url, dry_run=False, experiment_access_token=experiment_access_token)
         self.last_path: str | None = None
         self.last_payload: dict[str, Any] = {}
+        self.last_headers: dict[str, str] = {}
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         self.last_path = path
         self.last_payload = payload
+        if self.experiment_access_token:
+            self.last_headers["X-SHIELD-EXPERIMENT-TOKEN"] = self.experiment_access_token
         return {
-            "provider": payload["provider"],
-            "requestedProvider": payload["provider"],
-            "mode": payload["mode"],
-            "inputDomain": payload["domain"],
+            "provider": payload.get("provider", "openai"),
+            "requestedProvider": payload.get("provider", "openai"),
+            "mode": payload.get("mode", "A_FULL"),
+            "inputDomain": payload.get("domain"),
             "parsed": {"matchedNodeIds": ["law-007-01-05"]},
             "parseSuccess": True,
             "schemaSuccess": True,

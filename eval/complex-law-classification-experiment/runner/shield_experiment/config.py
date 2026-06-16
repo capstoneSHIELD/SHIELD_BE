@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ class ExperimentConfig:
     matching_labels_path: Path | None
     output_root: Path
     base_url: str
+    experiment_access_token: str | None = None
     providers: list[str] = field(default_factory=lambda: ["cohere"])
     classification_modes: list[str] = field(default_factory=lambda: ["A_FULL"])
     matching_modes: list[str] = field(default_factory=list)
@@ -59,6 +61,9 @@ class ExperimentConfig:
             matching_labels_path=resolve("matching_labels_path", "../input/matching-labels-v1.jsonl"),
             output_root=resolve("output_root", "../output"),
             base_url=str(data.get("base_url", "http://localhost:8080")),
+            experiment_access_token=_optional_string(
+                data.get("experiment_access_token", os.getenv("SHIELD_EXPERIMENT_ADAPTER_ACCESS_TOKEN"))
+            ),
             providers=list(data.get("providers", ["cohere"])),
             classification_modes=list(data.get("classification_modes", ["A_FULL"])),
             matching_modes=list(data.get("matching_modes", [])),
@@ -96,3 +101,10 @@ def _optional_int(value: Any) -> int | None:
     if value is None:
         return None
     return int(value)
+
+
+def _optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

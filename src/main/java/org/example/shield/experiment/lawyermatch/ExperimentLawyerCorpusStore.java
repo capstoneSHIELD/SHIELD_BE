@@ -1,6 +1,6 @@
 package org.example.shield.experiment.lawyermatch;
 
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -8,7 +8,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Component
-@Profile({"local", "test"})
+@ConditionalOnProperty(prefix = "shield.experiment.adapter", name = "enabled", havingValue = "true")
 public class ExperimentLawyerCorpusStore {
 
     private final AtomicReference<Snapshot> snapshot = new AtomicReference<>(Snapshot.empty());

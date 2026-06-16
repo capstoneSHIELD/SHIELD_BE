@@ -19,8 +19,8 @@ Implemented in this slice:
 - markdown summary reports, current-service baseline report, and cosine-vs-hybrid delta report
 - benchmark validity, corpus coverage, failure case, L1 confusion, scoped loss, and classification-to-matching loss reports
 - dry-run mode for pipeline validation without backend calls
-- BE `POST /internal/experiments/intent-route` adapter for local/test profile
-- BE `POST /internal/experiments/lawyer-match` adapter for local/test profile
+- BE `POST /internal/experiments/intent-route` adapter behind an explicit enable flag and token
+- BE `POST /internal/experiments/lawyer-match` adapter behind an explicit enable flag and token
 - synthetic lawyer corpus generator driven by `lawyer-corpus-generator-config.yaml`
 - wrong-selected testcase directory loader for `src/test/testcases/wrong/wrong-x1-*.json`
 - selected-label metadata forwarding to the intent-route adapter payload
@@ -40,7 +40,7 @@ cd C:\SHIELD_BE
 python .\eval\complex-law-classification-experiment\runner\run_experiment.py --config .\eval\complex-law-classification-experiment\runner\config.example.json
 ```
 
-`config.example.json` uses `dry_run=true`, so it validates the runner flow without calling the backend. For real classification and matching runs, set `dry_run=false` and start SHIELD BE with `local` or `test` profile so the internal experiment adapters are registered.
+`config.example.json` uses `dry_run=true`, so it validates the runner flow without calling the backend. For real classification and matching runs, set `dry_run=false` and start SHIELD BE with `shield.experiment.adapter.enabled=true`.
 
 For the wrong-selected cross-L1 benchmark, use:
 
@@ -49,7 +49,23 @@ cd C:\SHIELD_BE
 python .\eval\complex-law-classification-experiment\runner\run_experiment.py --config .\eval\complex-law-classification-experiment\runner\config.wrong-selected.example.json
 ```
 
-`config.wrong-selected.example.json` uses `dry_run=false`, so start SHIELD BE with the `local` or `test` profile before running it. It reads `src/test/testcases/wrong/wrong-x1-*.json`, converts each evaluation turn to normalized classification turns, and writes the normalized JSONL cache to `eval/complex-law-classification-experiment/input/wrong-selected-classification-turns-v1.jsonl`.
+`config.wrong-selected.example.json` uses `dry_run=false`, so start SHIELD BE with `shield.experiment.adapter.enabled=true` before running it. It reads `src/test/testcases/wrong/wrong-x1-*.json`, converts each evaluation turn to normalized classification turns, and writes the normalized JSONL cache to `eval/complex-law-classification-experiment/input/wrong-selected-classification-turns-v1.jsonl`.
+
+For AWS runs, deploy the backend with both:
+
+```text
+SHIELD_EXPERIMENT_ADAPTER_ENABLED=true
+SHIELD_EXPERIMENT_ADAPTER_ACCESS_TOKEN=<long random token>
+```
+
+Then set the same token in the runner environment and use the AWS config:
+
+```powershell
+$env:SHIELD_EXPERIMENT_ADAPTER_ACCESS_TOKEN="<same token>"
+python .\eval\complex-law-classification-experiment\runner\run_experiment.py --config .\eval\complex-law-classification-experiment\runner\config.wrong-selected.aws.example.json
+```
+
+The runner sends this value as `X-SHIELD-EXPERIMENT-TOKEN`. Do not commit the real token into config files.
 
 To validate the runner flow without backend or LLM calls, use:
 
@@ -62,7 +78,7 @@ The dry-run config copies gold labels into predictions. Use it only for pipeline
 
 For this benchmark, `classification_history_window` is `null` so turn 2~10 receive the cumulative user utterance history. `B_SCOPED_GOLD` is intentionally excluded because it scopes by the gold L1 and leaks the answer. The generated report `classification-turn-progress.md` groups classification metrics by `turn_index`.
 
-The backend `local/test` intent-route adapter accepts `selectedNodeIds` and `selectedLabels` from the runner. It includes them in the experiment prompt as user-supplied metadata, while instructing the classifier to prefer conversation facts over selected areas. The experiment route uses the full supplied message history by default; pass `historyWindowMessages` only when an explicit backend-side truncation window is desired.
+The backend intent-route adapter accepts `selectedNodeIds` and `selectedLabels` from the runner. It includes them in the experiment prompt as user-supplied metadata, while instructing the classifier to prefer conversation facts over selected areas. The experiment route uses the full supplied message history by default; pass `historyWindowMessages` only when an explicit backend-side truncation window is desired.
 
 Current backend adapter status:
 

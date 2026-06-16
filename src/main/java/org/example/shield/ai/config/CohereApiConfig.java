@@ -54,7 +54,7 @@ public class CohereApiConfig {
     @Value("${cohere.classify.temperature:0.1}")
     private double classifyTemperature;
 
-    @Value("${cohere.classify.max-tokens:384}")
+    @Value("${cohere.classify.max-tokens:2048}")
     private int classifyMaxTokens;
 
     @Value("${cohere.timeout.read-classify:15000}")

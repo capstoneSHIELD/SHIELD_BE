@@ -6,9 +6,10 @@ import org.example.shield.ai.application.IntentClassificationService;
 import org.example.shield.ai.dto.ExperimentIntentRouteResponse;
 import org.example.shield.ai.dto.ExperimentSelectedLabel;
 import org.example.shield.ai.provider.ChatMessage;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,24 +24,37 @@ import java.util.Map;
  * 실험 지표를 산출하기 위한 얇은 HTTP boundary다.
  */
 @RestController
-@Profile({"local", "test"})
+@ConditionalOnProperty(prefix = "shield.experiment.adapter", name = "enabled", havingValue = "true")
 @RequestMapping("/internal/experiments/intent-route")
 public class ExperimentIntentRouteController {
 
     private final IntentClassificationService intentClassificationService;
+    private final ExperimentAdapterAccessGuard accessGuard;
 
-    public ExperimentIntentRouteController(IntentClassificationService intentClassificationService) {
+    public ExperimentIntentRouteController(
+            IntentClassificationService intentClassificationService,
+            ExperimentAdapterAccessGuard accessGuard
+    ) {
         this.intentClassificationService = intentClassificationService;
+        this.accessGuard = accessGuard;
     }
 
     @PostMapping("/preflight")
-    public Map<String, Object> preflight(@RequestBody(required = false) ExperimentPreflightRequest request) {
+    public Map<String, Object> preflight(
+            @RequestHeader(name = ExperimentAdapterAccessGuard.HEADER_NAME, required = false) String accessToken,
+            @RequestBody(required = false) ExperimentPreflightRequest request
+    ) {
+        accessGuard.verify(accessToken);
         List<String> providers = request == null ? List.of() : request.providers();
         return Map.of("providers", intentClassificationService.availableExperimentProviders(providers));
     }
 
     @PostMapping
-    public ExperimentIntentRouteResponse route(@Valid @RequestBody ExperimentIntentRouteRequest request) {
+    public ExperimentIntentRouteResponse route(
+            @RequestHeader(name = ExperimentAdapterAccessGuard.HEADER_NAME, required = false) String accessToken,
+            @Valid @RequestBody ExperimentIntentRouteRequest request
+    ) {
+        accessGuard.verify(accessToken);
         return intentClassificationService.routeForExperiment(
                 request.provider(),
                 request.mode(),

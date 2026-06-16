@@ -96,6 +96,12 @@ jwt:
   access-token-expiry: 86400000
   refresh-token-expiry: 1209600000
 
+shield:
+  experiment:
+    adapter:
+      enabled: ${SHIELD_EXPERIMENT_ADAPTER_ENABLED:false}
+      access-token: ${SHIELD_EXPERIMENT_ADAPTER_ACCESS_TOKEN:}
+
 # Google OAuth
 # - allowed-redirect-uris: 클라이언트가 보낸 redirect_uri 화이트리스트 (Issue #116).
 #   모바일 native 앱은 https 의 `-mobile` suffix URL 사용. mobile callback 페이지가
@@ -179,7 +185,7 @@ cohere:
   classify:
     model: ${COHERE_CLASSIFY_MODEL:command-r7b-12-2024}
     temperature: 0.1
-    max-tokens: ${COHERE_CLASSIFY_MAX_TOKENS:384}
+    max-tokens: ${COHERE_CLASSIFY_MAX_TOKENS:2048}
     context-window-messages: ${COHERE_CLASSIFY_CONTEXT_WINDOW_MESSAGES:4}
   # P5.1 Commit 4 — Cohere 단가표 (USD per 1M tokens).
   # 출처: https://cohere.com/pricing (Phase P5.1 작성 시점 기준).
