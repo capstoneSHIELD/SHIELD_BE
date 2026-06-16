@@ -266,9 +266,9 @@ backend 쪽에서는 운영 API가 아니라 실험 전용 내부 endpoint를 �
 
 이 결과는 매우 중요하다. 정답 L1 범위를 알고 있다는 oracle 조건에서는, 전체 ontology를 모두 주는 것보다 scoped ontology가 모든 주요 품질 지표에서 좋아졌다. 즉 "먼저 L1 layer에서 범위를 좁힌 다음 분류한다"는 설계 자체는 실험적으로 의미가 있다.
 
-### 9.2 `B_SCOPED_RUNTIME`도 baseline보다 개선되었다
+### 9.2 `B_SCOPED_RUNTIME`은 전체 평균과 복합 케이스에서 개선되었다
 
-실제 서비스에 더 가까운 `B_SCOPED_RUNTIME`도 `A_FULL`보다 여러 지표에서 좋아졌다.
+실제 서비스에 더 가까운 `B_SCOPED_RUNTIME`도 전체 평균 기준으로는 `A_FULL`보다 여러 지표에서 좋아졌다.
 
 | 지표 | `A_FULL` | `B_SCOPED_RUNTIME` | 변화 |
 |---|---:|---:|---:|
@@ -282,7 +282,19 @@ backend 쪽에서는 운영 API가 아니라 실험 전용 내부 endpoint를 �
 
 이 결과는 production 관점에서 의미가 있다. 정답 L1을 모르는 실제 runtime 상황에서도, L1을 먼저 추정하고 범위를 좁히는 방식이 전체 ontology 방식보다 더 나은 Micro-F1과 더 낮은 token cost를 만들었다.
 
-다만 `B_SCOPED_RUNTIME`의 Hierarchical Partial은 76.28%로 `A_FULL`의 76.97%보다 약간 낮다. 이는 runtime L1 추정이 틀렸을 때, scoped ontology가 오히려 정답과 먼 범위로 분류를 제한할 수 있음을 보여준다. 따라서 현재 병목은 "scoped 분류 방식" 자체보다 "L1 router의 정확도"에 있다.
+다만 `B_SCOPED_RUNTIME`이 `A_FULL`보다 모든 지표에서 우월한 것은 아니다. 단일 분야와 일부 계층 유사도 지표에서는 `A_FULL`이 더 높게 나왔다.
+
+| 비교 항목 | `A_FULL` | `B_SCOPED_RUNTIME` | 더 높은 모드 |
+|---|---:|---:|---|
+| 전체 Hierarchical Partial | 76.97% | 76.28% | `A_FULL` |
+| 단일 Micro-F1 | 45.02% | 43.42% | `A_FULL` |
+| 단일 Hierarchical Partial | 87.15% | 82.93% | `A_FULL` |
+| 복합2 Micro-F1 | 36.76% | 42.50% | `B_SCOPED_RUNTIME` |
+| 복합3 Micro-F1 | 33.09% | 41.02% | `B_SCOPED_RUNTIME` |
+
+따라서 더 정확한 해석은 "`B_SCOPED_RUNTIME`이 무조건 `A_FULL`보다 좋다"가 아니다. `B_SCOPED_RUNTIME`은 전체 평균, 복합2, 복합3, token 효율에서는 의미 있는 개선을 보였지만, 단일 분야와 계층적 근접도 일부에서는 `A_FULL`의 장점이 남아 있다.
+
+이는 runtime L1 추정이 틀렸을 때 scoped ontology가 오히려 정답과 먼 범위로 분류를 제한할 수 있음을 보여준다. 따라서 현재 병목은 "scoped 분류 방식" 자체보다 "L1 router의 정확도"와 "잘못 좁혔을 때 full ontology로 되돌아가는 fallback 정책"에 있다.
 
 ### 9.3 점수는 아직 낮다
 
@@ -309,9 +321,9 @@ backend 쪽에서는 운영 API가 아니라 실험 전용 내부 endpoint를 �
 
 `B_SCOPED_GOLD`는 `A_FULL`보다 Micro-F1이 9.73%p 높고, token은 약 73.8% 적게 사용했다. 정확도와 비용이 동시에 좋아졌다.
 
-`B_SCOPED_RUNTIME`도 `A_FULL`보다 Micro-F1이 4.55%p 높고, token은 약 74.0% 적게 사용했다. 즉 oracle이 아닌 실제 runtime 조건에서도 같은 방향의 개선이 나타났다.
+`B_SCOPED_RUNTIME`도 전체 평균 기준으로는 `A_FULL`보다 Micro-F1이 4.55%p 높고, token은 약 74.0% 적게 사용했다. 즉 oracle이 아닌 실제 runtime 조건에서도 복합 분야와 비용 측면에서는 같은 방향의 개선이 나타났다.
 
-이것은 "처음부터 ontology 전체를 주고 분류하는 것"보다 "먼저 L1 layer에서 범위를 좁힌 뒤 분류하는 것"이 더 의미 있다는 강한 근거다.
+다만 이 결과는 scoped runtime 방식이 모든 상황에서 full ontology 방식보다 우월하다는 뜻은 아니다. 단일 분야와 전체 Hierarchical Partial에서는 `A_FULL`이 더 높았기 때문에, 현재 결론은 "복합 분야 분류와 token 효율 측면에서 L1-first scoped 방식이 유망하다"로 보는 것이 정확하다.
 
 ### 10.2 개선해야 할 병목이 구체화되었다
 
@@ -372,10 +384,11 @@ backend 쪽에서는 운영 API가 아니라 실험 전용 내부 endpoint를 �
 1. 현재 AI 분류기의 절대 성능은 아직 낮다. 가장 좋은 완료 모드인 `B_SCOPED_GOLD`도 Exact Match 10.63%, Micro-F1 47.34% 수준이다.
 2. 하지만 L1-first scoped ontology 설계는 의미 있는 성과를 보였다.
 3. `B_SCOPED_GOLD`는 `A_FULL` 대비 Micro-F1을 9.73%p 올리면서 입력 token을 약 73.8% 줄였다.
-4. 실제 runtime에 가까운 `B_SCOPED_RUNTIME`도 `A_FULL` 대비 Micro-F1을 4.55%p 올리면서 입력 token을 약 74.0% 줄였다.
-5. 따라서 처음부터 ontology 전체를 주고 분류하는 것보다, 먼저 L1 layer에서 범위를 좁힌 뒤 세부 분류하는 방식이 더 의미 있다.
-6. 다음 개선의 핵심은 L1 router 정확도, leaf-only normalization, 복합 쟁점 secondary issue 탐지, C hybrid 재실행이다.
+4. 실제 runtime에 가까운 `B_SCOPED_RUNTIME`도 전체 평균 Micro-F1을 4.55%p 올리면서 입력 token을 약 74.0% 줄였다.
+5. 다만 단일 분야 Micro-F1과 전체 Hierarchical Partial에서는 `A_FULL`이 더 높아, runtime scoped 방식이 무조건 우월하다고 볼 수는 없다.
+6. 따라서 이번 실험의 정확한 결론은 "복합 분야 분류와 token 효율에서는 L1으로 먼저 좁히는 방식이 유망하지만, 단일 분야와 계층적 근접도까지 안정적으로 이기려면 L1 router와 fallback 정책 개선이 필요하다"이다.
+7. 다음 개선의 핵심은 L1 router 정확도, leaf-only normalization, 복합 쟁점 secondary issue 탐지, C hybrid 재실행이다.
 
 한 문장으로 정리하면 다음과 같다.
 
-> 이번 실험은 현재 분류 정확도가 아직 충분하지 않다는 점을 보여주면서도, SHIELD AI 파이프라인의 방향성인 "L1으로 먼저 좁히고 세부 분류하는 구조"가 전체 ontology 직접 분류보다 더 유망하다는 것을 확인했다.
+> 이번 실험은 현재 분류 정확도가 아직 충분하지 않다는 점을 보여주면서도, 복합 분야 분류와 token 효율 측면에서는 "L1으로 먼저 좁히고 세부 분류하는 구조"가 유망하다는 것을 확인했다. 다만 단일 분야와 계층적 근접도에서는 `A_FULL`의 장점도 남아 있어, L1 router와 fallback 정책 개선이 다음 핵심 과제다.
