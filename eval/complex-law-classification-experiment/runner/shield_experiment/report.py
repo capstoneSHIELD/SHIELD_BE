@@ -27,8 +27,8 @@ class ReportWriter:
         lines = [
             "# Classification Turn Progress",
             "",
-            "| provider_mode | turn_index | row_count | exact_set_match | micro_f1 | primary_accuracy | hierarchical_partial_score |",
-            "|---|---:|---:|---:|---:|---:|---:|",
+            "| provider_mode | turn_index | row_count | exact_set_match | micro_f1 | primary_accuracy | path_aware_accuracy | hierarchical_partial_score |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
         for key, by_turn in sorted(classification_turn_metrics.items()):
             for turn_index, metrics in sorted(by_turn.items()):
@@ -37,6 +37,7 @@ class ReportWriter:
                     f"| {metrics.get('exact_set_match', 0.0):.4f} "
                     f"| {metrics.get('micro_f1', 0.0):.4f} "
                     f"| {metrics.get('primary_accuracy', 0.0):.4f} "
+                    f"| {metrics.get('path_aware_accuracy', 0.0):.4f} "
                     f"| {metrics.get('hierarchical_partial_score', 0.0):.4f} |"
                 )
         (self.reports_dir / "classification-turn-progress.md").write_text("\n".join(lines), encoding="utf-8")

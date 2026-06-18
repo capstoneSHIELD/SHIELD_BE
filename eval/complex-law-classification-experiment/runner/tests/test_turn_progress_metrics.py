@@ -27,7 +27,9 @@ class TurnProgressMetricsTest(unittest.TestCase):
         _, _, by_turn = EvaluationPipeline().run(results, {}, {}, mapper)
 
         self.assertEqual(by_turn["cohere_A_FULL"][2]["exact_set_match"], 0.5)
+        self.assertEqual(by_turn["cohere_A_FULL"][2]["path_aware_accuracy"], 0.5)
         self.assertEqual(by_turn["cohere_A_FULL"][3]["exact_set_match"], 1.0)
+        self.assertEqual(by_turn["cohere_A_FULL"][3]["path_aware_accuracy"], 1.0)
 
 
 def _result(turn_id: str, turn_index: int, pred_node_ids: list[str]) -> ClassificationResult:

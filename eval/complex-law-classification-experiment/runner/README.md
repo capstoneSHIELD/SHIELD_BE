@@ -14,7 +14,7 @@ Implemented in this slice:
 - matching mode strategies
 - ontology validation/mapping helper
 - JSONL result sink
-- classification metrics with valid node, fallback, primary, partial, and token/latency fields
+- classification metrics with valid node, fallback, primary, path-aware, partial, and token/latency fields
 - matching metrics with Recall@3/5/10, nDCG@5/10, MRR, exact specialist recall, and hard-negative intrusion rate
 - markdown summary reports, current-service baseline report, and cosine-vs-hybrid delta report
 - benchmark validity, corpus coverage, failure case, L1 confusion, scoped loss, and classification-to-matching loss reports
@@ -67,6 +67,26 @@ python .\eval\complex-law-classification-experiment\runner\run_experiment.py --c
 
 The runner sends this value as `X-SHIELD-EXPERIMENT-TOKEN`. Do not commit the real token into config files.
 
+For lighter wrong-selected trap runs, first build the single-bait final-turn input and then run the dedicated AWS config:
+
+```powershell
+cd C:\SHIELD_BE
+python .\eval\complex-law-classification-experiment\runner\build_wrong_selected_single_bait.py --input .\eval\complex-law-classification-experiment\input\wrong-selected-final-turns-v1.jsonl --output .\eval\complex-law-classification-experiment\input\wrong-selected-single-bait-final-turns-v1.jsonl
+python .\eval\complex-law-classification-experiment\runner\run_experiment.py --config .\eval\complex-law-classification-experiment\runner\config.wrong-selected.single-bait.aws.json
+```
+
+This variant keeps the same 30 final-turn rows as the relaxed run, but reduces the user-supplied wrong labels from two cross-L1 distractors to one cross-L1 distractor per row.
+
+For the expanded 300-case final-turn wrong-selected run, build the final-turn JSONL from `src/test/testcases/wrong` and use the dedicated AWS config:
+
+```powershell
+cd C:\SHIELD_BE
+python .\eval\complex-law-classification-experiment\runner\build_wrong_selected_final_turns.py --input-dir .\src\test\testcases\wrong --output .\eval\complex-law-classification-experiment\input\wrong-selected-300-final-turns-v1.jsonl
+python .\eval\complex-law-classification-experiment\runner\run_experiment.py --config .\eval\complex-law-classification-experiment\runner\config.wrong-selected.300-final.aws.json
+```
+
+This variant evaluates one final turn per testcase, so 300 testcase files produce 300 classification rows.
+
 To validate the runner flow without backend or LLM calls, use:
 
 ```powershell
@@ -77,6 +97,8 @@ python .\eval\complex-law-classification-experiment\runner\run_experiment.py --c
 The dry-run config copies gold labels into predictions. Use it only for pipeline validation, not for model performance measurement.
 
 For this benchmark, `classification_history_window` is `null` so turn 2~10 receive the cumulative user utterance history. `B_SCOPED_GOLD` is intentionally excluded because it scopes by the gold L1 and leaks the answer. The generated report `classification-turn-progress.md` groups classification metrics by `turn_index`.
+
+`path_aware_accuracy` treats the first predicted node as correct when it matches the gold leaf or one of that gold leaf's ancestors on the same ontology path.
 
 The backend intent-route adapter accepts `selectedNodeIds` and `selectedLabels` from the runner. It includes them in the experiment prompt as user-supplied metadata, while instructing the classifier to prefer conversation facts over selected areas. The experiment route uses the full supplied message history by default; pass `historyWindowMessages` only when an explicit backend-side truncation window is desired.
 

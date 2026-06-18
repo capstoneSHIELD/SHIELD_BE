@@ -1,0 +1,112 @@
+﻿{
+  "schemaVersion": "wrong-selected-cross-l1-testcases.v1",
+  "description": "사용자가 서로 다른 L1의 분야 2개를 잘못 선택했을 때, 자연어 입력만 보고 LLM이 실제 법률 분야를 탐지하는지 평가하기 위한 테스트 케이스.",
+  "sourceOntologyPath": "C:\\SHIELD_BE\\.codex\\ref_docs\\ai-rag-v2.2\\checklist-evidence",
+  "selectionRule": "selectedLabels는 항상 서로 다른 L1 2개로 구성하며, goldLabels의 L1과 겹치지 않는다.",
+  "case": {
+    "caseId": "WRONG-X1-270",
+    "group": "wrong_selected_cross_l1",
+    "selectedLabels": [
+      {
+        "nodeId": "law-007-03-02",
+        "l1": "임대차보호",
+        "l2": "임차인 보호 절차",
+        "l3": "임대차 분쟁조정"
+      },
+      {
+        "nodeId": "law-008-04-01",
+        "l1": "기업·상사거래",
+        "l2": "지분 및 주주 분쟁",
+        "l3": "주식 양도 및 발행"
+      }
+    ],
+    "goldLabels": [
+      {
+        "nodeId": "law-001-01-04",
+        "l1": "부동산 거래",
+        "l2": "부동산 매매",
+        "l3": "하자담보책임"
+      }
+    ],
+    "turns": [
+      {
+        "turnIndex": 1,
+        "userInput": "상담받고 싶은 일이 있어 내용을 차례대로 말씀드리겠습니다.",
+        "observableGoldNodeIds": [],
+        "evaluationTarget": false
+      },
+      {
+        "turnIndex": 2,
+        "userInput": "부동산 계약과 권리관계와 관련해 아파트에서 문제가 생겼고, 핵심은 부동산 매매 중 하자담보책임에 해당하는 사안입니다.",
+        "observableGoldNodeIds": [
+          "law-001-01-04"
+        ],
+        "evaluationTarget": true
+      },
+      {
+        "turnIndex": 3,
+        "userInput": "지난 1월부터 문제가 본격화됐고 관련 금액이나 부담은 1천8백만 원 정도로 보고 있습니다.",
+        "observableGoldNodeIds": [
+          "law-001-01-04"
+        ],
+        "evaluationTarget": true
+      },
+      {
+        "turnIndex": 4,
+        "userInput": "상대방과 중개인이 제 요구를 받아들이지 않거나 전혀 다른 설명을 하고 있어 법적 판단이 필요합니다.",
+        "observableGoldNodeIds": [
+          "law-001-01-04"
+        ],
+        "evaluationTarget": true
+      },
+      {
+        "turnIndex": 5,
+        "userInput": "현재 쟁점은 하자담보책임에 관한 권리와 책임을 어떻게 정리할지입니다.",
+        "observableGoldNodeIds": [
+          "law-001-01-04"
+        ],
+        "evaluationTarget": true
+      },
+      {
+        "turnIndex": 6,
+        "userInput": "제가 가진 자료는 계약서, 등기부등본, 중개대상물 확인서, 문자 기록이고, 일부 자료는 상대방에게 추가로 요청해야 합니다.",
+        "observableGoldNodeIds": [
+          "law-001-01-04"
+        ],
+        "evaluationTarget": true
+      },
+      {
+        "turnIndex": 7,
+        "userInput": "상대방은 구두 합의나 관행을 이유로 책임을 줄이려 하지만 저는 문서와 실제 진행 경과가 더 중요하다고 봅니다.",
+        "observableGoldNodeIds": [
+          "law-001-01-04"
+        ],
+        "evaluationTarget": true
+      },
+      {
+        "turnIndex": 8,
+        "userInput": "상대방이 책임을 부인하고 있습니다.",
+        "observableGoldNodeIds": [
+          "law-001-01-04"
+        ],
+        "evaluationTarget": true
+      },
+      {
+        "turnIndex": 9,
+        "userInput": "가능하다면 계약 책임, 등기·인도 절차, 손해배상 가능성까지 한 번에 검토하고 싶습니다.",
+        "observableGoldNodeIds": [
+          "law-001-01-04"
+        ],
+        "evaluationTarget": true
+      },
+      {
+        "turnIndex": 10,
+        "userInput": "최종적으로 이 사안이 부동산 거래의 부동산 매매, 특히 하자담보책임 문제로 분류되는지 확인하고 대응 순서를 정리하고 싶습니다.",
+        "observableGoldNodeIds": [
+          "law-001-01-04"
+        ],
+        "evaluationTarget": true
+      }
+    ]
+  }
+}

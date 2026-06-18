@@ -27,6 +27,10 @@
 
 실험 adapter의 cosine score는 local/test synthetic corpus를 고정 차원 해시 벡터로 변환해 계산한다. 외부 embedding provider나 운영 `lawyer_embeddings` 테이블은 사용하지 않는다.
 
+`intent-route` adapter는 parser 단계에서 `matched_node_ids` ancestor chain을 정규화한다. 예를 들어 `law-004`, `law-004-04`, `law-004-04-04`가 함께 오면 가장 구체적인 node 하나만 남긴다.
+
+classification summary는 strict `exact_set_match` 외에 `path_aware_accuracy`도 제공한다. 이 지표는 첫 predicted node가 gold leaf 또는 같은 ontology path의 ancestor(L2/L1)면 정답으로 본다.
+
 ## Runner Outputs
 
 runner는 각 실행마다 `eval/complex-law-classification-experiment/output/{run_id}` 아래에 raw/parsed/matching JSONL과 아래 리포트를 생성한다.

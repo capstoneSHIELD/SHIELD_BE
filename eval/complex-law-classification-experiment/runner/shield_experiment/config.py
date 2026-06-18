@@ -47,6 +47,11 @@ class ExperimentConfig:
             p = Path(str(value))
             return p if p.is_absolute() else (base / p).resolve()
 
+        experiment_access_token = (
+            _optional_string(data.get("experiment_access_token"))
+            or _optional_string(os.getenv("SHIELD_EXPERIMENT_ADAPTER_ACCESS_TOKEN"))
+        )
+
         return ExperimentConfig(
             dataset_path=resolve("dataset_path", "../input/dataset-v1.jsonl"),
             classification_turns_path=resolve(
@@ -61,9 +66,7 @@ class ExperimentConfig:
             matching_labels_path=resolve("matching_labels_path", "../input/matching-labels-v1.jsonl"),
             output_root=resolve("output_root", "../output"),
             base_url=str(data.get("base_url", "http://localhost:8080")),
-            experiment_access_token=_optional_string(
-                data.get("experiment_access_token", os.getenv("SHIELD_EXPERIMENT_ADAPTER_ACCESS_TOKEN"))
-            ),
+            experiment_access_token=experiment_access_token,
             providers=list(data.get("providers", ["cohere"])),
             classification_modes=list(data.get("classification_modes", ["A_FULL"])),
             matching_modes=list(data.get("matching_modes", [])),

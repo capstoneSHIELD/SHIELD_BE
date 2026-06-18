@@ -573,12 +573,12 @@ public class IntentClassificationService {
         JsonNode compactIdsNode = root.path("matched_node_ids");
         if (compactIdsNode.isArray()) {
             compactIdsNode.forEach(n -> addMatchedNode(matchedNodes, n.asText(), "", 0.0));
-            return matchedNodes;
+            return normalizeMatchedNodes(matchedNodes);
         }
 
         if (root.hasNonNull("matched_node_id")) {
             addMatchedNode(matchedNodes, root.path("matched_node_id").asText(), "", 0.0);
-            return matchedNodes;
+            return normalizeMatchedNodes(matchedNodes);
         }
 
         JsonNode nodesNode = root.path("matched_nodes");
@@ -592,7 +592,7 @@ public class IntentClassificationService {
                 );
             }
         }
-        return matchedNodes;
+        return normalizeMatchedNodes(matchedNodes);
     }
 
     private void addMatchedNode(List<MatchedNode> matchedNodes, String id, String name, double confidence) {
@@ -600,6 +600,72 @@ public class IntentClassificationService {
             return;
         }
         matchedNodes.add(new MatchedNode(id, name == null ? "" : name, confidence));
+    }
+
+    private List<MatchedNode> normalizeMatchedNodes(List<MatchedNode> matchedNodes) {
+        if (matchedNodes.isEmpty()) {
+            return List.of();
+        }
+
+        List<MatchedNode> deduplicated = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (MatchedNode node : matchedNodes) {
+            String nodeId = normalizeMatchedNodeId(node.id());
+            if (nodeId == null || !seen.add(nodeId)) {
+                continue;
+            }
+            deduplicated.add(new MatchedNode(nodeId, node.name(), node.confidence()));
+        }
+
+        if (deduplicated.size() < 2) {
+            return deduplicated;
+        }
+
+        List<MatchedNode> normalized = new ArrayList<>();
+        for (MatchedNode candidate : deduplicated) {
+            if (hasMoreSpecificDescendant(candidate.id(), deduplicated)) {
+                continue;
+            }
+            normalized.add(candidate);
+        }
+        return normalized;
+    }
+
+    private String normalizeMatchedNodeId(String nodeId) {
+        if (nodeId == null) {
+            return null;
+        }
+        String trimmed = nodeId.trim();
+        if (trimmed.isBlank() || "law-000".equals(trimmed)) {
+            return null;
+        }
+        return trimmed;
+    }
+
+    private boolean hasMoreSpecificDescendant(String candidateId, List<MatchedNode> matchedNodes) {
+        for (MatchedNode other : matchedNodes) {
+            if (isDescendantNodeId(other.id(), candidateId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isDescendantNodeId(String candidateId, String ancestorId) {
+        if (candidateId == null || ancestorId == null || candidateId.equals(ancestorId)) {
+            return false;
+        }
+        String[] candidateParts = candidateId.split("-");
+        String[] ancestorParts = ancestorId.split("-");
+        if (candidateParts.length <= ancestorParts.length) {
+            return false;
+        }
+        for (int index = 0; index < ancestorParts.length; index++) {
+            if (!ancestorParts[index].equals(candidateParts[index])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private List<ExtractedSlot> parseExtractedSlots(JsonNode node) {

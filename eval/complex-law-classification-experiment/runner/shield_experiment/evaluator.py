@@ -25,6 +25,7 @@ class ClassificationEvaluator:
         valid_nodes = 0
         predicted_nodes = 0
         primary_hits = 0
+        path_aware_hits = 0
         partial_score_total = 0.0
         for row in eligible:
             gold = set(row.gold_node_ids)
@@ -36,6 +37,7 @@ class ClassificationEvaluator:
             predicted_nodes += len(row.pred_node_ids)
             valid_nodes += len(self.mapper.validate(row.pred_node_ids))
             primary_hits += int(self._primary_matches(row))
+            path_aware_hits += int(self._path_aware_matches(row))
             partial_score_total += self._hierarchical_partial_score(row.pred_node_ids, row.gold_node_ids)
             if len(gold) >= 2:
                 complex_total += len(gold)
@@ -65,6 +67,7 @@ class ClassificationEvaluator:
             "under_classification_rate": _safe_div(under, complex_cases),
             "over_classification_rate": _safe_div(over, len(eligible)),
             "primary_accuracy": _safe_div(primary_hits, len(eligible)),
+            "path_aware_accuracy": _safe_div(path_aware_hits, len(eligible)),
             "hierarchical_partial_score": _safe_div(partial_score_total, len(eligible)),
             "latency_avg_ms": _average([r.latency_ms for r in eligible]),
             "tokens_input_avg": _average([r.tokens_in for r in eligible]),
@@ -86,6 +89,18 @@ class ClassificationEvaluator:
             str(parsed_case_type.get("l3") or ""),
         }
         return primary in case_type_values
+
+    def _path_aware_matches(self, row: ClassificationResult) -> bool:
+        primary = row.gold_primary_node_id or (row.gold_node_ids[0] if row.gold_node_ids else None)
+        predicted = row.pred_node_ids[0] if row.pred_node_ids else None
+        if not primary or not predicted:
+            return False
+        acceptable_nodes = {
+            primary,
+            self.mapper.to_l2(primary),
+            self.mapper.to_l1(primary),
+        }
+        return predicted in acceptable_nodes
 
     def _hierarchical_partial_score(self, predicted: list[str], gold: list[str]) -> float:
         if not gold:

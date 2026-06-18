@@ -89,18 +89,16 @@ shield:
     max-user-turns: 10
     completion:
       coverage-threshold: ${SHIELD_COMPLETION_COVERAGE_THRESHOLD:0.5}
+  experiment:
+    adapter:
+      enabled: ${SHIELD_EXPERIMENT_ADAPTER_ENABLED:false}
+      access-token: ${SHIELD_EXPERIMENT_ADAPTER_ACCESS_TOKEN:}
 
 # JWT
 jwt:
   secret: ${JWT_SECRET}
   access-token-expiry: 86400000
   refresh-token-expiry: 1209600000
-
-shield:
-  experiment:
-    adapter:
-      enabled: ${SHIELD_EXPERIMENT_ADAPTER_ENABLED:false}
-      access-token: ${SHIELD_EXPERIMENT_ADAPTER_ACCESS_TOKEN:}
 
 # Google OAuth
 # - allowed-redirect-uris: 클라이언트가 보낸 redirect_uri 화이트리스트 (Issue #116).

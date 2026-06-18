@@ -137,6 +137,31 @@ class IntentClassificationServiceTest {
     }
 
     @Test
+    @DisplayName("matched node ancestor chains collapse to the deepest node")
+    void parseIntentRouterResponse_collapsesAncestorChain() {
+        String json = """
+                {
+                  "schema_version": "2.0",
+                  "dialogueIntent": "ASK_LEGAL_ADVICE",
+                  "intentConfidence": 0.95,
+                  "caseType": {
+                    "l1": "洹쇰줈怨꾩빟쨌?닿퀬쨌?꾧툑",
+                    "l2": "遺?떦?댁퀂 ?먮뒗 援ъ젣",
+                    "l3": "遺?떦?댁퀂 援ъ젣",
+                    "confidence": 0.90
+                  },
+                  "matched_node_ids": ["law-000", "law-004", "law-004-04", "law-004-04-04", "law-004-04-04"],
+                  "core_keywords": ["遺?떦?댁퀂"],
+                  "retrievalQueries": []
+                }
+                """;
+
+        IntentRouterResponse result = service.parseIntentRouterResponse(json);
+
+        assertThat(result.toClassificationResult().matchedNodeIds()).containsExactly("law-004-04-04");
+    }
+
+    @Test
     @DisplayName("empty matched nodes remain empty")
     void parseClassificationResult_emptyNodes() {
         String json = """

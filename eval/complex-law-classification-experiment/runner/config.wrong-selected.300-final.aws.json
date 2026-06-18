@@ -1,0 +1,28 @@
+{
+  "base_url": "https://api.shieldai.kr",
+  "experiment_access_token": null,
+  "dry_run": false,
+  "dataset_path": "../input/sample-dataset-v1.jsonl",
+  "classification_turns_path": "../input/wrong-selected-300-final-turns-v1.jsonl",
+  "wrong_selected_testcases_path": null,
+  "ontology_snapshot_path": "../../../src/main/resources/ontology/legal-ontology-slim.json",
+  "lawyer_corpus_path": null,
+  "lawyer_corpus_generator_config_path": null,
+  "matching_labels_path": null,
+  "output_root": "../output",
+  "providers": ["openai"],
+  "classification_modes": ["A_FULL"],
+  "matching_modes": [],
+  "selected_provider": "openai",
+  "selected_classification_mode": "A_FULL",
+  "classification_history_window": null,
+  "top_k": 10,
+  "production_group_weights": {
+    "wrong_selected_cross_l1": 1.0
+  },
+  "hybrid_match_weights": {
+    "cosine": 0.6,
+    "fieldOverlap": 0.25,
+    "keywordOverlap": 0.15
+  }
+}

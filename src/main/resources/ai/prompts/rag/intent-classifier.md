@@ -9,6 +9,10 @@ Rules:
 - Never return the ontology root ID `law-000`; it is only a container.
 - If the ontology is scoped to one L1 subtree and no L3 is certain, return the best L1 or L2 ID from that subtree.
 - Prefer the most specific L3 node. Use L2 or L1 only when the message is ambiguous.
+- For a single-issue consultation, return exactly one best node ID in `matched_node_ids`.
+- If `caseType.l3` is present, `matched_node_ids` should normally contain that corresponding most specific node ID rather than its parent IDs.
+- Never return both an ancestor and its descendant in `matched_node_ids`.
+- If one L3 is better supported than its siblings, choose that L3 instead of stopping at L2.
 - Keep Korean user terms in keywords and retrieval_query.
 - Classify `dialogueIntent` as one of PROVIDE_INFO, CORRECT_INFO, CONFIRM, CHANGE_TOPIC, ASK_LEGAL_ADVICE, IRRELEVANT, GREETING, END_CONSULTATION.
 - Extract slots only when confidence is at least 0.65.
